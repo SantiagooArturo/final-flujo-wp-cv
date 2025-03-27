@@ -91,17 +91,17 @@ Soy tu asistente profesional para ayudarte en tu búsqueda de empleo. Puedo ofre
 ✅ *Revisión de CV* - Análisis detallado de tu currículum, fortalezas y áreas de mejora
 ✅ *Simulación de Entrevista* - Práctica de entrevistas con feedback personalizado
 
-¿Con qué te gustaría que te ayude hoy?
+Para comenzar, necesito analizar tu CV primero.
+¡Envíame tu currículum para obtener un análisis detallado!
     `;
     
-    // Create inline keyboard with two options
+    // Create inline keyboard with only CV review option initially
     const options = {
       parse_mode: 'Markdown',
       reply_markup: {
         inline_keyboard: [
           [
-            { text: '📋 Revisión de CV', callback_data: 'service_cv_review' },
-            { text: '🎥 Simulación de Entrevista', callback_data: 'service_interview' }
+            { text: '📋 Revisión de CV', callback_data: 'service_cv_review' }
           ]
         ]
       }
@@ -424,6 +424,9 @@ ${safeSummary}
           [
             { text: '📊 Informe Completo', callback_data: 'report_full' },
             { text: '✏️ Consejos de Mejora', callback_data: 'improvement_tips' },
+          ],
+          [
+            { text: '🎥 Simulación de Entrevista', callback_data: 'service_interview' },
           ],
         ],
       },
@@ -1033,11 +1036,51 @@ Este servicio analiza tu currículum y proporciona feedback detallado para ayuda
         break;
 
       case 'service_interview':
-        // Determinar si estamos en modo real o demo
-        const isRealAnalysisAvailable = process.env.OPENAI_API_KEY ? true : false;
-        
-        // Mostrar la información sobre el servicio de simulación de entrevista
-        const interviewMessage = `
+        try {
+          // Verificar si el usuario ya tiene un CV analizado
+          const userId = callbackQuery.from.id.toString();
+          let userHasCV = false;
+          
+          if (process.env.FIREBASE_PROJECT_ID && !firebaseConfig.usingMockImplementation) {
+            const db = firebaseConfig.getFirestore();
+            const cvsRef = db.collection(CVS_COLLECTION)
+              .where('userId', '==', userId)
+              .limit(1);
+              
+            const snapshot = await cvsRef.get();
+            userHasCV = !snapshot.empty;
+          }
+          
+          // Si el usuario no ha enviado un CV, pedirle que primero envíe su CV
+          if (!userHasCV) {
+            const needCVMessage = `
+*⚠️ Primero necesitamos analizar tu CV*
+
+Para acceder a la simulación de entrevista, primero debes enviar tu CV para análisis.
+
+Una vez que hayamos analizado tu CV, podrás acceder a la simulación de entrevista personalizada.
+            `;
+            
+            const cvFirstOptions = {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '📋 Enviar mi CV ahora', callback_data: 'service_cv_review' }
+                  ]
+                ]
+              }
+            };
+            
+            await bot.sendMessage(chatId, needCVMessage, cvFirstOptions);
+            break;
+          }
+          
+          // Determinar si estamos en modo real o demo
+          const isRealAnalysisAvailable = process.env.OPENAI_API_KEY ? true : false;
+          
+          // Mostrar la información sobre el servicio de simulación de entrevista
+          const interviewMessage = `
 *🎥 Simulación de Entrevista Virtual*${!isRealAnalysisAvailable ? ' [DEMO]' : ''}
 
 Este servicio te ayuda a prepararte para entrevistas reales mediante simulaciones con IA y feedback personalizado.
@@ -1057,53 +1100,106 @@ ${!isRealAnalysisAvailable ?
 • Sugerencias de mejora específicas`}
 
 ¿Listo para ${isRealAnalysisAvailable ? 'practicar' : 'probar la demostración'}?
-        `;
-        
-        // Crear teclado con opciones de puestos de trabajo
-        const jobOptions = {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '💻 Desarrollador', callback_data: 'interview_dev' },
-                { text: '📊 Marketing', callback_data: 'interview_marketing' }
-              ],
-              [
-                { text: '📱 Diseñador UX/UI', callback_data: 'interview_design' },
-                { text: '📈 Ventas', callback_data: 'interview_sales' }
-              ],
-              [
-                { text: '👨‍💼 Gerente de Proyecto', callback_data: 'interview_pm' },
-                { text: '🔙 Volver', callback_data: 'back_to_start' }
+          `;
+          
+          // Crear teclado con opciones de puestos de trabajo
+          const jobOptions = {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '💻 Desarrollador', callback_data: 'interview_dev' },
+                  { text: '📊 Marketing', callback_data: 'interview_marketing' }
+                ],
+                [
+                  { text: '📱 Diseñador UX/UI', callback_data: 'interview_design' },
+                  { text: '📈 Ventas', callback_data: 'interview_sales' }
+                ],
+                [
+                  { text: '👨‍💼 Gerente de Proyecto', callback_data: 'interview_pm' },
+                  { text: '🔙 Volver', callback_data: 'back_to_start' }
+                ]
               ]
-            ]
-          }
-        };
-        
-        await bot.sendMessage(chatId, interviewMessage, jobOptions);
+            }
+          };
+          
+          await bot.sendMessage(chatId, interviewMessage, jobOptions);
+        } catch (error) {
+          logger.error(`Error al procesar solicitud de entrevista: ${error.message}`);
+          await bot.sendMessage(chatId, 'Lo siento, hubo un problema al acceder a la simulación de entrevista. Por favor intenta nuevamente más tarde.');
+        }
         break;
 
       case 'back_to_start':
-        // Volver al mensaje principal con las dos opciones
-        const backToStartMessage = `
+        try {
+          // Volver al mensaje principal pero verificando si el usuario ya ha enviado un CV
+          const backToStartMessage = `
 *¿Con qué te gustaría que te ayude hoy?*
 
 Selecciona una de las opciones para comenzar:
-        `;
-        
-        const startOptions = {
-          parse_mode: 'Markdown',
-          reply_markup: {
-            inline_keyboard: [
-              [
-                { text: '📋 Revisión de CV', callback_data: 'service_cv_review' },
-                { text: '🎥 Simulación de Entrevista', callback_data: 'service_interview' }
-              ]
-            ]
+          `;
+          
+          // Verificar si el usuario ya tiene un CV analizado
+          const userId = callbackQuery.from.id.toString();
+          let userHasCV = false;
+          
+          if (process.env.FIREBASE_PROJECT_ID && !firebaseConfig.usingMockImplementation) {
+            const db = firebaseConfig.getFirestore();
+            const cvsRef = db.collection(CVS_COLLECTION)
+              .where('userId', '==', userId)
+              .limit(1);
+              
+            const snapshot = await cvsRef.get();
+            userHasCV = !snapshot.empty;
           }
-        };
-        
-        await bot.sendMessage(chatId, backToStartMessage, startOptions);
+          
+          let startOptions;
+          
+          if (userHasCV) {
+            // Si el usuario ya tiene un CV, mostrar ambas opciones
+            startOptions = {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '📋 Revisión de CV', callback_data: 'service_cv_review' },
+                    { text: '🎥 Simulación de Entrevista', callback_data: 'service_interview' }
+                  ]
+                ]
+              }
+            };
+          } else {
+            // Si el usuario no tiene un CV, mostrar solo la opción de revisión de CV
+            startOptions = {
+              parse_mode: 'Markdown',
+              reply_markup: {
+                inline_keyboard: [
+                  [
+                    { text: '📋 Revisión de CV', callback_data: 'service_cv_review' }
+                  ]
+                ]
+              }
+            };
+          }
+          
+          await bot.sendMessage(chatId, backToStartMessage, startOptions);
+        } catch (error) {
+          logger.error(`Error handling back_to_start: ${error.message}`);
+          
+          // En caso de error, mostrar solo la opción de CV review por seguridad
+          const startOptions = {
+            parse_mode: 'Markdown',
+            reply_markup: {
+              inline_keyboard: [
+                [
+                  { text: '📋 Revisión de CV', callback_data: 'service_cv_review' }
+                ]
+              ]
+            }
+          };
+          
+          await bot.sendMessage(chatId, '*¿Con qué te gustaría que te ayude hoy?*', startOptions);
+        }
         break;
         
       // Casos para los diferentes tipos de entrevista
@@ -1308,6 +1404,36 @@ const handleVideo = async (bot, msg) => {
     
     // Register user
     await registerUser(user);
+    
+    // Verificar si el usuario ya tiene un CV analizado
+    const userId = user.id.toString();
+    let userHasCV = false;
+    
+    if (process.env.FIREBASE_PROJECT_ID && !firebaseConfig.usingMockImplementation) {
+      const db = firebaseConfig.getFirestore();
+      const cvsRef = db.collection(CVS_COLLECTION)
+        .where('userId', '==', userId)
+        .limit(1);
+        
+      const snapshot = await cvsRef.get();
+      userHasCV = !snapshot.empty;
+    }
+    
+    // Si el usuario no ha enviado un CV, pedirle que primero envíe su CV
+    if (!userHasCV) {
+      await bot.sendMessage(
+        chatId,
+        "⚠️ Para acceder a la simulación de entrevista, primero debes enviar tu CV para análisis. Una vez que hayamos analizado tu CV, podrás acceder a esta funcionalidad.",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📋 Enviar mi CV ahora', callback_data: 'service_cv_review' }]
+            ]
+          }
+        }
+      );
+      return;
+    }
     
     // Check if there is a question associated with this user
     if (!lastInterviewQuestions[user.id]) {

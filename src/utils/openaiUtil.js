@@ -228,10 +228,99 @@ const generateMockInterviewAnalysis = (question) => {
   };
 };
 
+/**
+ * Enhance CV analysis results using OpenAI
+ * @param {Object} analysis - The original CV analysis
+ * @returns {Promise<Object>} Enhanced analysis
+ */
+const enhanceCVAnalysis = async (analysis) => {
+  if (!openai) {
+    logger.warn('OpenAI no está inicializado. Devolviendo análisis original.');
+    return analysis;
+  }
+  
+  try {
+    // Create a copy of the analysis to avoid modifying the original
+    const enhancedAnalysis = JSON.parse(JSON.stringify(analysis));
+    
+    // Enhance the summary using OpenAI
+    const summaryPrompt = `
+    Dado este resumen básico de CV: "${analysis.summary}"
+    
+    Genera un resumen más detallado y profesional que sea más útil para el candidato. 
+    El resumen debe ser en español, contener aproximadamente 3-4 oraciones, y ser específico y útil.
+    `;
+    
+    enhancedAnalysis.summary = await generateImprovedText(summaryPrompt, {
+      max_tokens: 250,
+      temperature: 0.7
+    });
+    
+    // Enhance basic info suggestions
+    if (analysis.basicInfo && analysis.basicInfo.suggestions) {
+      const basicInfoPrompt = `
+      Estas son sugerencias para mejorar la información básica de un CV: "${analysis.basicInfo.suggestions}"
+      
+      Proporciona sugerencias más detalladas y útiles sobre cómo mejorar la sección de información básica de un CV.
+      Incluye consejos concretos sobre el formato, estilo y qué tipo de información incluir.
+      `;
+      
+      enhancedAnalysis.basicInfo.suggestions = await generateImprovedText(basicInfoPrompt, {
+        max_tokens: 200
+      });
+    }
+    
+    // Enhance experience suggestions
+    if (analysis.experience && analysis.experience.suggestions) {
+      const experiencePrompt = `
+      Estas son sugerencias para mejorar la sección de experiencia de un CV: "${analysis.experience.suggestions}"
+      
+      La persona tiene estos roles: ${analysis.experience.roles ? analysis.experience.roles.join(', ') : 'No especificados'}
+      Con aproximadamente ${analysis.experience.years || 'desconocidos'} años de experiencia.
+      
+      Proporciona consejos detallados sobre cómo mejorar la sección de experiencia laboral, 
+      incluyendo cómo destacar logros, usar verbos de acción y cuantificar resultados.
+      `;
+      
+      enhancedAnalysis.experience.suggestions = await generateImprovedText(experiencePrompt, {
+        max_tokens: 250
+      });
+    }
+    
+    // Enhance recommendations
+    if (analysis.recommendations && analysis.recommendations.length > 0) {
+      const recommendations = analysis.recommendations.join('\n');
+      const recommendationsPrompt = `
+      Estas son recomendaciones generales para mejorar un CV: "${recommendations}"
+      
+      Proporciona 3-5 recomendaciones más específicas, detalladas y accionables para mejorar este CV.
+      Cada recomendación debe ser clara, concisa y útil para que el candidato pueda implementarla inmediatamente.
+      `;
+      
+      const enhancedRecs = await generateImprovedText(recommendationsPrompt, {
+        max_tokens: 350,
+        temperature: 0.7
+      });
+      
+      // Split the enhanced recommendations into an array
+      enhancedAnalysis.recommendations = enhancedRecs
+        .split('\n')
+        .filter(rec => rec.trim())
+        .map(rec => rec.replace(/^\d+\.\s*/, '').trim());
+    }
+    
+    return enhancedAnalysis;
+  } catch (error) {
+    logger.error(`Error al mejorar el análisis con OpenAI: ${error.message}`);
+    return analysis;
+  }
+};
+
 module.exports = {
   initializeOpenAI,
   generateImprovedText,
   transcribeAudio,
   analyzeInterviewResponse,
-  generateMockInterviewAnalysis
+  generateMockInterviewAnalysis,
+  enhanceCVAnalysis
 }; 
