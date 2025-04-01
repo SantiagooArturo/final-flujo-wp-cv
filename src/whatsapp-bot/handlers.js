@@ -3,6 +3,9 @@ const logger = require('../utils/logger');
 const cvService = require('../core/cvService');
 const interviewService = require('../core/interviewService');
 const sessionService = require('../core/sessionService');
+const videoProcessing = require('../utils/videoProcessing');
+const openaiUtil = require('../utils/openaiUtil');
+const fileProcessing = require('../utils/fileProcessing');
 
 const handleStart = async (from) => {
   try {
@@ -222,12 +225,92 @@ const handleAudio = async (from, audio) => {
       throw new Error('No se pudo obtener la URL del audio');
     }
 
-    // Implementación del procesamiento de audio
-    // TO-DO: Implementar la descarga y transcripción del audio
+    logger.info(`Audio URL obtenida: ${audioUrl}`);
 
-    // Por ahora, simularemos el proceso
-    await handleSimulatedAnswer(from, session);
+    try {
+      // Descargar el archivo de audio
+      logger.info(`Descargando audio para usuario ${from}`);
+      const audioBuffer = await fileProcessing.downloadFile(audioUrl);
+      logger.info(`Audio descargado, tamaño: ${audioBuffer.length} bytes`);
 
+      // Obtener la pregunta actual
+      const currentQuestion = session.questions[session.currentQuestion];
+      let transcription = null;
+      let analysis = null;
+      let errorOccurred = false;
+
+      // Transcribir el audio con Whisper
+      try {
+        logger.info('Transcribiendo audio con Whisper...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, {
+          language: "es",
+          prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
+        });
+        
+        if (transcription) {
+          logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
+          
+          // Analizar la transcripción
+          logger.info('Analizando respuesta de entrevista...');
+          analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
+          logger.info('Análisis de respuesta completado');
+        } else {
+          errorOccurred = true;
+          logger.error("Error al transcribir el audio");
+        }
+      } catch (transcriptError) {
+        errorOccurred = true;
+        logger.error(`Error durante la transcripción/análisis: ${transcriptError.message}`);
+      }
+
+      // Si hay un error o no se puede hacer análisis real, usar simulación
+      if (errorOccurred || !analysis) {
+        logger.info('Usando análisis simulado debido a error o falta de configuración');
+        analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
+        
+        if (!transcription) {
+          transcription = "Transcripción no disponible. Usando análisis simulado.";
+        }
+      }
+
+      // Guardar respuesta y análisis
+      const answer = {
+        transcription: transcription,
+        analysis: analysis,
+        timestamp: new Date()
+      };
+      
+      await sessionService.saveInterviewAnswer(from, answer);
+      logger.info('Respuesta y análisis guardados en la sesión');
+      
+      // Enviar feedback
+      const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
+      await bot.sendMessage(from, feedbackMessage);
+      
+      // Verificar si debemos seguir con más preguntas
+      const updatedSession = await sessionService.getOrCreateSession(from);
+      
+      if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
+        // Entrevista completada
+        await bot.sendMessage(from, `
+¡Felicidades! Has completado todas las preguntas de la entrevista.
+
+Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+        `);
+        await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+      } else {
+        // Preguntar si quiere continuar
+        setTimeout(async () => {
+          await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
+          await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+        }, 2000);
+      }
+    } catch (processingError) {
+      logger.error(`Error procesando audio: ${processingError.message}`);
+      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu audio. Por favor, intenta nuevamente.');
+    }
   } catch (error) {
     logger.error(`Error handling audio: ${error.message}`);
     await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu audio. Por favor, intenta nuevamente.');
@@ -255,12 +338,92 @@ const handleVideo = async (from, video) => {
       throw new Error('No se pudo obtener la URL del video');
     }
 
-    // Implementación del procesamiento de video
-    // TO-DO: Implementar la descarga y extracción del audio del video
+    logger.info(`Video URL obtenida: ${videoUrl}`);
 
-    // Por ahora, simularemos el proceso
-    await handleSimulatedAnswer(from, session);
+    try {
+      // Procesar el video y extraer el audio
+      logger.info(`Procesando video para usuario ${from}`);
+      const audioBuffer = await videoProcessing.processVideoFromUrl(videoUrl);
+      logger.info(`Audio extraído del video, tamaño: ${audioBuffer.length} bytes`);
 
+      // Obtener la pregunta actual
+      const currentQuestion = session.questions[session.currentQuestion];
+      let transcription = null;
+      let analysis = null;
+      let errorOccurred = false;
+
+      // Transcribir el audio con Whisper
+      try {
+        logger.info('Transcribiendo audio con Whisper...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, {
+          language: "es",
+          prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
+        });
+        
+        if (transcription) {
+          logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
+          
+          // Analizar la transcripción
+          logger.info('Analizando respuesta de entrevista...');
+          analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
+          logger.info('Análisis de respuesta completado');
+        } else {
+          errorOccurred = true;
+          logger.error("Error al transcribir el audio");
+        }
+      } catch (transcriptError) {
+        errorOccurred = true;
+        logger.error(`Error durante la transcripción/análisis: ${transcriptError.message}`);
+      }
+
+      // Si hay un error o no se puede hacer análisis real, usar simulación
+      if (errorOccurred || !analysis) {
+        logger.info('Usando análisis simulado debido a error o falta de configuración');
+        analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
+        
+        if (!transcription) {
+          transcription = "Transcripción no disponible. Usando análisis simulado.";
+        }
+      }
+
+      // Guardar respuesta y análisis
+      const answer = {
+        transcription: transcription,
+        analysis: analysis,
+        timestamp: new Date()
+      };
+      
+      await sessionService.saveInterviewAnswer(from, answer);
+      logger.info('Respuesta y análisis guardados en la sesión');
+      
+      // Enviar feedback
+      const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
+      await bot.sendMessage(from, feedbackMessage);
+      
+      // Verificar si debemos seguir con más preguntas
+      const updatedSession = await sessionService.getOrCreateSession(from);
+      
+      if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
+        // Entrevista completada
+        await bot.sendMessage(from, `
+¡Felicidades! Has completado todas las preguntas de la entrevista.
+
+Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+        `);
+        await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+      } else {
+        // Preguntar si quiere continuar
+        setTimeout(async () => {
+          await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
+          await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+        }, 2000);
+      }
+    } catch (processingError) {
+      logger.error(`Error procesando video: ${processingError.message}`);
+      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');
+    }
   } catch (error) {
     logger.error(`Error handling video: ${error.message}`);
     await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');

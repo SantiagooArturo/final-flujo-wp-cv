@@ -239,7 +239,7 @@ const downloadFile = async (fileUrl) => {
       url: encodedUrl,
       responseType: 'arraybuffer',
       headers: {
-        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
+        'Authorization': `Bearer ${process.env.WHATSAPP_API_TOKEN}`
       },
       // Opciones adicionales para manejar URLs problemáticas
       maxRedirects: 5,
@@ -255,6 +255,9 @@ const downloadFile = async (fileUrl) => {
     if (error.response) {
       logger.error(`Error downloading file - Status: ${error.response.status}`);
       logger.error(`Error data: ${JSON.stringify(error.response.data)}`);
+      if (error.response.status === 401) {
+        throw new Error('Error de autenticación con WhatsApp. Por favor, verifica el token.');
+      }
     } else if (error.request) {
       logger.error(`Error downloading file - No response received: ${error.message}`);
     } else {

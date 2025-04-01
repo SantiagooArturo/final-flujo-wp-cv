@@ -69,26 +69,49 @@ const generateImprovedText = async (prompt, options = {}) => {
 
 /**
  * Generate an interview question based on job type using OpenAI
- * @param {string} jobType - Type of job (e.g., 'software', 'marketing', 'sales')
+ * @param {string} jobType - Normalized type of job (e.g., 'software', 'marketing', 'sales')
+ * @param {string} originalJobType - Original job description from the user (can be more specific)
  * @returns {Promise<string>} Generated interview question
  */
-const generateInterviewQuestion = async (jobType) => {
+const generateInterviewQuestion = async (jobType, originalJobType = '') => {
   if (!openai) {
     logger.error('OpenAI no está inicializado. Usa initializeOpenAI primero.');
     throw new Error('OpenAI no está inicializado');
   }
 
   try {
-    const prompt = `Genera una pregunta de entrevista desafiante y relevante para un candidato que aplica a un puesto de "${jobType}".
-La pregunta debe evaluar habilidades técnicas, experiencia o competencias relevantes para este tipo de rol.
+    // Usar ambos tipos de trabajo para generar una pregunta más relevante
+    const jobContext = originalJobType && originalJobType !== jobType 
+      ? `"${originalJobType}" (categorizado como ${jobType})` 
+      : `"${jobType}"`;
+    
+    const prompt = `Genera una pregunta de entrevista desafiante, específica y relevante para un candidato que aplica a un puesto de ${jobContext}.
+
+La pregunta debe:
+1. Evaluar habilidades técnicas, experiencia o competencias relevantes para este tipo de rol
+2. Requerir ejemplos concretos o situaciones específicas (preferiblemente tipo STAR)
+3. Ser específica para el contexto laboral del puesto
+4. Estar formulada en español y usar un lenguaje profesional
+5. Ser abierta y requerir más que una respuesta de sí/no
+
+Contexto específico según el tipo de trabajo:
+${jobType === 'software' ? '- Enfocada en algún desafío técnico, arquitectura, metodologías de desarrollo, solución de problemas o trabajo colaborativo en código' : ''}
+${jobType === 'marketing' ? '- Enfocada en estrategias digitales, campañas, medición de resultados, segmentación de audiencia o gestión de contenidos' : ''}
+${jobType === 'sales' ? '- Enfocada en técnicas de venta, negociación, manejo de objeciones, prospección o retención de clientes' : ''}
+${jobType === 'design' ? '- Enfocada en procesos creativos, metodologías de diseño, experiencia de usuario o adaptación a requisitos de marca/cliente' : ''}
+${jobType === 'pm' ? '- Enfocada en gestión de proyectos, metodologías ágiles, priorización, gestión de equipos o manejo de stakeholders' : ''}
+${jobType === 'hr' ? '- Enfocada en procesos de selección, desarrollo de talento, cultura organizacional o gestión del desempeño' : ''}
+${jobType === 'data' ? '- Enfocada en análisis de datos, visualización, toma de decisiones basada en datos o implementación de modelos' : ''}
+${jobType === 'finance' ? '- Enfocada en análisis financiero, presupuestos, reportes, optimización de recursos o compliance' : ''}
+
 Proporciona solo la pregunta, sin introducción ni texto adicional.`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       messages: [
         { 
           role: "system", 
-          content: "Eres un entrevistador experto con amplia experiencia en entrevistas para roles de tecnología y negocios. Tu objetivo es crear preguntas desafiantes pero justas que evalúen las capacidades de los candidatos." 
+          content: "Eres un entrevistador experto con amplia experiencia en entrevistas laborales. Tu objetivo es crear preguntas desafiantes pero justas que evalúen las capacidades reales de los candidatos para roles específicos." 
         },
         { role: "user", content: prompt }
       ],
