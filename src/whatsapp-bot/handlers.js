@@ -343,32 +343,39 @@ const handleInterview = async (from) => {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
     
-    // Verificar que el usuario tenga un CV analizado
-    if (!session.cvAnalysis) {
-      await bot.sendMessage(from, 'Para iniciar una entrevista, primero necesito analizar tu CV. Por favor, envíalo como documento.');
-      return;
-    }
-    
-    // Verificar que el usuario haya especificado un puesto
-    if (!session.jobPosition) {
-      await bot.sendMessage(from, '¿A qué puesto te gustaría aplicar? Por favor, describe brevemente el puesto y la industria.');
-      await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_ASKED);
-      return;
-    }
-    
     // Iniciar entrevista
     await sessionService.startInterview(from);
     
-    // Generar primera pregunta basada en el CV y el puesto
-    const cvInfo = session.cvAnalysis;
-    const question = await interviewService.generateInterviewQuestion(session.jobPosition, cvInfo);
+    // Obtener puesto de trabajo
+    const jobPosition = session.jobPosition || 'software';
+    
+    // Generar primera pregunta (con fallback a pregunta por defecto)
+    let questionData;
+    try {
+      questionData = await interviewService.generateInterviewQuestion(jobPosition);
+    } catch (error) {
+      logger.error(`Error handling interview command: ${error.message}`);
+      questionData = interviewService.getDefaultQuestion(jobPosition);
+    }
     
     // Guardar pregunta en la sesión
-    await sessionService.saveInterviewQuestion(from, question);
+    await sessionService.saveInterviewQuestion(from, questionData);
     
-    // Enviar la pregunta al usuario
-    await bot.sendMessage(from, `*Pregunta 1 de 4:*\n\n${question.question}\n\nPor favor, responde con un mensaje de audio o video.`);
+    // Formatear mensaje
+    const questionMessage = `
+*Pregunta 1 de 4:*
+
+${questionData.question}
+
+Por favor, responde con un mensaje de audio o video.
+`;
     
+    // Enviar pregunta
+    await bot.sendMessage(from, questionMessage);
+    logger.info(`Sent first interview question to user ${from}`);
+    
+    // Actualizar estado
+    await sessionService.updateSessionState(from, sessionService.SessionState.QUESTION_ASKED);
   } catch (error) {
     logger.error(`Error handling interview command: ${error.message}`);
     await bot.sendMessage(from, 'Lo siento, hubo un error al iniciar la entrevista. Por favor, intenta nuevamente.');

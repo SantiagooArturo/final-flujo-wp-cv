@@ -68,6 +68,42 @@ const generateImprovedText = async (prompt, options = {}) => {
 };
 
 /**
+ * Generate an interview question based on job type using OpenAI
+ * @param {string} jobType - Type of job (e.g., 'software', 'marketing', 'sales')
+ * @returns {Promise<string>} Generated interview question
+ */
+const generateInterviewQuestion = async (jobType) => {
+  if (!openai) {
+    logger.error('OpenAI no está inicializado. Usa initializeOpenAI primero.');
+    throw new Error('OpenAI no está inicializado');
+  }
+
+  try {
+    const prompt = `Genera una pregunta de entrevista desafiante y relevante para un candidato que aplica a un puesto de "${jobType}".
+La pregunta debe evaluar habilidades técnicas, experiencia o competencias relevantes para este tipo de rol.
+Proporciona solo la pregunta, sin introducción ni texto adicional.`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { 
+          role: "system", 
+          content: "Eres un entrevistador experto con amplia experiencia en entrevistas para roles de tecnología y negocios. Tu objetivo es crear preguntas desafiantes pero justas que evalúen las capacidades de los candidatos." 
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 150
+    });
+
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    logger.error(`Error al generar pregunta de entrevista con OpenAI: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
  * Transcribe audio file using OpenAI's Whisper API
  * @param {Buffer|string} audioFile - The audio file as buffer or path
  * @param {Object} options - Additional options

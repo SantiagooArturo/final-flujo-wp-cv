@@ -1,8 +1,10 @@
 const firebaseConfig = require('../config/firebase');
 const logger = require('../utils/logger');
+const admin = require('firebase-admin');
 
 // Firestore collection name
 const SESSIONS_COLLECTION = 'sessions';
+const USERS_COLLECTION = 'users';
 
 // Estados posibles de la conversación
 const SessionState = {
@@ -247,6 +249,35 @@ const resetSession = async (userId) => {
   }
 };
 
+/**
+ * Save current question in session
+ * @param {string} userId - User ID
+ * @param {string} question - Question text
+ * @returns {Promise<void>}
+ */
+const saveQuestion = async (userId, question) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, question not saved');
+      return;
+    }
+    
+    const db = firebaseConfig.getFirestore();
+    const session = await getOrCreateSession(userId);
+    const questions = [...(session.questions || []), question];
+    const currentQuestion = questions.length - 1;
+    
+    return updateSessionState(userId, SessionState.QUESTION_ASKED, {
+      questions,
+      currentQuestion,
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    logger.error(`Error saving question for user ${userId}: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
   SessionState,
   getOrCreateSession,
@@ -256,5 +287,6 @@ module.exports = {
   saveInterviewQuestion,
   saveInterviewAnswer,
   startInterview,
-  resetSession
+  resetSession,
+  saveQuestion
 }; 

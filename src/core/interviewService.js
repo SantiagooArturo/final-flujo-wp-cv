@@ -8,15 +8,24 @@ const logger = require('../utils/logger');
  */
 const generateInterviewQuestion = async (type) => {
   try {
-    const question = await openaiUtil.generateInterviewQuestion(type);
-    return {
-      question,
-      type,
-      timestamp: new Date(),
-    };
+    // Check if openaiUtil has the generateInterviewQuestion function
+    if (typeof openaiUtil.generateInterviewQuestion === 'function') {
+      const question = await openaiUtil.generateInterviewQuestion(type);
+      return {
+        question,
+        type,
+        timestamp: new Date(),
+      };
+    } else {
+      // Fallback to default question if the function doesn't exist
+      logger.warn(`openaiUtil.generateInterviewQuestion not available, using default question for ${type}`);
+      return getDefaultQuestion(type);
+    }
   } catch (error) {
     logger.error(`Error generating interview question: ${error.message}`);
-    throw error;
+    // Fallback to default question on error
+    logger.info(`Falling back to default question for ${type}`);
+    return getDefaultQuestion(type);
   }
 };
 
