@@ -100,28 +100,39 @@ const extractTextFromDocx = async (fileBuffer) => {
 };
 
 /**
- * Extract text from file based on its extension
- * @param {Buffer} fileBuffer - File as buffer
- * @param {String} fileName - Original file name
+ * Extract text from a file based on MIME type
+ * @param {Buffer} fileBuffer - File data as buffer
+ * @param {String} mimeType - MIME type of the file
  * @returns {Promise<String>} - Extracted text
  */
-const extractTextFromFile = async (fileBuffer, fileName) => {
-  const extension = path.extname(fileName).toLowerCase();
-  
-  switch (extension) {
-    case '.pdf':
-      return extractTextFromPdf(fileBuffer);
-    case '.docx':
-      return extractTextFromDocx(fileBuffer);
-    case '.txt':
+const extractTextFromFile = async (fileBuffer, mimeType) => {
+  try {
+    logger.info(`Extracting text from file with MIME type: ${mimeType}`);
+    
+    if (!fileBuffer) {
+      throw new Error('No file buffer provided');
+    }
+
+    if (!mimeType) {
+      logger.warn('No MIME type provided, defaulting to PDF');
+      mimeType = 'application/pdf';
+    }
+
+    // Extract text based on MIME type
+    if (mimeType.includes('pdf')) {
+      return await extractTextFromPdf(fileBuffer);
+    } else if (mimeType.includes('word') || mimeType.includes('docx')) {
+      return await extractTextFromDocx(fileBuffer);
+    } else if (mimeType.includes('text')) {
+      // Plain text
       return fileBuffer.toString('utf8');
-    case '.jpg':
-    case '.jpeg':
-    case '.png':
-      // For image files, we'll need OCR which will be handled by the Python service
-      return null;
-    default:
-      throw new Error(`Unsupported file format: ${extension}`);
+    } else {
+      logger.warn(`Unsupported MIME type: ${mimeType}, attempting to process as PDF`);
+      return await extractTextFromPdf(fileBuffer);
+    }
+  } catch (error) {
+    logger.error(`Error extracting text from file: ${error.message}`);
+    throw new Error(`Failed to extract text from file: ${error.message}`);
   }
 };
 
@@ -177,7 +188,7 @@ const processCvFile = async (fileBuffer, fileName, userId) => {
     // 2. Extract text from file (if possible from our end)
     let extractedText = null;
     try {
-      extractedText = await extractTextFromFile(fileBuffer, fileName);
+      extractedText = await extractTextFromFile(fileBuffer, getContentType(path.extname(fileName)));
     } catch (error) {
       logger.warn(`Could not extract text locally: ${error.message}. Will rely on analyzer service.`);
     }
@@ -204,9 +215,62 @@ const processCvFile = async (fileBuffer, fileName, userId) => {
   }
 };
 
+/**
+ * Download a file from WhatsApp
+ * @param {String} fileUrl - URL of the file to download
+ * @returns {Promise<Buffer>} - File data as buffer
+ */
+const downloadFile = async (fileUrl) => {
+  try {
+    logger.info(`Attempting to download file from URL: ${fileUrl}`);
+    
+    // Verificar que la URL sea válida
+    if (!fileUrl || typeof fileUrl !== 'string') {
+      throw new Error('URL inválida');
+    }
+    
+    // Asegurarse de que la URL esté codificada correctamente
+    const encodedUrl = encodeURI(fileUrl);
+    logger.info(`Encoded URL: ${encodedUrl}`);
+    
+    // Realizar la solicitud con validación de SSL desactivada para URLs de Meta
+    const response = await axios({
+      method: 'GET',
+      url: encodedUrl,
+      responseType: 'arraybuffer',
+      headers: {
+        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
+      },
+      // Opciones adicionales para manejar URLs problemáticas
+      maxRedirects: 5,
+      timeout: 30000,
+      validateStatus: function (status) {
+        return status >= 200 && status < 300; // Aceptar solo códigos 2xx
+      }
+    });
+    
+    logger.info(`File downloaded successfully, size: ${response.data.length} bytes`);
+    return Buffer.from(response.data);
+  } catch (error) {
+    if (error.response) {
+      logger.error(`Error downloading file - Status: ${error.response.status}`);
+      logger.error(`Error data: ${JSON.stringify(error.response.data)}`);
+    } else if (error.request) {
+      logger.error(`Error downloading file - No response received: ${error.message}`);
+    } else {
+      logger.error(`Error downloading file: ${error.message}`);
+    }
+    throw new Error('Failed to download file from WhatsApp');
+  }
+};
+
 module.exports = {
   uploadToStorage,
+  getContentType,
+  extractTextFromPdf,
+  extractTextFromDocx,
   extractTextFromFile,
   sendToAnalyzerService,
   processCvFile,
+  downloadFile
 };

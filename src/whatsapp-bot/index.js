@@ -30,7 +30,9 @@ app.get('/webhook', (req, res) => {
 // Manejo de mensajes
 app.post('/webhook', async (req, res) => {
   try {
-    logger.info('Received webhook POST request', { body: req.body });
+    logger.info('========== WEBHOOK REQUEST BODY ============');
+    logger.info(JSON.stringify(req.body, null, 2));
+    logger.info('===========================================');
     
     const message = await bot.handleWebhook(req.body);
     
@@ -42,6 +44,10 @@ app.post('/webhook', async (req, res) => {
     logger.info('Processing message', { message });
 
     const { from, type, text, document, image } = message;
+    
+    if (document) {
+      logger.info('Document details:', JSON.stringify(document, null, 2));
+    }
 
     switch (type) {
       case 'text':

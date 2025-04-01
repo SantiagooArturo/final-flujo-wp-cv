@@ -13,6 +13,7 @@ dotenv.config();
 let firebaseApp;
 let mockFirestore = null;
 let usingMockImplementation = false;
+let firebaseInitialized = false;
 
 /**
  * Create a simple mock implementation for Firestore
@@ -115,53 +116,46 @@ const createMockStorage = () => {
 };
 
 /**
- * Initialize Firebase Admin SDK
- * Uses service account credentials from environment or credential file
- * Falls back to mock implementations if credentials are not available
+ * Initialize Firebase with credentials
  */
 const initializeFirebase = () => {
-  if (firebaseApp) {
-    return firebaseApp;
+  if (admin.apps.length) {
+    logger.info('Firebase already initialized');
+    return;
   }
-  
-  if (!process.env.FIREBASE_PROJECT_ID) {
-    logger.warn('Firebase project ID not set, using mock implementations');
-    usingMockImplementation = true;
-    mockFirestore = createMockFirestore();
-    return null;
+
+  // Check if all required environment variables are present
+  if (!process.env.FIREBASE_PROJECT_ID || 
+      !process.env.FIREBASE_PRIVATE_KEY || 
+      !process.env.FIREBASE_CLIENT_EMAIL) {
+    logger.error('Firebase environment variables not configured');
+    throw new Error('Firebase environment variables not configured');
   }
-  
+
   try {
-    // Check if we have a full service account JSON with private key
-    if (process.env.FIREBASE_SERVICE_ACCOUNT && 
-        process.env.FIREBASE_SERVICE_ACCOUNT.includes('"private_key"')) {
-      // Parse credentials from environment variable
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
-      
-      firebaseApp = admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-      });
-      
-      logger.info('Firebase initialized with service account credentials');
-    } 
-    // For all other cases (client credentials or project ID only), use mock implementation
-    else {
-      logger.warn('No full service account credentials found, using mock implementations');
-      usingMockImplementation = true;
-      mockFirestore = createMockFirestore();
-      return null;
-    }
-    
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      }),
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET,
+    });
+    firebaseInitialized = true;
     logger.info('Firebase initialized successfully');
-    return firebaseApp;
   } catch (error) {
+    firebaseInitialized = false;
     logger.error(`Error initializing Firebase: ${error.message}`);
-    logger.warn('Falling back to mock implementations');
-    usingMockImplementation = true;
-    mockFirestore = createMockFirestore();
-    return null;
+    throw error;
   }
+};
+
+/**
+ * Check if Firebase is initialized
+ * @returns {Boolean} - Whether Firebase is initialized
+ */
+const isInitialized = () => {
+  return firebaseInitialized && admin.apps.length > 0;
 };
 
 /**
@@ -211,5 +205,6 @@ module.exports = {
   admin,
   get usingMockImplementation() {
     return usingMockImplementation;
-  }
+  },
+  isInitialized
 };

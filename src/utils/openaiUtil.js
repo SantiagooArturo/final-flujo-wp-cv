@@ -316,11 +316,117 @@ const enhanceCVAnalysis = async (analysis) => {
   }
 };
 
+/**
+ * Analyze CV text using OpenAI
+ * @param {string} cvText - The CV text content
+ * @param {Object} options - Additional options
+ * @returns {Promise<Object>} Analysis results
+ */
+const analyzeCV = async (cvText, options = {}) => {
+  logger.info('Starting CV analysis');
+  
+  if (!openai) {
+    logger.warn('OpenAI no está inicializado. Generando análisis de prueba.');
+    return generateMockCVAnalysis();
+  }
+  
+  try {
+    const defaultOptions = {
+      model: "gpt-4o",
+      temperature: 0.7,
+      language: "es"
+    };
+
+    const mergedOptions = { ...defaultOptions, ...options };
+    
+    const systemPrompt = `Eres un experto en recursos humanos especializado en análisis de currículum vitae.
+Tu tarea es analizar currículums y proporcionar retroalimentación útil, constructiva y accionable.
+Responde siempre en ${mergedOptions.language === "es" ? "español" : "inglés"}.`;
+
+    const userPrompt = `
+Analiza el siguiente currículum vitae:
+"""
+${cvText.substring(0, 8000)} ${cvText.length > 8000 ? '... [texto truncado por límite de tokens]' : ''}
+"""
+
+Proporciona:
+1. Una puntuación general del 1-100
+2. Cinco fortalezas principales del CV
+3. Cinco áreas principales de mejora
+4. Cinco recomendaciones específicas y accionables
+
+Devuelve tu análisis estrictamente en formato JSON con las siguientes claves:
+{
+  "score": número,
+  "strengths": ["fortaleza1", "fortaleza2", "fortaleza3", "fortaleza4", "fortaleza5"],
+  "improvements": ["mejora1", "mejora2", "mejora3", "mejora4", "mejora5"],
+  "recommendations": ["recomendación1", "recomendación2", "recomendación3", "recomendación4", "recomendación5"]
+}
+`;
+
+    logger.info('Sending CV for analysis to OpenAI');
+    
+    const response = await openai.chat.completions.create({
+      model: mergedOptions.model,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      temperature: mergedOptions.temperature
+    });
+
+    const analysis = JSON.parse(response.choices[0].message.content);
+    logger.info('CV analysis completed successfully');
+    
+    return analysis;
+  } catch (error) {
+    logger.error(`Error analyzing CV with OpenAI: ${error.message}`);
+    logger.warn('Falling back to mock CV analysis');
+    return generateMockCVAnalysis();
+  }
+};
+
+/**
+ * Generate mock CV analysis for demo/testing purposes
+ * @returns {Object} Mock analysis results
+ */
+const generateMockCVAnalysis = () => {
+  logger.info('Generating mock CV analysis');
+  
+  return {
+    score: 72,
+    strengths: [
+      "Experiencia laboral relevante en el sector tecnológico",
+      "Habilidades técnicas bien definidas y actualizadas",
+      "Formación académica sólida y relacionada con el campo profesional",
+      "Organización clara y estructura profesional del CV",
+      "Inclusión de logros cuantificables en experiencias previas"
+    ],
+    improvements: [
+      "Falta de descripción detallada de responsabilidades en algunos roles",
+      "Ausencia de habilidades blandas relevantes para el puesto",
+      "Sección de objetivos profesionales demasiado genérica",
+      "Falta de personalización para el puesto específico al que se postula",
+      "Escasa información sobre proyectos personales o extracurriculares"
+    ],
+    recommendations: [
+      "Incluir métricas y resultados concretos para cada logro profesional",
+      "Añadir una sección de habilidades blandas relevantes para complementar las técnicas",
+      "Personalizar el resumen profesional para cada aplicación específica",
+      "Restructurar la sección de experiencia para destacar primero los logros más relevantes",
+      "Incorporar enlaces a portfolio o proyectos personales cuando sea aplicable"
+    ]
+  };
+};
+
 module.exports = {
   initializeOpenAI,
   generateImprovedText,
   transcribeAudio,
   analyzeInterviewResponse,
   generateMockInterviewAnalysis,
-  enhanceCVAnalysis
+  enhanceCVAnalysis,
+  analyzeCV,
+  generateMockCVAnalysis
 }; 
