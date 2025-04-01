@@ -145,6 +145,13 @@ const handleText = async (from, text) => {
         }
         break;
       case sessionService.SessionState.ANSWER_RECEIVED:
+        // Usuario confirmando que quiere continuar con la siguiente pregunta
+        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si') {
+          await handleNextQuestion(from);
+        } else {
+          await bot.sendMessage(from, 'Para continuar con la siguiente pregunta, responde "sí". Si deseas reiniciar el proceso, envía !reset.');
+        }
+        break;
       case sessionService.SessionState.QUESTION_ASKED:
         // Usuario respondiendo a una pregunta de entrevista con texto (no ideal)
         await bot.sendMessage(from, 'Por favor, responde a la pregunta con un mensaje de audio o video para que pueda evaluar tu respuesta.');
@@ -523,10 +530,13 @@ const handleInterview = async (from) => {
     // Obtener puesto de trabajo
     const jobPosition = session.jobPosition || 'software';
     
+    // Para la primera pregunta, enfocarse en la experiencia y presentación
+    const questionPrompt = `Pregunta inicial para un Tech Lead en ${jobPosition} sobre experiencia y trayectoria profesional`;
+    
     // Generar primera pregunta (con fallback a pregunta por defecto)
     let questionData;
     try {
-      questionData = await interviewService.generateInterviewQuestion(jobPosition);
+      questionData = await openaiUtil.generateInterviewQuestion(jobPosition, questionPrompt);
     } catch (error) {
       logger.error(`Error handling interview command: ${error.message}`);
       questionData = interviewService.getDefaultQuestion(jobPosition);
@@ -613,6 +623,120 @@ ${feedback.suggestions.map(s => `- ${s}`).join('\n')}
   `;
 };
 
+/**
+ * Genera y envía la siguiente pregunta de la entrevista
+ * @param {string} from - ID del usuario
+ * @returns {Promise<void>}
+ */
+const handleNextQuestion = async (from) => {
+  try {
+    // Obtener sesión del usuario
+    const session = await sessionService.getOrCreateSession(from);
+    
+    // Verificar si ya se completaron todas las preguntas
+    if (session.currentQuestion >= 3) {
+      await bot.sendMessage(from, `
+¡Felicidades! Has completado todas las preguntas de la entrevista.
+
+Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+      `);
+      await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+      return;
+    }
+    
+    // Incrementar contador de preguntas
+    const nextQuestionNumber = session.currentQuestion + 1;
+    
+    // Obtener puesto de trabajo
+    const jobPosition = session.jobPosition || 'software';
+    
+    // Definir diferentes tipos de preguntas según el número de pregunta
+    let questionType = jobPosition;
+    let questionPrompt = '';
+    
+    switch (nextQuestionNumber) {
+      case 1: // Segunda pregunta - enfoque en habilidades técnicas
+        questionPrompt = `Pregunta técnica específica para un Tech Lead en ${jobPosition} sobre arquitectura o tecnologías`;
+        break;
+      case 2: // Tercera pregunta - enfoque en liderazgo
+        questionPrompt = `Pregunta sobre liderazgo, gestión de equipos o resolución de conflictos para un Tech Lead en ${jobPosition}`;
+        break;
+      case 3: // Cuarta pregunta - enfoque en resolución de problemas
+        questionPrompt = `Pregunta sobre resolución de problemas complejos o decisiones difíciles para un Tech Lead en ${jobPosition}`;
+        break;
+      default:
+        questionPrompt = `Pregunta general para un Tech Lead en ${jobPosition}`;
+    }
+    
+    // Generar siguiente pregunta con el tipo específico
+    let questionData;
+    try {
+      questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt);
+      
+      // Verificar que la pregunta no sea igual a las anteriores
+      if (session.questions && session.questions.length > 0) {
+        const previousQuestions = session.questions.map(q => q.question);
+        let attempts = 0;
+        
+        // Si la pregunta es igual a alguna anterior, generar una nueva (máx 3 intentos)
+        while (previousQuestions.includes(questionData.question) && attempts < 3) {
+          logger.info(`Pregunta repetida detectada, generando nueva pregunta (intento ${attempts + 1})`);
+          questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt + " (diferente a las preguntas anteriores)");
+          attempts++;
+        }
+      }
+    } catch (error) {
+      logger.error(`Error generating next question: ${error.message}`);
+      // Usar preguntas predefinidas en caso de error
+      const predefinedQuestions = [
+        "¿Cómo gestionas la deuda técnica en proyectos con plazos ajustados?",
+        "Describe una situación en la que tuviste que liderar un equipo a través de un desafío técnico significativo.",
+        "¿Cómo equilibras la innovación técnica con la necesidad de entregar productos a tiempo?",
+        "¿Cuál es tu enfoque para la mentoría y desarrollo profesional de los miembros más junior de tu equipo?"
+      ];
+      
+      // Usar una pregunta predefinida que no se haya usado antes
+      const usedQuestions = session.questions.map(q => q.question);
+      const availableQuestions = predefinedQuestions.filter(q => !usedQuestions.includes(q));
+      
+      if (availableQuestions.length > 0) {
+        questionData = {
+          question: availableQuestions[0],
+          type: jobPosition,
+          originalType: jobPosition,
+          timestamp: new Date()
+        };
+      } else {
+        questionData = interviewService.getDefaultQuestion(jobPosition);
+      }
+    }
+    
+    // Guardar pregunta en la sesión
+    await sessionService.saveInterviewQuestion(from, questionData);
+    
+    // Formatear mensaje
+    const questionMessage = `
+*Pregunta ${nextQuestionNumber + 1} de 4:*
+
+${questionData.question}
+
+Por favor, responde con un mensaje de audio o video.
+`;
+    
+    // Enviar pregunta
+    await bot.sendMessage(from, questionMessage);
+    logger.info(`Sent question ${nextQuestionNumber + 1} to user ${from}`);
+    
+    // Actualizar estado
+    await sessionService.updateSessionState(from, sessionService.SessionState.QUESTION_ASKED);
+  } catch (error) {
+    logger.error(`Error handling next question: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al generar la siguiente pregunta. Por favor, intenta nuevamente con !interview.');
+  }
+};
+
 module.exports = {
   handleStart,
   handleDocument,
@@ -622,5 +746,6 @@ module.exports = {
   handleVideo,
   handleUnknown,
   handleHelp,
-  handleInterview
+  handleInterview,
+  handleNextQuestion
 }; 
