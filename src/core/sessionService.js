@@ -36,6 +36,7 @@ const getOrCreateSession = async (userId) => {
         questions: [],
         answers: [],
         feedback: [],
+        cvProcessed: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -58,6 +59,7 @@ const getOrCreateSession = async (userId) => {
         questions: [],
         answers: [],
         feedback: [],
+        cvProcessed: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -219,6 +221,7 @@ const resetSession = async (userId) => {
       return {
         userId,
         state: SessionState.INITIAL,
+        cvProcessed: false,
         updatedAt: new Date()
       };
     }
@@ -234,6 +237,7 @@ const resetSession = async (userId) => {
       questions: [],
       answers: [],
       feedback: [],
+      cvProcessed: false,
       updatedAt: new Date()
     };
     
@@ -278,6 +282,37 @@ const saveQuestion = async (userId, question) => {
   }
 };
 
+const updateSession = async (userId, data) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, session not updated');
+      return {
+        userId,
+        ...data,
+        updatedAt: new Date()
+      };
+    }
+
+    const db = firebaseConfig.getFirestore();
+    const sessionRef = db.collection(SESSIONS_COLLECTION).doc(userId.toString());
+    
+    const updateData = {
+      ...data,
+      updatedAt: new Date()
+    };
+    
+    await sessionRef.update(updateData);
+    logger.info(`Session updated for user ${userId}`);
+    
+    // Obtener la sesión actualizada
+    const updatedSession = await sessionRef.get();
+    return updatedSession.data();
+  } catch (error) {
+    logger.error(`Error updating session: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
   SessionState,
   getOrCreateSession,
@@ -288,5 +323,6 @@ module.exports = {
   saveInterviewAnswer,
   startInterview,
   resetSession,
-  saveQuestion
+  saveQuestion,
+  updateSession
 }; 

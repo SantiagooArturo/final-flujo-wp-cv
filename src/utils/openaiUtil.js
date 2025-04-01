@@ -355,73 +355,170 @@ const enhanceCVAnalysis = async (analysis) => {
 /**
  * Analyze CV text using OpenAI
  * @param {string} cvText - The CV text content
- * @param {Object} options - Additional options
+ * @param {string} jobType - The job type for which the CV is intended
  * @returns {Promise<Object>} Analysis results
  */
-const analyzeCV = async (cvText, options = {}) => {
-  logger.info('Starting CV analysis');
-  
-  if (!openai) {
-    logger.warn('OpenAI no está inicializado. Generando análisis de prueba.');
-    return generateMockCVAnalysis();
-  }
-  
+const analyzeCV = async (cvText, jobType) => {
   try {
-    const defaultOptions = {
-      model: "gpt-4o",
-      temperature: 0.7,
-      language: "es"
-    };
+    const prompt = `Analiza el siguiente CV de manera detallada y personalizada. Enfócate en los aspectos específicos y únicos del candidato:
 
-    const mergedOptions = { ...defaultOptions, ...options };
-    
-    const systemPrompt = `Eres un experto en recursos humanos especializado en análisis de currículum vitae.
-Tu tarea es analizar currículums y proporcionar retroalimentación útil, constructiva y accionable.
-Responde siempre en ${mergedOptions.language === "es" ? "español" : "inglés"}.`;
+CV:
+${cvText}
 
-    const userPrompt = `
-Analiza el siguiente currículum vitae:
-"""
-${cvText.substring(0, 8000)} ${cvText.length > 8000 ? '... [texto truncado por límite de tokens]' : ''}
-"""
+Tipo de trabajo: ${jobType}
 
-Proporciona:
-1. Una puntuación general del 1-100
-2. Cinco fortalezas principales del CV
-3. Cinco áreas principales de mejora
-4. Cinco recomendaciones específicas y accionables
+Por favor, proporciona un análisis detallado que incluya las siguientes secciones exactamente como se muestran:
 
-Devuelve tu análisis estrictamente en formato JSON con las siguientes claves:
-{
-  "score": número,
-  "strengths": ["fortaleza1", "fortaleza2", "fortaleza3", "fortaleza4", "fortaleza5"],
-  "improvements": ["mejora1", "mejora2", "mejora3", "mejora4", "mejora5"],
-  "recommendations": ["recomendación1", "recomendación2", "recomendación3", "recomendación4", "recomendación5"]
-}
-`;
+Puntuación general: [número]/100
+[Explicación breve de la puntuación]
 
-    logger.info('Sending CV for analysis to OpenAI');
-    
+Fortalezas específicas:
+- [Fortaleza 1]
+- [Fortaleza 2]
+- [Fortaleza 3]
+
+Áreas de mejora:
+- [Área 1]
+- [Área 2]
+- [Área 3]
+
+Recomendaciones:
+- [Recomendación 1]
+- [Recomendación 2]
+- [Recomendación 3]
+
+Experiencia relevante:
+- [Experiencia 1]
+- [Experiencia 2]
+- [Experiencia 3]
+
+Habilidades técnicas:
+- [Habilidad 1]
+- [Habilidad 2]
+- [Habilidad 3]
+
+Formación académica:
+- [Formación 1]
+- [Formación 2]
+- [Formación 3]
+
+Proyectos destacados:
+- [Proyecto 1]
+- [Proyecto 2]
+- [Proyecto 3]
+
+Alineación con el puesto:
+[Análisis detallado de la alineación con el puesto]
+
+Puntos destacables:
+- [Punto 1]
+- [Punto 2]
+- [Punto 3]
+
+Por favor, asegúrate de:
+1. Mantener exactamente los títulos de sección como se muestran arriba
+2. Usar guiones (-) para cada punto en las listas
+3. Incluir todas las secciones en el orden especificado
+4. Proporcionar información específica y personalizada para cada sección`;
+
     const response = await openai.chat.completions.create({
-      model: mergedOptions.model,
-      response_format: { type: "json_object" },
+      model: "gpt-4",
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
+        {
+          role: "system",
+          content: "Eres un experto en análisis de CVs y reclutamiento. Tu tarea es proporcionar un análisis detallado, personalizado y constructivo del CV del candidato, siguiendo exactamente el formato especificado."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
       ],
-      temperature: mergedOptions.temperature
+      temperature: 0.7,
+      max_tokens: 2000
     });
 
-    const analysis = JSON.parse(response.choices[0].message.content);
-    logger.info('CV analysis completed successfully');
-    
-    return analysis;
+    const analysis = response.choices[0].message.content;
+    return parseAnalysis(analysis);
   } catch (error) {
-    logger.error(`Error analyzing CV with OpenAI: ${error.message}`);
-    logger.warn('Falling back to mock CV analysis');
-    return generateMockCVAnalysis();
+    logger.error(`Error analyzing CV: ${error.message}`);
+    throw error;
   }
 };
+
+function parseAnalysis(analysis) {
+  try {
+    // Extraer secciones del análisis
+    const sections = analysis.split('\n\n');
+    const result = {
+      score: 0,
+      strengths: [],
+      improvements: [],
+      recommendations: [],
+      experience: [],
+      skills: [],
+      education: [],
+      projects: [],
+      alignment: '',
+      highlights: []
+    };
+
+    sections.forEach(section => {
+      if (section.includes('Puntuación general')) {
+        const scoreMatch = section.match(/(\d+)\/100/);
+        if (scoreMatch) {
+          result.score = parseInt(scoreMatch[1]);
+        }
+      } else if (section.includes('Fortalezas específicas')) {
+        result.strengths = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Áreas de mejora')) {
+        result.improvements = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Recomendaciones')) {
+        result.recommendations = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Experiencia relevante')) {
+        result.experience = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Habilidades técnicas')) {
+        result.skills = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Formación académica')) {
+        result.education = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Proyectos destacados')) {
+        result.projects = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Alineación con el puesto')) {
+        result.alignment = section.split('\n').slice(1).join('\n').trim();
+      } else if (section.includes('Puntos destacables')) {
+        result.highlights = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      }
+    });
+
+    return result;
+  } catch (error) {
+    logger.error(`Error parsing analysis: ${error.message}`);
+    throw error;
+  }
+}
 
 /**
  * Generate mock CV analysis for demo/testing purposes

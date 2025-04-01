@@ -6,22 +6,21 @@ const sessionService = require('../core/sessionService');
 
 const handleStart = async (from) => {
   try {
-    // Registrar usuario
-    await cvService.registerUser({
-      id: from,
-      phoneNumber: from,
-      language: 'es'
-    });
-
-    // Inicializar o reiniciar sesión
+    logger.info('Firebase already initialized');
     await sessionService.resetSession(from);
-
-    // Enviar mensaje de bienvenida usando plantilla
+    logger.info(`Session reset for user ${from}`);
+    
+    // Enviar solo el saludo inicial
     await bot.sendTemplate(from, 'saludo');
+    logger.info(`Template saludo sent successfully to ${from}`);
+    
+    // Actualizar el estado a 'initial' en lugar de 'waiting_for_cv'
+    await sessionService.updateSessionState(from, 'initial');
+    
     logger.info(`Start command handled for user ${from}`);
   } catch (error) {
     logger.error(`Error handling start command: ${error.message}`);
-    throw error;
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta nuevamente.');
   }
 };
 
@@ -30,9 +29,11 @@ const handleDocument = async (from, document) => {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
     
-    // Enviar respuesta inicial
-    await bot.sendMessage(from, 'Gracias por enviar tu CV. Lo analizaré y te daré retroalimentación.');
-    logger.info('Sent initial response to user');
+    // Verificar si ya se procesó este CV
+    if (session.cvProcessed) {
+      logger.info(`CV already processed for user ${from}`);
+      return;
+    }
 
     // Validar documento
     if (!document) {
@@ -59,6 +60,12 @@ const handleDocument = async (from, document) => {
 
     logger.info(`Document URL obtained: ${documentUrl}`);
 
+    // Marcar el CV como procesado antes de comenzar el análisis
+    await sessionService.updateSession(from, { cvProcessed: true });
+
+    // Enviar mensaje de procesamiento
+    await bot.sendMessage(from, 'Gracias por enviar tu CV. Lo analizaré y te daré retroalimentación.');
+
     // Procesar el CV
     logger.info(`Processing CV for user ${from} with URL: ${documentUrl}`);
     const analysis = await cvService.processCV(documentUrl, from);
@@ -72,12 +79,12 @@ const handleDocument = async (from, document) => {
     await bot.sendMessage(from, analysisMessage);
     logger.info(`Analysis results sent to user ${from}`);
 
-    // Preguntar por el puesto de trabajo
-    setTimeout(async () => {
+    // Preguntar por el puesto de trabajo solo si no está en estado position_asked
+    if (session.state !== sessionService.SessionState.POSITION_ASKED) {
       await bot.sendMessage(from, '¿A qué puesto te gustaría aplicar? Por favor, describe brevemente el puesto y la industria.');
       await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_ASKED);
       logger.info(`Asked user ${from} about job position`);
-    }, 2000);
+    }
 
     logger.info(`Document processed successfully for user ${from}`);
   } catch (error) {
@@ -89,35 +96,39 @@ const handleDocument = async (from, document) => {
 
 const handleText = async (from, text) => {
   try {
-    // Obtener sesión del usuario
+    logger.info('Firebase already initialized');
     const session = await sessionService.getOrCreateSession(from);
+    logger.info(`Session retrieved for user: ${from}, state: ${session.state}`);
+    
     logger.info(`Handling text message from user ${from} in state: ${session.state}`);
-
-    // Manejar comandos
-    if (text.startsWith('!')) {
-      const command = text.slice(1).toLowerCase();
+    
+    // Manejar comandos especiales primero
+    if (text.toLowerCase().startsWith('!')) {
+      const command = text.toLowerCase().substring(1);
       switch (command) {
         case 'start':
           await handleStart(from);
-          break;
+          return;
         case 'help':
           await handleHelp(from);
-          break;
-        case 'interview':
-          await handleInterview(from);
-          break;
+          return;
         case 'reset':
           await sessionService.resetSession(from);
-          await bot.sendMessage(from, 'Se ha reiniciado tu sesión. Puedes enviar tu CV para comenzar de nuevo.');
-          break;
+          await handleStart(from);
+          return;
         default:
-          await bot.sendMessage(from, 'Por favor, envía tu CV como documento para que pueda analizarlo.');
+          await bot.sendMessage(from, 'Comando no reconocido. Usa !help para ver los comandos disponibles.');
+          return;
       }
-      return;
     }
-
-    // Manejar mensajes según el estado de la sesión
+    
+    // Manejar mensajes normales según el estado
     switch (session.state) {
+      case 'initial':
+        // Si el usuario está en estado inicial, pedir el CV
+        await bot.sendMessage(from, 'Por favor, envía tu CV como documento para que pueda analizarlo.');
+        await sessionService.updateSessionState(from, 'waiting_for_cv');
+        break;
       case sessionService.SessionState.POSITION_ASKED:
         // Usuario respondiendo a la pregunta sobre el puesto
         await handleJobPosition(from, text);
@@ -145,7 +156,7 @@ const handleText = async (from, text) => {
     logger.info(`Text message handled for user ${from}`);
   } catch (error) {
     logger.error(`Error handling text message: ${error.message}`);
-    throw error;
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta nuevamente.');
   }
 };
 
@@ -385,18 +396,36 @@ Por favor, responde con un mensaje de audio o video.
 
 const formatAnalysisResults = (analysis) => {
   return `
-*Análisis de tu CV*
+*Análisis Detallado de tu CV*
 
-*Puntuación general:* ${analysis.score}/100
+*Puntuación General:* ${analysis.score}/100
 
-*Fortalezas:*
+*Puntos Destacables:*
+${analysis.highlights.map(h => `- ${h}`).join('\n')}
+
+*Fortalezas Específicas:*
 ${analysis.strengths.map(s => `- ${s}`).join('\n')}
 
-*Áreas de mejora:*
+*Experiencia Relevante:*
+${analysis.experience.map(e => `- ${e}`).join('\n')}
+
+*Habilidades Técnicas:*
+${analysis.skills.map(s => `- ${s}`).join('\n')}
+
+*Formación Académica:*
+${analysis.education.map(e => `- ${e}`).join('\n')}
+
+*Proyectos Destacados:*
+${analysis.projects.map(p => `- ${p}`).join('\n')}
+
+*Áreas de Mejora:*
 ${analysis.improvements.map(i => `- ${i}`).join('\n')}
 
-*Recomendaciones:*
+*Recomendaciones Personalizadas:*
 ${analysis.recommendations.map(r => `- ${r}`).join('\n')}
+
+*Análisis de Alineación con el Puesto:*
+${analysis.alignment}
   `;
 };
 
