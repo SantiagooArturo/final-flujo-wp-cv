@@ -43,7 +43,7 @@ app.post('/webhook', async (req, res) => {
 
     logger.info('Processing message', { message });
 
-    const { from, type, text, document, image } = message;
+    const { from, type, text, document, image, audio, video } = message;
     
     if (document) {
       logger.info('Document details:', JSON.stringify(document, null, 2));
@@ -65,6 +65,19 @@ app.post('/webhook', async (req, res) => {
       case 'image':
         logger.info('Handling image message', { from, image });
         await handlers.handleImage(from, image);
+        break;
+      case 'audio':
+        logger.info('Handling audio message', { from, audio });
+        await handlers.handleAudio(from, audio);
+        break;
+      case 'video':
+        logger.info('Handling video message', { from, video });
+        await handlers.handleVideo(from, video);
+        break;
+      case 'button':
+      case 'interactive':
+        logger.info('Handling interactive message', { from, text });
+        await handlers.handleText(from, text || 'Mensaje interactivo');
         break;
       default:
         logger.info('Handling unknown message type', { from, type });

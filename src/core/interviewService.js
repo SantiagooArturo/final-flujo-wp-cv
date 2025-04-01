@@ -60,8 +60,38 @@ const getDefaultQuestion = (type) => {
   };
 };
 
+/**
+ * Generate mock interview analysis for simulation
+ * @param {Object} question - Question object
+ * @returns {Object} Mock analysis results
+ */
+function generateMockInterviewAnalysis(question) {
+  const mockAnalysis = {
+    score: Math.floor(Math.random() * 3) + 7, // Random score between 7-9
+    summary: "Tu respuesta muestra buena preparación y comunicación efectiva aunque hay áreas de mejora.",
+    strengths: [
+      "Buena estructura en la respuesta",
+      "Comunicación clara y concisa",
+      "Uso de ejemplos específicos"
+    ],
+    weaknesses: [
+      "Podrías profundizar más en algunos puntos",
+      "La respuesta podría beneficiarse de más datos concretos",
+      "Oportunidad para mostrar más entusiasmo en la comunicación"
+    ],
+    suggestions: [
+      "Incluye más métricas o resultados específicos de tu experiencia",
+      "Practica un tono más dinámico y entusiasta",
+      "Refuerza tus puntos con ejemplos de situaciones reales"
+    ]
+  };
+  
+  return mockAnalysis;
+}
+
 module.exports = {
   generateInterviewQuestion,
   analyzeVideoResponse,
-  getDefaultQuestion
+  getDefaultQuestion,
+  generateMockInterviewAnalysis
 }; 

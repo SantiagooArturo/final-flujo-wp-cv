@@ -148,6 +148,41 @@ class WhatsAppBot {
     }
   }
 
+  /**
+   * Obtener URL de medios (audio, video, imagen)
+   * @param {string} mediaId - ID del medio
+   * @returns {Promise<string>} URL del medio
+   */
+  async getMediaUrl(mediaId) {
+    try {
+      logger.info(`Getting media URL for ID: ${mediaId}`);
+      
+      // URL para obtener medio
+      const mediaUrl = `https://graph.facebook.com/${config.apiVersion}/${mediaId}`;
+      
+      const headers = {
+        'Authorization': `Bearer ${config.token}`,
+        'Content-Type': 'application/json'
+      };
+      
+      const response = await axios.get(
+        mediaUrl,
+        { headers }
+      );
+      
+      if (response.data && response.data.url) {
+        logger.info(`Media URL found: ${response.data.url}`);
+        return response.data.url;
+      } else {
+        logger.warn('No URL found in media API response');
+        throw new Error('No se encontró la URL del medio en la respuesta');
+      }
+    } catch (error) {
+      logger.error(`Error getting media URL: ${error.message}`);
+      throw error;
+    }
+  }
+
   async handleWebhook(body) {
     try {
       // Validar que el body tenga la estructura esperada
@@ -169,6 +204,13 @@ class WhatsAppBot {
       }
 
       const value = changes.value;
+      
+      // Si incluye statuses, es una notificación de estado, no un mensaje
+      if (value.statuses) {
+        logger.info('Status notification received, not a message');
+        return null;
+      }
+      
       if (!Array.isArray(value.messages) || value.messages.length === 0) {
         logger.warn('Invalid webhook body structure: missing messages array');
         return null;
@@ -180,14 +222,61 @@ class WhatsAppBot {
         return null;
       }
 
-      return {
+      const messageType = message.type;
+      logger.info(`Message type received: ${messageType}`);
+      
+      // Construir objeto de retorno según el tipo de mensaje
+      const baseMessage = {
         from: message.from,
-        type: message.type,
-        timestamp: message.timestamp,
-        text: message.text?.body,
-        document: message.document,
-        image: message.image
+        type: messageType,
+        timestamp: message.timestamp
       };
+      
+      // Agregar datos específicos según el tipo de mensaje
+      switch (messageType) {
+        case 'text':
+          return {
+            ...baseMessage,
+            text: message.text?.body
+          };
+        case 'document':
+          return {
+            ...baseMessage,
+            document: message.document
+          };
+        case 'image':
+          return {
+            ...baseMessage,
+            image: message.image
+          };
+        case 'audio':
+          return {
+            ...baseMessage,
+            audio: message.audio
+          };
+        case 'video':
+          return {
+            ...baseMessage,
+            video: message.video
+          };
+        case 'button':
+          return {
+            ...baseMessage,
+            button: message.button,
+            text: message.button?.text
+          };
+        case 'interactive':
+          return {
+            ...baseMessage,
+            interactive: message.interactive,
+            text: 
+              message.interactive?.button_reply?.title || 
+              message.interactive?.list_reply?.title
+          };
+        default:
+          logger.warn(`Unhandled message type: ${messageType}`);
+          return baseMessage;
+      }
     } catch (error) {
       logger.error(`Error handling webhook: ${error.message}`);
       throw error;
