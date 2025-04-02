@@ -1,5 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const path = require('path');
 const config = require('./config');
 const bot = require('./bot');
 const handlers = require('./handlers');
@@ -8,6 +9,11 @@ const sessionService = require('../core/sessionService');
 
 const app = express();
 app.use(bodyParser.json());
+
+// Servir archivos estáticos desde el directorio 'public'
+const publicDir = path.join(process.cwd(), 'public');
+app.use('/public', express.static(publicDir));
+logger.info(`Sirviendo archivos estáticos desde: ${publicDir}`);
 
 // Verificación del webhook
 app.get('/webhook', (req, res) => {
@@ -122,6 +128,9 @@ app.post('/webhook', async (req, res) => {
             await sessionService.updateSession(from, { cvProcessed: false });
             await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
             await sessionService.updateSessionState(from, 'waiting_for_cv');
+          } else if (buttonId === 'premium_required') {
+            // Mostrar información sobre la versión premium
+            await handlers.handlePremiumInfo(from);
           }
         }
         else {

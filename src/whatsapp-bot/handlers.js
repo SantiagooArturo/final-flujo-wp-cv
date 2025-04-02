@@ -6,6 +6,11 @@ const sessionService = require('../core/sessionService');
 const videoProcessing = require('../utils/videoProcessing');
 const openaiUtil = require('../utils/openaiUtil');
 const fileProcessing = require('../utils/fileProcessing');
+const { generateCVAnalysisPDF } = require('../utils/pdfGenerator');
+const storageService = require('../utils/storageService');
+const fs = require('fs');
+const path = require('path');
+const axios = require('axios');
 
 const handleStart = async (from) => {
   try {
@@ -116,9 +121,9 @@ const handleMenuSelection = async (from, selection) => {
         
         await bot.sendButtonMessage(
           from,
-          'No reconozco esa opción. Por favor, selecciona una de las siguientes:',
+          'No reconozco esa opción. Si quieres simular una entrevista dale a Simular entrevista, si quieres analizar otro CV dale a Premium',
           menuButtons,
-          '¿En qué puedo ayudarte hoy?'
+          '¿Ahora cómo te ayudo?'
         );
         logger.info(`Invalid selection, menu re-sent to user ${from}`);
         break;
@@ -191,10 +196,60 @@ const handleDocument = async (from, document) => {
     // Guardar análisis en la sesión
     await sessionService.saveCVAnalysis(from, analysis);
 
-    // Formatear y enviar resultados del análisis
-    const analysisMessage = formatAnalysisResults(analysis);
-    await bot.sendMessage(from, analysisMessage);
-    logger.info(`Analysis results sent to user ${from}`);
+    // Guardar el análisis actual como "previo" para futuras referencias
+    // Importante: Esto debe hacerse ANTES de mostrar los botones de opciones
+    await sessionService.updateSession(from, { 
+      previousAnalysis: session.previousAnalysis ? [...session.previousAnalysis, analysis] : [analysis] 
+    });
+
+    // Ya no enviar el análisis en texto, solo informar que será enviado en PDF
+    await bot.sendMessage(from, 'He analizado tu CV. Te enviaré un informe detallado en PDF.');
+    logger.info(`Analysis processing completed for user ${from}`);
+
+    // Generar PDF con el análisis
+    try {
+      logger.info('Generando PDF del análisis de CV');
+      const candidateName = session.userName || 'Candidato';
+      const pdfPath = await generateCVAnalysisPDF(analysis, jobPosition || 'No especificado', candidateName);
+      
+      if (pdfPath) {
+        logger.info(`PDF generado correctamente en: ${pdfPath}`);
+        
+        // Obtener el nombre base del archivo
+        const fileName = path.basename(pdfPath);
+        
+        // Intentar obtener la URL de ngrok para enviar un enlace directo
+        try {
+          const response = await axios.get('http://localhost:4040/api/tunnels');
+          const ngrokUrl = response.data.tunnels[0].public_url;
+          
+          if (ngrokUrl) {
+            // Construir URL directa al PDF
+            const pdfUrl = `${ngrokUrl}/public/${fileName}`;
+            logger.info(`URL directo al PDF: ${pdfUrl}`);
+            
+            // Enviar mensaje con enlace al PDF
+            await bot.sendMessage(from, `Aquí tienes el análisis completo de tu CV para el puesto de ${jobPosition || 'no especificado'}:`);
+            await bot.sendMessage(from, `${pdfUrl}`);
+            
+            logger.info(`Enlace al PDF enviado al usuario ${from}`);
+          } else {
+            logger.warn('No se pudo obtener la URL de ngrok');
+            await bot.sendMessage(from, 'A continuación te envío un PDF detallado con el análisis de tu CV');
+            await bot.sendMessage(from, 'El análisis completo incluye una evaluación detallada de tus fortalezas, áreas de mejora y recomendaciones específicas para el puesto.');
+          }
+        } catch (ngrokError) {
+          logger.error(`Error al obtener la URL de ngrok: ${ngrokError.message}`);
+          await bot.sendMessage(from, 'A continuación te envío un PDF detallado con el análisis de tu CV');
+          await bot.sendMessage(from, 'El análisis completo incluye una evaluación detallada de tus fortalezas, áreas de mejora y recomendaciones específicas para el puesto.');
+        }
+      } else {
+        logger.warn('No se pudo generar el PDF, la ruta es nula');
+      }
+    } catch (pdfError) {
+      logger.error(`Error al generar o enviar el PDF: ${pdfError.message}`, { error: pdfError });
+      // Continuar con el flujo normal aunque falle el PDF
+    }
 
     // Preguntar por el puesto de trabajo solo si no está en estado position_asked
     // y no tenemos ya un puesto guardado
@@ -207,27 +262,49 @@ const handleDocument = async (from, document) => {
       // Ofrecer las opciones de simular entrevista o revisar CV nuevamente
       setTimeout(async () => {
         try {
+          // Obtener sesión actualizada ya que podría haber cambiado
+          const updatedSession = await sessionService.getOrCreateSession(from);
+          // Verificar si ya se ha analizado un CV anteriormente
+          const hasAnalyzedCVBefore = updatedSession.previousAnalysis && updatedSession.previousAnalysis.length > 1;
+          
           // Definir las opciones del menú post-análisis
-          const menuButtons = [
-            { id: 'start_interview', text: 'Simular entrevista' },
-            { id: 'review_cv_again', text: 'Revisar otro CV' }
+          let menuButtons = [
+            { id: 'start_interview', text: 'Simular entrevista' }
           ];
           
-          // Enviar mensaje con botones
-          await bot.sendButtonMessage(
-            from,
-            `¿Qué deseas hacer a continuación para el puesto de ${jobPosition}?`,
-            menuButtons,
-            'Opciones disponibles'
-          );
+          // Para la opción de revisar otro CV, mostrar texto diferente si ya ha analizado uno antes
+          if (hasAnalyzedCVBefore) {
+            menuButtons.push({ id: 'premium_required', text: 'Premium' });
+          } else {
+            menuButtons.push({ id: 'review_cv_again', text: 'Otro CV' });
+          }
           
-          // Actualizar estado a un nuevo estado para manejar esta selección
+          // Actualizar estado antes de enviar los botones
           await sessionService.updateSessionState(from, 'post_cv_options');
-          logger.info(`Post-CV analysis options sent to user ${from}`);
-        } catch (buttonError) {
-          logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-          // Si los botones fallan, usar mensaje de texto simple
-          await bot.sendMessage(from, `¿Quieres simular una entrevista para el puesto de ${jobPosition}? Responde "sí" para comenzar o "revisar" para analizar otro CV.`);
+          
+          try {
+            // Enviar mensaje con botones
+            await bot.sendButtonMessage(
+              from,
+              `Si quieres simular una entrevista como ${jobPosition} dale a Simular entrevista, si quieres analizar nuevamente un CV dale a ${hasAnalyzedCVBefore ? 'Premium' : 'Otro CV'}`,
+              menuButtons,
+              '¿Ahora cómo te ayudo?'
+            );
+            
+            logger.info(`Post-CV analysis options sent to user ${from}`);
+          } catch (buttonError) {
+            logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+            // Si los botones fallan, usar mensaje de texto simple
+            const premiumMsg = hasAnalyzedCVBefore ? 
+              " Escribe 'premium' para conocer cómo obtener la versión premium para revisar más CVs." : 
+              " Escribe 'revisar' para analizar otro CV.";
+            
+            await bot.sendMessage(from, `¿Quieres simular una entrevista para el puesto de ${jobPosition}? Responde "sí" para comenzar.${premiumMsg}`);
+          }
+        } catch (error) {
+          logger.error(`Error showing post-CV options: ${error.message}`);
+          // Mostrar un mensaje simple en caso de error
+          await bot.sendMessage(from, `Tu CV ha sido analizado para el puesto de ${jobPosition}. ¿Quieres simular una entrevista? Responde "sí" para comenzar.`);
           await sessionService.updateSessionState(from, 'post_cv_options');
         }
       }, 2000);
@@ -301,9 +378,9 @@ const handleText = async (from, text) => {
           
           await bot.sendButtonMessage(
             from,
-            'No reconozco esa opción. Por favor, selecciona una de las siguientes:',
+            'No reconozco esa opción. Si quieres simular una entrevista dale a Simular entrevista, si quieres analizar otro CV dale a Premium',
             menuButtons,
-            '¿En qué puedo ayudarte hoy?'
+            '¿Ahora cómo te ayudo?'
           );
         }
         break;
@@ -316,23 +393,33 @@ const handleText = async (from, text) => {
           await handleInterview(from);
         } else if (text.toLowerCase().includes('revisar') || text.toLowerCase().includes('otro cv') || 
                   text.toLowerCase().includes('nuevo cv')) {
-          // Reiniciar el proceso para revisar otro CV, manteniendo el puesto
-          await sessionService.updateSession(from, { cvProcessed: false });
-          await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
-          await sessionService.updateSessionState(from, 'waiting_for_cv');
+                  
+          // Verificar si ya ha analizado un CV anteriormente
+          if (session.previousAnalysis && session.previousAnalysis.length > 0) {
+            // Mostrar mensaje de versión premium
+            await handlePremiumInfo(from);
+          } else {
+            // Reiniciar el proceso para revisar otro CV, manteniendo el puesto
+            await sessionService.updateSession(from, { cvProcessed: false });
+            await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
+            await sessionService.updateSessionState(from, 'waiting_for_cv');
+          }
+        } else if (text.toLowerCase().includes('premium')) {
+          // Mostrar información sobre la versión premium
+          await handlePremiumInfo(from);
         } else {
           // Opción no reconocida, mostrar las opciones nuevamente
           try {
             const menuButtons = [
               { id: 'start_interview', text: 'Simular entrevista' },
-              { id: 'review_cv_again', text: 'Revisar otro CV' }
+              { id: 'premium_required', text: 'Premium' }
             ];
             
             await bot.sendButtonMessage(
               from,
               'No reconozco esa opción. ¿Qué deseas hacer a continuación?',
               menuButtons,
-              'Opciones disponibles'
+              '¿Ahora cómo te ayudo?'
             );
           } catch (buttonError) {
             await bot.sendMessage(from, 'No reconozco esa opción. Responde "sí" para simular una entrevista o "revisar" para analizar otro CV.');
@@ -962,6 +1049,50 @@ Por favor, responde con un mensaje de audio o video.
   }
 };
 
+/**
+ * Maneja la información sobre la versión premium
+ * @param {string} from - Número de teléfono del usuario
+ */
+const handlePremiumInfo = async (from) => {
+  try {
+    // Enviar información sobre la versión premium
+    await bot.sendMessage(from, '¡Gracias por tu interés en nuestra versión premium! 🌟\n\nPara poder analizar múltiples CVs y acceder a todas nuestras funcionalidades avanzadas, te invitamos a adquirir nuestra suscripción premium.');
+    await bot.sendMessage(from, 'Beneficios de la versión premium:\n• Análisis ilimitado de CVs\n• Comparación entre diferentes perfiles\n• Recomendaciones personalizadas avanzadas\n• Acceso a plantillas profesionales\n• Soporte prioritario 24/7');
+    await bot.sendMessage(from, 'Para más información sobre precios y cómo obtener tu suscripción, visita: https://www.myworkin.com/premium');
+    
+    // Mostrar las opciones disponibles nuevamente
+    setTimeout(async () => {
+      try {
+        // Actualizar estado antes de enviar los botones
+        await sessionService.updateSessionState(from, 'post_cv_options');
+        
+        const menuButtons = [
+          { id: 'start_interview', text: 'Simular entrevista' },
+          { id: 'premium_required', text: 'Premium' }
+        ];
+        
+        try {
+          await bot.sendButtonMessage(
+            from,
+            'Si quieres simular una entrevista dale a Simular entrevista, si quieres analizar más CVs dale a Premium',
+            menuButtons,
+            '¿Ahora cómo te ayudo?'
+          );
+        } catch (buttonError) {
+          logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+          await bot.sendMessage(from, '¿Quieres simular una entrevista? Responde "sí" para comenzar. O escribe "premium" para más información sobre la versión premium para revisar más CVs.');
+        }
+      } catch (error) {
+        logger.error(`Error showing options after premium info: ${error.message}`);
+        await bot.sendMessage(from, '¿Quieres simular una entrevista? Responde "sí" para comenzar.');
+      }
+    }, 1000);
+  } catch (error) {
+    logger.error(`Error handling premium info: ${error.message}`, { error });
+    throw error;
+  }
+};
+
 module.exports = {
   handleStart,
   handleDocument,
@@ -973,5 +1104,6 @@ module.exports = {
   handleHelp,
   handleInterview,
   handleNextQuestion,
-  handleMenuSelection
+  handleMenuSelection,
+  handlePremiumInfo
 }; 
