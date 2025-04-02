@@ -473,7 +473,11 @@ const handleText = async (from, text) => {
         await bot.sendMessage(from, 'Por favor, responde a la pregunta con un mensaje de audio o video para que pueda evaluar tu respuesta.');
         break;
       case sessionService.SessionState.INTERVIEW_COMPLETED:
-        await bot.sendMessage(from, 'Tu entrevista ha finalizado. Si deseas comenzar de nuevo, envía !reset.');
+        // Cuando recibimos cualquier mensaje después de completar la entrevista,
+        // automáticamente reiniciamos el proceso como si el usuario hubiera enviado !reset
+        logger.info(`User ${from} sent a message after interview completion. Auto-resetting session.`);
+        await sessionService.resetSession(from);
+        await handleStart(from);
         break;
       default:
         await bot.sendMessage(from, 'Por favor, envía tu CV como documento para que pueda analizarlo.');
