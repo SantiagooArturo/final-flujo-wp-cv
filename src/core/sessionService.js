@@ -15,6 +15,7 @@ const SessionState = {
   POST_CV_OPTIONS: 'post_cv_options', // Opciones después del análisis del CV
   POSITION_ASKED: 'position_asked', // Se preguntó por el puesto
   POSITION_RECEIVED: 'position_received', // Se recibió el puesto
+  WAITING_INTERVIEW_CONFIRMATION: 'waiting_interview_confirmation', // Esperando confirmación para iniciar entrevista
   INTERVIEW_STARTED: 'interview_started', // Entrevista iniciada
   QUESTION_ASKED: 'question_asked', // Pregunta realizada
   ANSWER_RECEIVED: 'answer_received', // Respuesta recibida

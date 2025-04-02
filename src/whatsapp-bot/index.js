@@ -121,7 +121,6 @@ app.post('/webhook', async (req, res) => {
         else if (session.state === sessionService.SessionState.POST_CV_OPTIONS && buttonId) {
           if (buttonId === 'start_interview') {
             // Iniciar simulación de entrevista
-            await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
             await handlers.handleInterview(from);
           } else if (buttonId === 'review_cv_again') {
             // Reiniciar el proceso para revisar otro CV, manteniendo el puesto
@@ -131,6 +130,28 @@ app.post('/webhook', async (req, res) => {
           } else if (buttonId === 'premium_required') {
             // Mostrar información sobre la versión premium
             await handlers.handlePremiumInfo(from);
+          }
+        }
+        // Si estamos en el estado de espera de confirmación de entrevista
+        else if (session.state === sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION && buttonId) {
+          if (buttonId === 'start_interview_now') {
+            // El usuario confirmó que está listo para iniciar la entrevista
+            await handlers.startInterviewQuestions(from);
+          } else if (buttonId === 'cancel_interview') {
+            // El usuario canceló la entrevista
+            await bot.sendMessage(from, 'Entrevista cancelada. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
+            await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+          }
+        }
+        // Si estamos en estado de respuesta recibida (después de mostrar feedback)
+        else if (session.state === sessionService.SessionState.ANSWER_RECEIVED && buttonId) {
+          if (buttonId === 'continue_interview') {
+            // El usuario quiere continuar con la siguiente pregunta
+            await handlers.handleNextQuestion(from);
+          } else if (buttonId === 'stop_interview') {
+            // El usuario quiere detener la entrevista
+            await bot.sendMessage(from, 'Entrevista detenida. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
+            await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
           }
         }
         else {

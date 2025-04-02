@@ -378,10 +378,22 @@ const handleText = async (from, text) => {
           
           await bot.sendButtonMessage(
             from,
-            'No reconozco esa opción. Si quieres simular una entrevista dale a Simular entrevista, si quieres analizar otro CV dale a Premium',
+            'No reconozco esa opción. Por favor, selecciona una de las siguientes:',
             menuButtons,
-            '¿Ahora cómo te ayudo?'
+            '¿En qué puedo ayudarte hoy?'
           );
+        }
+        break;
+      case sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION:
+        // Usuario confirmando si quiere comenzar la entrevista
+        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si' || 
+            text.toLowerCase().includes('listo') || text.toLowerCase().includes('comenzar')) {
+          await startInterviewQuestions(from);
+        } else if (text.toLowerCase() === 'no' || text.toLowerCase().includes('cancel')) {
+          await bot.sendMessage(from, 'Entrevista cancelada. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
+          await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+        } else {
+          await bot.sendMessage(from, 'Por favor, responde "sí" si estás listo para comenzar la entrevista o "no" para cancelar.');
         }
         break;
       case sessionService.SessionState.POST_CV_OPTIONS:
@@ -612,10 +624,28 @@ Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
         `);
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
       } else {
-        // Preguntar si quiere continuar
+        // Preguntar si quiere continuar usando botones
         setTimeout(async () => {
-          await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
-          await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+          try {
+            const continueButtons = [
+              { id: 'continue_interview', text: 'Si' },
+              { id: 'stop_interview', text: 'Detener' }
+            ];
+            
+            await bot.sendButtonMessage(
+              from,
+              '¿Quieres continuar con la siguiente pregunta?',
+              continueButtons,
+              'Continuar entrevista'
+            );
+            
+            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+            logger.info(`Asked user ${from} if wants to continue interview with buttons`);
+          } catch (buttonError) {
+            logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+            await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
+            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+          }
         }, 2000);
       }
     } catch (processingError) {
@@ -725,10 +755,28 @@ Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
         `);
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
       } else {
-        // Preguntar si quiere continuar
+        // Preguntar si quiere continuar usando botones
         setTimeout(async () => {
-          await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
-          await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+          try {
+            const continueButtons = [
+              { id: 'continue_interview', text: 'Si' },
+              { id: 'stop_interview', text: 'Detener' }
+            ];
+            
+            await bot.sendButtonMessage(
+              from,
+              '¿Quieres continuar con la siguiente pregunta?',
+              continueButtons,
+              'Continuar entrevista'
+            );
+            
+            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+            logger.info(`Asked user ${from} if wants to continue interview with buttons`);
+          } catch (buttonError) {
+            logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+            await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
+            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
+          }
         }, 2000);
       }
     } catch (processingError) {
@@ -774,9 +822,26 @@ Gracias por participar en esta simulación. Espero que el feedback te haya sido 
 Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
       `);
     } else {
-      // Preguntar si quiere continuar
+      // Preguntar si quiere continuar usando botones
       setTimeout(async () => {
-        await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
+        try {
+          const continueButtons = [
+            { id: 'continue_interview', text: 'Si' },
+            { id: 'stop_interview', text: 'Detener' }
+          ];
+          
+          await bot.sendButtonMessage(
+            from,
+            '¿Quieres continuar con la siguiente pregunta?',
+            continueButtons,
+            'Continuar entrevista'
+          );
+          
+          logger.info(`Asked user ${from} if wants to continue interview with buttons`);
+        } catch (buttonError) {
+          logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+          await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
+        }
       }, 2000);
     }
     
@@ -828,6 +893,48 @@ const handleInterview = async (from) => {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
     
+    // Obtener puesto de trabajo
+    const jobPosition = session.jobPosition || 'software';
+    
+    // Preguntar al usuario si está listo para comenzar la entrevista
+    try {
+      const readyButtons = [
+        { id: 'start_interview_now', text: 'Estoy listo' },
+        { id: 'cancel_interview', text: 'Cancelar' }
+      ];
+      
+      await bot.sendButtonMessage(
+        from,
+        `Vamos a comenzar una simulación de entrevista para el puesto de ${jobPosition}. Te haré 4 preguntas y deberás responder con mensajes de audio o video.`,
+        readyButtons,
+        '¿Estás listo para comenzar?'
+      );
+      
+      // Actualizar estado para esperar confirmación
+      await sessionService.updateSessionState(from, sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION);
+      logger.info(`Asked user ${from} if ready to start interview`);
+    } catch (buttonError) {
+      logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+      await bot.sendMessage(from, `Vamos a comenzar una simulación de entrevista para el puesto de ${jobPosition}. Te haré 4 preguntas y deberás responder con mensajes de audio o video.`);
+      await bot.sendMessage(from, '¿Estás listo para comenzar? Responde "sí" para iniciar la entrevista o "no" para cancelar.');
+      await sessionService.updateSessionState(from, sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION);
+    }
+  } catch (error) {
+    logger.error(`Error preparing interview: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al preparar la entrevista. Por favor, intenta nuevamente con !start.');
+  }
+};
+
+/**
+ * Inicia la primera pregunta de la entrevista
+ * @param {string} from - ID del usuario
+ * @returns {Promise<void>}
+ */
+const startInterviewQuestions = async (from) => {
+  try {
+    // Obtener sesión del usuario
+    const session = await sessionService.getOrCreateSession(from);
+    
     // Iniciar entrevista
     await sessionService.startInterview(from);
     
@@ -873,9 +980,8 @@ Por favor, responde con un mensaje de audio o video.
     // Actualizar estado
     await sessionService.updateSessionState(from, sessionService.SessionState.QUESTION_ASKED);
   } catch (error) {
-    logger.error(`Error handling interview command: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al iniciar la entrevista. Por favor, intenta nuevamente.');
-    throw error;
+    logger.error(`Error starting interview: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al iniciar la entrevista. Por favor, intenta nuevamente con !start.');
   }
 };
 
@@ -1105,5 +1211,6 @@ module.exports = {
   handleInterview,
   handleNextQuestion,
   handleMenuSelection,
-  handlePremiumInfo
+  handlePremiumInfo,
+  startInterviewQuestions
 }; 
