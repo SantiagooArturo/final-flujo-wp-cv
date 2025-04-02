@@ -38,7 +38,7 @@ const downloadFile = async (url, outputPath) => {
       url: encodedUrl,
       responseType: 'arraybuffer',
       headers: {
-        'Authorization': `Bearer ${process.env.WHATSAPP_API_TOKEN}`
+        'Authorization': `Bearer ${process.env.WHATSAPP_TOKEN}`
       },
       // Opciones adicionales para manejar URLs problemáticas
       maxRedirects: 10, // Permitir hasta 10 redirecciones

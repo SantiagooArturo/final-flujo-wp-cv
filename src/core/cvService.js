@@ -46,11 +46,12 @@ const registerUser = async (user) => {
  * Process and analyze a CV
  * @param {String|Object} documentOrUrl - Document object or URL from WhatsApp
  * @param {string} userId - User ID
+ * @param {string} [jobPosition] - Optional job position the user is applying for
  * @returns {Promise<Object>} Analysis results
  */
-const processCV = async (documentOrUrl, userId) => {
+const processCV = async (documentOrUrl, userId, jobPosition = null) => {
   try {
-    logger.info(`Processing CV for user ${userId}`);
+    logger.info(`Processing CV for user ${userId}${jobPosition ? ` for position: ${jobPosition}` : ''}`);
     
     // Handle both document object and URL string
     let documentUrl;
@@ -81,7 +82,9 @@ const processCV = async (documentOrUrl, userId) => {
     
     // Analyze the CV using OpenAI
     logger.info('Analyzing CV with OpenAI');
-    const analysis = await openaiUtil.analyzeCV(text);
+    const analysis = jobPosition 
+      ? await openaiUtil.analyzeCV(text, jobPosition)
+      : await openaiUtil.analyzeCV(text);
     logger.info('CV analysis completed');
     
     // Store analysis in Firestore
@@ -92,6 +95,7 @@ const processCV = async (documentOrUrl, userId) => {
         userId,
         text,
         analysis,
+        jobPosition,
         createdAt: new Date(),
         documentType: mimeType,
       });

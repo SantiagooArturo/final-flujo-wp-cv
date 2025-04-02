@@ -10,6 +10,26 @@ const fileProcessing = require('../utils/fileProcessing');
 const handleStart = async (from) => {
   try {
     logger.info('Firebase already initialized');
+    
+    // Obtener la sesión actual antes de resetearla
+    const currentSession = await sessionService.getOrCreateSession(from);
+    
+    // Estados que indican que está en medio de una entrevista
+    const interviewStates = [
+      sessionService.SessionState.POSITION_RECEIVED,
+      sessionService.SessionState.INTERVIEW_STARTED,
+      sessionService.SessionState.QUESTION_ASKED,
+      sessionService.SessionState.ANSWER_RECEIVED
+    ];
+    
+    // Si está en medio de una entrevista, notificar y no resetear
+    if (interviewStates.includes(currentSession.state)) {
+      await bot.sendMessage(from, 'Ya tienes una entrevista en curso. Para reiniciar, envía !reset primero.');
+      logger.info(`Start command ignored for user ${from} due to active interview session`);
+      return;
+    }
+    
+    // Si no está en entrevista, proceder con el reseteo normal
     await sessionService.resetSession(from);
     logger.info(`Session reset for user ${from}`);
     
@@ -17,13 +37,78 @@ const handleStart = async (from) => {
     await bot.sendTemplate(from, 'saludo');
     logger.info(`Template saludo sent successfully to ${from}`);
     
-    // Actualizar el estado a 'initial' en lugar de 'waiting_for_cv'
-    await sessionService.updateSessionState(from, 'initial');
+    // Después del saludo, en lugar de pedir directamente el CV, mostrar opciones
+    setTimeout(async () => {
+      // Definir las opciones del menú
+      const menuButtons = [
+        { id: 'review_cv', text: 'Revisar mi CV' },
+        { id: 'interview_simulation', text: 'Simular entrevista' }
+      ];
+      
+      // Enviar mensaje con botones
+      await bot.sendButtonMessage(
+        from,
+        'Selecciona una opción para continuar:',
+        menuButtons,
+        '¿En qué puedo ayudarte hoy?'
+      );
+      
+      // Actualizar estado a menu_selection
+      await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
+      logger.info(`Menu options sent to user ${from}`);
+    }, 1000); // Pequeño retraso para asegurar que el mensaje de saludo se muestra primero
     
-    logger.info(`Start command handled for user ${from}`);
   } catch (error) {
     logger.error(`Error handling start command: ${error.message}`);
     await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta nuevamente.');
+  }
+};
+
+/**
+ * Manejar la selección del menú inicial
+ * @param {string} from - ID del usuario
+ * @param {string} selection - Opción seleccionada
+ * @returns {Promise<void>}
+ */
+const handleMenuSelection = async (from, selection) => {
+  try {
+    logger.info(`Menu selection received from user ${from}: ${selection}`);
+    
+    switch(selection) {
+      case 'review_cv':
+        // Primero preguntar por el puesto al que aspira
+        await bot.sendMessage(from, '¿A qué puesto aspiras? Por favor, describe brevemente el puesto y la industria.');
+        // Crear un estado intermedio para indicar que estamos esperando el puesto antes del CV
+        await sessionService.updateSessionState(from, 'waiting_for_position_before_cv');
+        logger.info(`Asked for position before CV for user ${from}`);
+        break;
+        
+      case 'interview_simulation':
+        // Para simulación de entrevista, primero necesitamos el CV para análisis
+        await bot.sendMessage(from, 'Para simular una entrevista, primero necesito analizar tu CV. Por favor, envíalo como documento.');
+        await sessionService.updateSessionState(from, 'waiting_for_cv');
+        logger.info(`Interview simulation flow initiated for user ${from}`);
+        break;
+        
+      default:
+        // Opción no reconocida, mostrar menú de nuevo
+        const menuButtons = [
+          { id: 'review_cv', text: 'Revisar mi CV' },
+          { id: 'interview_simulation', text: 'Simular entrevista' }
+        ];
+        
+        await bot.sendButtonMessage(
+          from,
+          'No reconozco esa opción. Por favor, selecciona una de las siguientes:',
+          menuButtons,
+          '¿En qué puedo ayudarte hoy?'
+        );
+        logger.info(`Invalid selection, menu re-sent to user ${from}`);
+        break;
+    }
+  } catch (error) {
+    logger.error(`Error handling menu selection: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
   }
 };
 
@@ -71,7 +156,19 @@ const handleDocument = async (from, document) => {
 
     // Procesar el CV
     logger.info(`Processing CV for user ${from} with URL: ${documentUrl}`);
-    const analysis = await cvService.processCV(documentUrl, from);
+    
+    // Verificar si tenemos información sobre el puesto
+    const jobPosition = session.jobPosition || null;
+    
+    // Si tenemos un puesto, lo pasamos al servicio de procesamiento del CV
+    let analysis;
+    if (jobPosition) {
+      logger.info(`Processing CV with job position: ${jobPosition}`);
+      analysis = await cvService.processCV(documentUrl, from, jobPosition);
+    } else {
+      analysis = await cvService.processCV(documentUrl, from);
+    }
+    
     logger.info(`CV processing completed: ${JSON.stringify(analysis, null, 2)}`);
 
     // Guardar análisis en la sesión
@@ -83,10 +180,19 @@ const handleDocument = async (from, document) => {
     logger.info(`Analysis results sent to user ${from}`);
 
     // Preguntar por el puesto de trabajo solo si no está en estado position_asked
-    if (session.state !== sessionService.SessionState.POSITION_ASKED) {
+    // y no tenemos ya un puesto guardado
+    if (!jobPosition && session.state !== sessionService.SessionState.POSITION_ASKED) {
       await bot.sendMessage(from, '¿A qué puesto te gustaría aplicar? Por favor, describe brevemente el puesto y la industria.');
       await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_ASKED);
       logger.info(`Asked user ${from} about job position`);
+    } else if (jobPosition) {
+      // Si ya tenemos el puesto y solo queríamos revisar el CV (no simular entrevista)
+      // Podemos ofrecer la opción de simular entrevista ahora
+      setTimeout(async () => {
+        await bot.sendMessage(from, `¿Quieres simular una entrevista para el puesto de ${jobPosition}? Responde "sí" para comenzar.`);
+        await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
+        logger.info(`CV review completed, offered interview simulation to user ${from}`);
+      }, 2000);
     }
 
     logger.info(`Document processed successfully for user ${from}`);
@@ -128,8 +234,49 @@ const handleText = async (from, text) => {
     // Manejar mensajes normales según el estado
     switch (session.state) {
       case 'initial':
-        // Si el usuario está en estado inicial, pedir el CV
-        await bot.sendMessage(from, 'Por favor, envía tu CV como documento para que pueda analizarlo.');
+        // Si el usuario está en estado inicial, mostrar el menú de opciones
+        const menuButtons = [
+          { id: 'review_cv', text: 'Revisar mi CV' },
+          { id: 'interview_simulation', text: 'Simular entrevista' }
+        ];
+        
+        await bot.sendButtonMessage(
+          from,
+          'Selecciona una opción para continuar:',
+          menuButtons,
+          '¿En qué puedo ayudarte hoy?'
+        );
+        await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
+        break;
+      case sessionService.SessionState.MENU_SELECTION:
+        // Intentar interpretar el texto como una opción del menú
+        if (text.toLowerCase().includes('revisar') || text.toLowerCase().includes('cv')) {
+          await handleMenuSelection(from, 'review_cv');
+        } else if (text.toLowerCase().includes('simular') || text.toLowerCase().includes('entrevista')) {
+          await handleMenuSelection(from, 'interview_simulation');
+        } else {
+          // Si no se reconoce la opción, mostrar el menú nuevamente
+          const menuButtons = [
+            { id: 'review_cv', text: 'Revisar mi CV' },
+            { id: 'interview_simulation', text: 'Simular entrevista' }
+          ];
+          
+          await bot.sendButtonMessage(
+            from,
+            'No reconozco esa opción. Por favor, selecciona una de las siguientes:',
+            menuButtons,
+            '¿En qué puedo ayudarte hoy?'
+          );
+        }
+        break;
+      case sessionService.SessionState.WAITING_FOR_POSITION_BEFORE_CV:
+        // El usuario está enviando la posición antes de enviar el CV
+        // Guardar la posición en la sesión
+        await sessionService.saveJobPosition(from, text);
+        logger.info(`Job position saved before CV for user ${from}: ${text}`);
+        
+        // Solicitar el CV
+        await bot.sendMessage(from, `Gracias por indicar el puesto de ${text}. Ahora, por favor envía tu CV como documento para analizarlo en relación con este puesto.`);
         await sessionService.updateSessionState(from, 'waiting_for_cv');
         break;
       case sessionService.SessionState.POSITION_ASKED:
@@ -747,5 +894,6 @@ module.exports = {
   handleUnknown,
   handleHelp,
   handleInterview,
-  handleNextQuestion
+  handleNextQuestion,
+  handleMenuSelection
 }; 

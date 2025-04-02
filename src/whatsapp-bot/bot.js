@@ -31,6 +31,61 @@ class WhatsAppBot {
     }
   }
 
+  /**
+   * Envía un mensaje interactivo con botones
+   * @param {string} to - Número de teléfono del destinatario
+   * @param {string} headerText - Texto del encabezado (opcional)
+   * @param {string} bodyText - Texto principal del mensaje
+   * @param {Array} buttons - Array de objetos {id, text} para los botones
+   * @returns {Promise<Object>} Respuesta de la API
+   */
+  async sendButtonMessage(to, bodyText, buttons, headerText = null) {
+    try {
+      const buttonObjects = buttons.map(button => ({
+        type: 'reply',
+        reply: {
+          id: button.id,
+          title: button.text
+        }
+      }));
+
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'button',
+          body: {
+            text: bodyText
+          },
+          action: {
+            buttons: buttonObjects
+          }
+        }
+      };
+
+      // Añadir encabezado si se proporciona
+      if (headerText) {
+        payload.interactive.header = {
+          type: 'text',
+          text: headerText
+        };
+      }
+
+      const response = await axios.post(
+        `${this.apiUrl}/messages`,
+        payload,
+        { headers: this.headers }
+      );
+      logger.info(`Interactive button message sent successfully to ${to}`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Error sending interactive button message: ${error.message}`);
+      throw error;
+    }
+  }
+
   async sendTemplate(to, templateName, languageCode = 'es') {
     try {
       const response = await axios.post(

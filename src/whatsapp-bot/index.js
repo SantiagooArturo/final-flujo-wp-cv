@@ -4,6 +4,7 @@ const config = require('./config');
 const bot = require('./bot');
 const handlers = require('./handlers');
 const logger = require('../utils/logger');
+const sessionService = require('../core/sessionService');
 
 const app = express();
 app.use(bodyParser.json());
@@ -53,7 +54,22 @@ app.post('/webhook', async (req, res) => {
       case 'text':
         logger.info('Handling text message', { from, text });
         if (text === '!start') {
-          await handlers.handleStart(from);
+          // Verificar si el usuario está en medio de una entrevista antes de reiniciar
+          const session = await sessionService.getOrCreateSession(from);
+          
+          // Si el usuario está en medio de una entrevista, enviar mensaje informativo
+          const interviewStates = [
+            sessionService.SessionState.POSITION_RECEIVED,
+            sessionService.SessionState.INTERVIEW_STARTED,
+            sessionService.SessionState.QUESTION_ASKED,
+            sessionService.SessionState.ANSWER_RECEIVED
+          ];
+          
+          if (interviewStates.includes(session.state)) {
+            await bot.sendMessage(from, 'Ya tienes una entrevista en curso. Para reiniciar, envía !reset primero.');
+          } else {
+            await handlers.handleStart(from);
+          }
         } else {
           await handlers.handleText(from, text);
         }
@@ -77,7 +93,27 @@ app.post('/webhook', async (req, res) => {
       case 'button':
       case 'interactive':
         logger.info('Handling interactive message', { from, text });
-        await handlers.handleText(from, text || 'Mensaje interactivo');
+        // Procesar interacciones de botones
+        const session = await sessionService.getOrCreateSession(from);
+        
+        // Obtener el ID del botón seleccionado
+        let buttonId = null;
+        if (message.interactive && message.interactive.button_reply) {
+          buttonId = message.interactive.button_reply.id;
+        } else if (message.button && message.button.payload) {
+          buttonId = message.button.payload;
+        }
+        
+        logger.info(`Button interaction detected, ID: ${buttonId}`);
+        
+        // Si estamos en el estado de selección de menú y tenemos un ID de botón
+        if (session.state === sessionService.SessionState.MENU_SELECTION && buttonId) {
+          // Manejar la selección del menú
+          await handlers.handleMenuSelection(from, buttonId);
+        } else {
+          // Manejar como mensaje de texto regular
+          await handlers.handleText(from, text || 'Mensaje interactivo');
+        }
         break;
       default:
         logger.info('Handling unknown message type', { from, type });
