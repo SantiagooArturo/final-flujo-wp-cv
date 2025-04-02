@@ -110,7 +110,21 @@ app.post('/webhook', async (req, res) => {
         if (session.state === sessionService.SessionState.MENU_SELECTION && buttonId) {
           // Manejar la selección del menú
           await handlers.handleMenuSelection(from, buttonId);
-        } else {
+        } 
+        // Si estamos en el estado de opciones post-CV y tenemos un ID de botón
+        else if (session.state === sessionService.SessionState.POST_CV_OPTIONS && buttonId) {
+          if (buttonId === 'start_interview') {
+            // Iniciar simulación de entrevista
+            await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
+            await handlers.handleInterview(from);
+          } else if (buttonId === 'review_cv_again') {
+            // Reiniciar el proceso para revisar otro CV, manteniendo el puesto
+            await sessionService.updateSession(from, { cvProcessed: false });
+            await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
+            await sessionService.updateSessionState(from, 'waiting_for_cv');
+          }
+        }
+        else {
           // Manejar como mensaje de texto regular
           await handlers.handleText(from, text || 'Mensaje interactivo');
         }

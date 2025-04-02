@@ -204,11 +204,32 @@ const handleDocument = async (from, document) => {
       logger.info(`Asked user ${from} about job position`);
     } else if (jobPosition) {
       // Si ya tenemos el puesto y solo queríamos revisar el CV (no simular entrevista)
-      // Podemos ofrecer la opción de simular entrevista ahora
+      // Ofrecer las opciones de simular entrevista o revisar CV nuevamente
       setTimeout(async () => {
-        await bot.sendMessage(from, `¿Quieres simular una entrevista para el puesto de ${jobPosition}? Responde "sí" para comenzar.`);
-        await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
-        logger.info(`CV review completed, offered interview simulation to user ${from}`);
+        try {
+          // Definir las opciones del menú post-análisis
+          const menuButtons = [
+            { id: 'start_interview', text: 'Simular entrevista' },
+            { id: 'review_cv_again', text: 'Revisar otro CV' }
+          ];
+          
+          // Enviar mensaje con botones
+          await bot.sendButtonMessage(
+            from,
+            `¿Qué deseas hacer a continuación para el puesto de ${jobPosition}?`,
+            menuButtons,
+            'Opciones disponibles'
+          );
+          
+          // Actualizar estado a un nuevo estado para manejar esta selección
+          await sessionService.updateSessionState(from, 'post_cv_options');
+          logger.info(`Post-CV analysis options sent to user ${from}`);
+        } catch (buttonError) {
+          logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+          // Si los botones fallan, usar mensaje de texto simple
+          await bot.sendMessage(from, `¿Quieres simular una entrevista para el puesto de ${jobPosition}? Responde "sí" para comenzar o "revisar" para analizar otro CV.`);
+          await sessionService.updateSessionState(from, 'post_cv_options');
+        }
       }, 2000);
     }
 
@@ -284,6 +305,38 @@ const handleText = async (from, text) => {
             menuButtons,
             '¿En qué puedo ayudarte hoy?'
           );
+        }
+        break;
+      case sessionService.SessionState.POST_CV_OPTIONS:
+        // Manejar opciones después del análisis del CV
+        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si' || 
+            text.toLowerCase().includes('simular') || text.toLowerCase().includes('entrevista')) {
+          // Iniciar simulación de entrevista
+          await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
+          await handleInterview(from);
+        } else if (text.toLowerCase().includes('revisar') || text.toLowerCase().includes('otro cv') || 
+                  text.toLowerCase().includes('nuevo cv')) {
+          // Reiniciar el proceso para revisar otro CV, manteniendo el puesto
+          await sessionService.updateSession(from, { cvProcessed: false });
+          await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
+          await sessionService.updateSessionState(from, 'waiting_for_cv');
+        } else {
+          // Opción no reconocida, mostrar las opciones nuevamente
+          try {
+            const menuButtons = [
+              { id: 'start_interview', text: 'Simular entrevista' },
+              { id: 'review_cv_again', text: 'Revisar otro CV' }
+            ];
+            
+            await bot.sendButtonMessage(
+              from,
+              'No reconozco esa opción. ¿Qué deseas hacer a continuación?',
+              menuButtons,
+              'Opciones disponibles'
+            );
+          } catch (buttonError) {
+            await bot.sendMessage(from, 'No reconozco esa opción. Responde "sí" para simular una entrevista o "revisar" para analizar otro CV.');
+          }
         }
         break;
       case sessionService.SessionState.WAITING_FOR_POSITION_BEFORE_CV:

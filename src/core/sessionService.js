@@ -12,6 +12,7 @@ const SessionState = {
   MENU_SELECTION: 'menu_selection', // Selección de opción en el menú
   WAITING_FOR_POSITION_BEFORE_CV: 'waiting_for_position_before_cv', // Esperando posición antes de solicitar CV
   CV_RECEIVED: 'cv_received',      // CV recibido y analizado
+  POST_CV_OPTIONS: 'post_cv_options', // Opciones después del análisis del CV
   POSITION_ASKED: 'position_asked', // Se preguntó por el puesto
   POSITION_RECEIVED: 'position_received', // Se recibió el puesto
   INTERVIEW_STARTED: 'interview_started', // Entrevista iniciada
