@@ -71,7 +71,7 @@ const generateImprovedText = async (prompt, options = {}) => {
  * Generate an interview question based on job type using OpenAI
  * @param {string} jobType - Normalized type of job (e.g., 'software', 'marketing', 'sales')
  * @param {string} originalJobType - Original job description from the user (can be more specific)
- * @returns {Promise<string>} Generated interview question
+ * @returns {Promise<Object>} Generated interview question and metadata
  */
 const generateInterviewQuestion = async (jobType, originalJobType = '') => {
   if (!openai) {
@@ -85,16 +85,34 @@ const generateInterviewQuestion = async (jobType, originalJobType = '') => {
       ? `"${originalJobType}" (categorizado como ${jobType})` 
       : `"${jobType}"`;
     
+    // Prompt específico para Tech Lead si el puesto lo indica
+    let specificPrompt = '';
+    if (jobType.toLowerCase().includes('tech') && jobType.toLowerCase().includes('lead')) {
+      specificPrompt = `
+Para un puesto de Tech Lead, enfócate especialmente en preguntas que evalúen:
+1. Capacidad para tomar decisiones técnicas estratégicas
+2. Habilidades para liderar equipos de desarrollo y resolver conflictos técnicos
+3. Conocimiento de arquitectura de software y patrones de diseño
+4. Experiencia manejando deuda técnica y optimizando sistemas
+5. Equilibrio entre excelencia técnica y necesidades comerciales
+6. Gestión de proyectos técnicos complejos y equipos multidisciplinarios
+`;
+    }
+    
     const prompt = `Genera una pregunta de entrevista desafiante, específica y relevante para un candidato que aplica a un puesto de ${jobContext}.
 
 La pregunta debe:
-1. Evaluar habilidades técnicas, experiencia o competencias relevantes para este tipo de rol
+1. Evaluar habilidades técnicas, experiencia o competencias relevantes para este tipo de rol específico
 2. Requerir ejemplos concretos o situaciones específicas (preferiblemente tipo STAR)
-3. Ser específica para el contexto laboral del puesto
+3. Ser específica y no genérica, adaptada para el contexto laboral del puesto
 4. Estar formulada en español y usar un lenguaje profesional
 5. Ser abierta y requerir más que una respuesta de sí/no
+6. Ser desafiante pero justa, evaluando habilidades reales del candidato
+
+${specificPrompt}
 
 Contexto específico según el tipo de trabajo:
+${jobType.toLowerCase().includes('tech lead') ? '- Enfocada en liderazgo técnico, decisiones arquitectónicas, gestión de equipos de desarrollo, o manejo de situaciones técnicas complejas' : ''}
 ${jobType === 'software' ? '- Enfocada en algún desafío técnico, arquitectura, metodologías de desarrollo, solución de problemas o trabajo colaborativo en código' : ''}
 ${jobType === 'marketing' ? '- Enfocada en estrategias digitales, campañas, medición de resultados, segmentación de audiencia o gestión de contenidos' : ''}
 ${jobType === 'sales' ? '- Enfocada en técnicas de venta, negociación, manejo de objeciones, prospección o retención de clientes' : ''}
@@ -104,22 +122,55 @@ ${jobType === 'hr' ? '- Enfocada en procesos de selección, desarrollo de talent
 ${jobType === 'data' ? '- Enfocada en análisis de datos, visualización, toma de decisiones basada en datos o implementación de modelos' : ''}
 ${jobType === 'finance' ? '- Enfocada en análisis financiero, presupuestos, reportes, optimización de recursos o compliance' : ''}
 
-Proporciona solo la pregunta, sin introducción ni texto adicional.`;
+IMPORTANTE: Proporciona solo la pregunta, sin introducción ni texto adicional.`;
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { 
-          role: "system", 
-          content: "Eres un entrevistador experto con amplia experiencia en entrevistas laborales. Tu objetivo es crear preguntas desafiantes pero justas que evalúen las capacidades reales de los candidatos para roles específicos." 
-        },
-        { role: "user", content: prompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 150
-    });
+    // Intentar usar GPT-4o para mejor calidad, con fallback a GPT-3.5 Turbo
+    let model = "gpt-4o";
+    try {
+      const response = await openai.chat.completions.create({
+        model: model,
+        messages: [
+          { 
+            role: "system", 
+            content: "Eres un entrevistador técnico experto con amplia experiencia en entrevistas para roles de liderazgo en tecnología. Tu objetivo es crear preguntas desafiantes pero justas que evalúen las capacidades reales de los candidatos para roles de Tech Lead y posiciones técnicas avanzadas." 
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 200
+      });
 
-    return response.choices[0].message.content.trim();
+      return {
+        question: response.choices[0].message.content.trim(),
+        type: jobType,
+        originalType: originalJobType || jobType,
+        timestamp: new Date()
+      };
+    } catch (error) {
+      // Si falla con GPT-4o, intentar con GPT-3.5 Turbo
+      logger.warn(`Error using ${model}, falling back to gpt-3.5-turbo: ${error.message}`);
+      model = "gpt-3.5-turbo";
+      
+      const response = await openai.chat.completions.create({
+        model: model,
+        messages: [
+          { 
+            role: "system", 
+            content: "Eres un entrevistador técnico experto con amplia experiencia en entrevistas para roles de liderazgo en tecnología." 
+          },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 150
+      });
+
+      return {
+        question: response.choices[0].message.content.trim(),
+        type: jobType,
+        originalType: originalJobType || jobType,
+        timestamp: new Date()
+      };
+    }
   } catch (error) {
     logger.error(`Error al generar pregunta de entrevista con OpenAI: ${error.message}`);
     throw error;

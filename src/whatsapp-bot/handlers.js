@@ -33,34 +33,51 @@ const handleStart = async (from) => {
     await sessionService.resetSession(from);
     logger.info(`Session reset for user ${from}`);
     
-    // Enviar solo el saludo inicial
-    await bot.sendTemplate(from, 'saludo');
-    logger.info(`Template saludo sent successfully to ${from}`);
+    // Intentar enviar el saludo usando plantilla, pero tener un mensaje alternativo en caso de error
+    try {
+      await bot.sendTemplate(from, 'saludo');
+      logger.info(`Template saludo sent successfully to ${from}`);
+    } catch (templateError) {
+      logger.warn(`Failed to send template, using text message instead: ${templateError.message}`);
+      // Enviar mensaje de texto alternativo
+      await bot.sendMessage(from, '¡Hola! Bienvenido a Worky. Estamos aquí para ayudarte con tu carrera profesional.');
+    }
     
     // Después del saludo, en lugar de pedir directamente el CV, mostrar opciones
     setTimeout(async () => {
-      // Definir las opciones del menú
-      const menuButtons = [
-        { id: 'review_cv', text: 'Revisar mi CV' },
-        { id: 'interview_simulation', text: 'Simular entrevista' }
-      ];
-      
-      // Enviar mensaje con botones
-      await bot.sendButtonMessage(
-        from,
-        'Selecciona una opción para continuar:',
-        menuButtons,
-        '¿En qué puedo ayudarte hoy?'
-      );
-      
-      // Actualizar estado a menu_selection
-      await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
-      logger.info(`Menu options sent to user ${from}`);
+      try {
+        // Definir las opciones del menú
+        const menuButtons = [
+          { id: 'review_cv', text: 'Revisar mi CV' },
+          { id: 'interview_simulation', text: 'Simular entrevista' }
+        ];
+        
+        // Enviar mensaje con botones
+        await bot.sendButtonMessage(
+          from,
+          'Selecciona una opción para continuar:',
+          menuButtons,
+          '¿En qué puedo ayudarte hoy?'
+        );
+        
+        // Actualizar estado a menu_selection
+        await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
+        logger.info(`Menu options sent to user ${from}`);
+      } catch (buttonError) {
+        logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+        // Enviar mensaje de texto alternativo para las opciones
+        await bot.sendMessage(from, 'Selecciona una opción para continuar:\n\n1. Revisar mi CV (escribe "revisar")\n2. Simular entrevista (escribe "entrevista")');
+        await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
+      }
     }, 1000); // Pequeño retraso para asegurar que el mensaje de saludo se muestra primero
     
   } catch (error) {
     logger.error(`Error handling start command: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta nuevamente.');
+    try {
+      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta nuevamente.');
+    } catch (sendError) {
+      logger.error(`Failed to send error message: ${sendError.message}`);
+    }
   }
 };
 
@@ -678,15 +695,23 @@ const handleInterview = async (from) => {
     const jobPosition = session.jobPosition || 'software';
     
     // Para la primera pregunta, enfocarse en la experiencia y presentación
-    const questionPrompt = `Pregunta inicial para un Tech Lead en ${jobPosition} sobre experiencia y trayectoria profesional`;
+    const questionPrompt = `Pregunta inicial específica para un Tech Lead en ${jobPosition} sobre experiencia en liderazgo técnico y trayectoria profesional relevante para el puesto`;
     
     // Generar primera pregunta (con fallback a pregunta por defecto)
     let questionData;
     try {
-      questionData = await openaiUtil.generateInterviewQuestion(jobPosition, questionPrompt);
+      // Intentar usar OpenAI si está disponible
+      if (openaiUtil.generateInterviewQuestion) {
+        questionData = await openaiUtil.generateInterviewQuestion(jobPosition, questionPrompt);
+      } else {
+        // Si no está disponible la función, usar pregunta predefinida
+        throw new Error("Función generateInterviewQuestion no disponible");
+      }
     } catch (error) {
-      logger.error(`Error handling interview command: ${error.message}`);
+      logger.error(`Error generating interview question: ${error.message}`);
+      // Usar preguntas predefinidas en caso de error
       questionData = interviewService.getDefaultQuestion(jobPosition);
+      logger.info(`Using default question: ${questionData.question}`);
     }
     
     // Guardar pregunta en la sesión
@@ -805,58 +830,58 @@ Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
     
     switch (nextQuestionNumber) {
       case 1: // Segunda pregunta - enfoque en habilidades técnicas
-        questionPrompt = `Pregunta técnica específica para un Tech Lead en ${jobPosition} sobre arquitectura o tecnologías`;
+        questionPrompt = `Pregunta técnica específica y desafiante para un Tech Lead en ${jobPosition} sobre diseño de arquitectura, decisiones técnicas estratégicas o gestión de sistemas complejos`;
         break;
       case 2: // Tercera pregunta - enfoque en liderazgo
-        questionPrompt = `Pregunta sobre liderazgo, gestión de equipos o resolución de conflictos para un Tech Lead en ${jobPosition}`;
+        questionPrompt = `Pregunta específica sobre liderazgo técnico, gestión de equipos de desarrollo o resolución de conflictos técnicos para un Tech Lead en ${jobPosition}`;
         break;
       case 3: // Cuarta pregunta - enfoque en resolución de problemas
-        questionPrompt = `Pregunta sobre resolución de problemas complejos o decisiones difíciles para un Tech Lead en ${jobPosition}`;
+        questionPrompt = `Pregunta sobre manejo de situaciones complejas, escalado de problemas o toma de decisiones críticas para un Tech Lead en ${jobPosition}`;
         break;
       default:
-        questionPrompt = `Pregunta general para un Tech Lead en ${jobPosition}`;
+        questionPrompt = `Pregunta específica para un Tech Lead en ${jobPosition} sobre habilidades de liderazgo técnico, arquitectura o gestión`;
     }
     
     // Generar siguiente pregunta con el tipo específico
     let questionData;
     try {
-      questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt);
+      // Intentar usar OpenAI si la función está disponible
+      if (openaiUtil.generateInterviewQuestion) {
+        questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt);
+        
+        // Verificar que la pregunta no sea igual a las anteriores
+        if (session.questions && session.questions.length > 0) {
+          const previousQuestions = session.questions.map(q => q.question);
+          let attempts = 0;
+          
+          // Si la pregunta es igual a alguna anterior, generar una nueva (máx 3 intentos)
+          while (previousQuestions.includes(questionData.question) && attempts < 3) {
+            logger.info(`Pregunta repetida detectada, generando nueva pregunta (intento ${attempts + 1})`);
+            questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt + " (diferente a las preguntas anteriores)");
+            attempts++;
+          }
+        }
+      } else {
+        // Si la función no está disponible, lanzar error para usar las predefinidas
+        throw new Error("Función generateInterviewQuestion no disponible");
+      }
+    } catch (error) {
+      logger.error(`Error generating next question: ${error.message}`);
       
-      // Verificar que la pregunta no sea igual a las anteriores
+      // Usar preguntas predefinidas específicas para Tech Lead en caso de error
+      questionData = interviewService.getDefaultQuestion(jobPosition);
+      logger.info(`Using default question: ${questionData.question}`);
+      
+      // Asegurarse de que no se repita la pregunta
       if (session.questions && session.questions.length > 0) {
         const previousQuestions = session.questions.map(q => q.question);
         let attempts = 0;
         
-        // Si la pregunta es igual a alguna anterior, generar una nueva (máx 3 intentos)
-        while (previousQuestions.includes(questionData.question) && attempts < 3) {
-          logger.info(`Pregunta repetida detectada, generando nueva pregunta (intento ${attempts + 1})`);
-          questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt + " (diferente a las preguntas anteriores)");
+        // Intentar hasta 5 veces encontrar una pregunta no repetida
+        while (previousQuestions.includes(questionData.question) && attempts < 5) {
+          questionData = interviewService.getDefaultQuestion(jobPosition);
           attempts++;
         }
-      }
-    } catch (error) {
-      logger.error(`Error generating next question: ${error.message}`);
-      // Usar preguntas predefinidas en caso de error
-      const predefinedQuestions = [
-        "¿Cómo gestionas la deuda técnica en proyectos con plazos ajustados?",
-        "Describe una situación en la que tuviste que liderar un equipo a través de un desafío técnico significativo.",
-        "¿Cómo equilibras la innovación técnica con la necesidad de entregar productos a tiempo?",
-        "¿Cuál es tu enfoque para la mentoría y desarrollo profesional de los miembros más junior de tu equipo?"
-      ];
-      
-      // Usar una pregunta predefinida que no se haya usado antes
-      const usedQuestions = session.questions.map(q => q.question);
-      const availableQuestions = predefinedQuestions.filter(q => !usedQuestions.includes(q));
-      
-      if (availableQuestions.length > 0) {
-        questionData = {
-          question: availableQuestions[0],
-          type: jobPosition,
-          originalType: jobPosition,
-          timestamp: new Date()
-        };
-      } else {
-        questionData = interviewService.getDefaultQuestion(jobPosition);
       }
     }
     
@@ -874,7 +899,7 @@ Por favor, responde con un mensaje de audio o video.
     
     // Enviar pregunta
     await bot.sendMessage(from, questionMessage);
-    logger.info(`Sent question ${nextQuestionNumber + 1} to user ${from}`);
+    logger.info(`Sent question ${nextQuestionNumber + 1} to user ${from}: "${questionData.question}"`);
     
     // Actualizar estado
     await sessionService.updateSessionState(from, sessionService.SessionState.QUESTION_ASKED);

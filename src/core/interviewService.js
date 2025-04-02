@@ -162,29 +162,61 @@ const analyzeVideoResponse = async (videoBuffer, question) => {
 };
 
 /**
- * Get a default question for a job type
- * @param {string} type - Normalized type of job
- * @param {string} originalType - Original job type string from user
- * @returns {Object} Default question
+ * Get default interview question based on job type
+ * @param {string} jobType - Type of job
+ * @returns {Object} Question data
  */
-const getDefaultQuestion = (type, originalType = '') => {
+const getDefaultQuestion = (jobType) => {
+  // Lista de preguntas predefinidas por tipo de trabajo
   const questions = {
-    software: '¿Podrías describir un proyecto desafiante de desarrollo de software en el que hayas trabajado y cómo resolviste los problemas técnicos que surgieron?',
-    marketing: '¿Cómo has medido el éxito de tus campañas de marketing digital y qué métricas consideras más importantes para evaluar el ROI?',
-    sales: '¿Puedes contarme sobre una situación difícil de ventas que hayas enfrentado y cómo lograste cerrar el trato?',
-    design: '¿Cómo adaptas tu proceso de diseño cuando trabajas con restricciones de tiempo y recursos limitados?',
-    pm: '¿Cómo priorizas tareas y requisitos cuando estás gestionando un proyecto con plazos ajustados?',
-    hr: '¿Cómo evalúas y seleccionas candidatos para posiciones técnicas especializadas fuera de tu área de experiencia?',
-    data: '¿Podrías explicar cómo has utilizado el análisis de datos para resolver un problema de negocio complejo?',
-    finance: '¿Cómo preparas y presentas informes financieros para que sean comprensibles para audiencias no financieras?',
-    general: `¿Podrías contarme sobre tu experiencia profesional relevante para el puesto de ${originalType || 'al que aspiras'}?`
+    "tech lead": [
+      "Describe un proyecto técnico complejo que hayas liderado. ¿Cuáles fueron los mayores desafíos arquitectónicos y cómo los resolviste?",
+      "¿Cómo gestionas la deuda técnica en un proyecto con plazos ajustados cuando tu equipo está bajo presión para entregar nuevas funcionalidades?",
+      "Cuéntame sobre una situación en la que tuviste que mediar un desacuerdo técnico entre miembros de tu equipo. ¿Cómo lo manejaste y cuál fue el resultado?",
+      "¿Qué estrategias has implementado para mejorar la calidad del código y reducir los bugs en los proyectos que has liderado?",
+      "Describe cómo has manejado la transición a una nueva tecnología o framework. ¿Cómo minimizaste el impacto en la productividad del equipo?",
+      "¿Cómo equilibras las necesidades técnicas a largo plazo con las demandas comerciales a corto plazo?"
+    ],
+    "software": [
+      "Describe un problema técnico complejo que hayas resuelto. ¿Cuál fue tu enfoque y cómo llegaste a la solución?",
+      "¿Cómo gestionas tu trabajo cuando te enfrentas a requisitos ambiguos o cambiantes?",
+      "Cuéntame sobre una ocasión en la que tuviste que optimizar el rendimiento de una aplicación. ¿Qué estrategias utilizaste?",
+      "¿Cómo te mantienes actualizado con las nuevas tecnologías y tendencias en desarrollo de software?",
+      "Describe una situación en la que hayas tenido que priorizar tareas técnicas. ¿Qué criterios utilizaste?"
+    ],
+    "default": [
+      "¿Podrías contarme sobre tu experiencia profesional relevante para este puesto?",
+      "Describe una situación difícil en tu trabajo anterior y cómo la manejaste.",
+      "¿Cuáles consideras que son tus principales fortalezas y debilidades profesionales?",
+      "¿Por qué te interesa este puesto y cómo crees que puedes contribuir?",
+      "¿Cuáles son tus objetivos profesionales a largo plazo?"
+    ]
   };
-
+  
+  // Normalizar el tipo de trabajo para la búsqueda
+  const normalizedJobType = jobType.toLowerCase().trim();
+  
+  // Buscar preguntas para el tipo de trabajo específico, con fallback a predeterminadas
+  let jobQuestions = questions[normalizedJobType] || questions["default"];
+  
+  // Para Tech Lead, intentar buscar con y sin espacio
+  if (!jobQuestions && normalizedJobType.includes("tech") && normalizedJobType.includes("lead")) {
+    jobQuestions = questions["tech lead"];
+  }
+  
+  // Si sigue sin encontrar, usar preguntas predeterminadas
+  if (!jobQuestions) {
+    jobQuestions = questions["default"];
+  }
+  
+  // Seleccionar una pregunta aleatoria
+  const randomQuestion = jobQuestions[Math.floor(Math.random() * jobQuestions.length)];
+  
   return {
-    question: questions[type] || questions.general,
-    type,
-    originalType,
-    timestamp: new Date(),
+    question: randomQuestion,
+    type: jobType,
+    originalType: jobType,
+    timestamp: new Date()
   };
 };
 
