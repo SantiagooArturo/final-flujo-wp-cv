@@ -37,136 +37,80 @@ app.get('/webhook', (req, res) => {
 // Manejo de mensajes
 app.post('/webhook', async (req, res) => {
   try {
-    logger.info('========== WEBHOOK REQUEST BODY ============');
-    logger.info(JSON.stringify(req.body, null, 2));
-    logger.info('===========================================');
-    
-    const message = await bot.handleWebhook(req.body);
-    
-    if (!message) {
-      logger.info('No message to process');
-      return res.sendStatus(200);
+    // Extraer los datos del evento
+    const data = req.body;
+    logger.info(`Webhook payload received (truncated): ${JSON.stringify(data).substring(0, 500)}...`);
+
+    if (!data || !data.object) {
+      logger.warn('No data or object property in webhook payload');
+      return res.sendStatus(400);
     }
 
-    logger.info('Processing message', { message });
+    // Verificar si es una notificación de mensaje
+    if (data.object === 'whatsapp_business_account') {
+      // Procesar cada entrada
+      for (const entry of data.entry || []) {
+        // Procesar cada cambio
+        for (const change of entry.changes || []) {
+          if (!change.value || !change.value.messages) {
+            continue;
+          }
 
-    const { from, type, text, document, image, audio, video } = message;
-    
-    if (document) {
-      logger.info('Document details:', JSON.stringify(document, null, 2));
+          // Procesar cada mensaje
+          for (const message of change.value.messages) {
+            logger.info(`Processing message of type: ${message.type}`);
+
+            const metadata = change.value.metadata || {};
+            const from = metadata.phone_number_id;
+            const to = message.from;
+
+            if (!from || !to) {
+              logger.warn('Missing from or to in message');
+              continue;
+            }
+
+            logger.info(`Message from ${from} to ${to}`);
+
+            // Manejar diferentes tipos de mensajes
+            try {
+              // Registrar o actualizar usuario al recibir cualquier mensaje
+              const userService = require('../core/userService');
+              await userService.registerOrUpdateUser(to);
+              
+              if (message.type === 'text') {
+                await handlers.handleText(to, message.text.body);
+              } else if (message.type === 'interactive' && message.interactive.type === 'button_reply') {
+                await handlers.handleButtonReply(to, message.interactive.button_reply.id);
+              } else if (message.type === 'document') {
+                await handlers.handleDocument(to, message.document);
+              } else if (message.type === 'audio') {
+                await handlers.handleAudio(to, message.audio);
+              } else if (message.type === 'video') {
+                await handlers.handleVideo(to, message.video);
+              } else {
+                logger.warn(`Unsupported message type: ${message.type}`);
+              }
+            } catch (error) {
+              logger.error(`Error handling message: ${error.message}`);
+            }
+          }
+
+          // Procesar respuestas de botones
+          if (change.value.statuses) {
+            for (const status of change.value.statuses) {
+              logger.info(`Message status: ${status.status}`);
+            }
+          }
+        }
+      }
+
+      res.sendStatus(200);
+    } else {
+      logger.warn(`Unexpected object: ${data.object}`);
+      res.sendStatus(400);
     }
-
-    switch (type) {
-      case 'text':
-        logger.info('Handling text message', { from, text });
-        if (text === '!start') {
-          // Verificar si el usuario está en medio de una entrevista antes de reiniciar
-          const session = await sessionService.getOrCreateSession(from);
-          
-          // Si el usuario está en medio de una entrevista, enviar mensaje informativo
-          const interviewStates = [
-            sessionService.SessionState.POSITION_RECEIVED,
-            sessionService.SessionState.INTERVIEW_STARTED,
-            sessionService.SessionState.QUESTION_ASKED,
-            sessionService.SessionState.ANSWER_RECEIVED
-          ];
-          
-          if (interviewStates.includes(session.state)) {
-            await bot.sendMessage(from, 'Ya tienes una entrevista en curso. Para reiniciar, envía !reset primero.');
-          } else {
-            await handlers.handleStart(from);
-          }
-        } else {
-          await handlers.handleText(from, text);
-        }
-        break;
-      case 'document':
-        logger.info('Handling document message', { from, document });
-        await handlers.handleDocument(from, document);
-        break;
-      case 'image':
-        logger.info('Handling image message', { from, image });
-        await handlers.handleImage(from, image);
-        break;
-      case 'audio':
-        logger.info('Handling audio message', { from, audio });
-        await handlers.handleAudio(from, audio);
-        break;
-      case 'video':
-        logger.info('Handling video message', { from, video });
-        await handlers.handleVideo(from, video);
-        break;
-      case 'button':
-      case 'interactive':
-        logger.info('Handling interactive message', { from, text });
-        // Procesar interacciones de botones
-        const session = await sessionService.getOrCreateSession(from);
-        
-        // Obtener el ID del botón seleccionado
-        let buttonId = null;
-        if (message.interactive && message.interactive.button_reply) {
-          buttonId = message.interactive.button_reply.id;
-        } else if (message.button && message.button.payload) {
-          buttonId = message.button.payload;
-        }
-        
-        logger.info(`Button interaction detected, ID: ${buttonId}`);
-        
-        // Si estamos en el estado de selección de menú y tenemos un ID de botón
-        if (session.state === sessionService.SessionState.MENU_SELECTION && buttonId) {
-          // Manejar la selección del menú
-          await handlers.handleMenuSelection(from, buttonId);
-        } 
-        // Si estamos en el estado de opciones post-CV y tenemos un ID de botón
-        else if (session.state === sessionService.SessionState.POST_CV_OPTIONS && buttonId) {
-          if (buttonId === 'start_interview') {
-            // Iniciar simulación de entrevista
-            await handlers.handleInterview(from);
-          } else if (buttonId === 'review_cv_again') {
-            // Reiniciar el proceso para revisar otro CV, manteniendo el puesto
-            await sessionService.updateSession(from, { cvProcessed: false });
-            await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
-            await sessionService.updateSessionState(from, 'waiting_for_cv');
-          } else if (buttonId === 'premium_required') {
-            // Mostrar información sobre la versión premium
-            await handlers.handlePremiumInfo(from);
-          }
-        }
-        // Si estamos en el estado de espera de confirmación de entrevista
-        else if (session.state === sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION && buttonId) {
-          if (buttonId === 'start_interview_now') {
-            // El usuario confirmó que está listo para iniciar la entrevista
-            await handlers.startInterviewQuestions(from);
-          } else if (buttonId === 'cancel_interview') {
-            // El usuario canceló la entrevista
-            await bot.sendMessage(from, 'Entrevista cancelada. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
-            await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-          }
-        }
-        // Si estamos en estado de respuesta recibida (después de mostrar feedback)
-        else if (session.state === sessionService.SessionState.ANSWER_RECEIVED && buttonId) {
-          if (buttonId === 'continue_interview') {
-            // El usuario quiere continuar con la siguiente pregunta
-            await handlers.handleNextQuestion(from);
-          } else if (buttonId === 'stop_interview') {
-            // El usuario quiere detener la entrevista
-            await bot.sendMessage(from, 'Entrevista detenida. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
-            await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-          }
-        }
-        else {
-          // Manejar como mensaje de texto regular
-          await handlers.handleText(from, text || 'Mensaje interactivo');
-        }
-        break;
-      default:
-        logger.info('Handling unknown message type', { from, type });
-        await handlers.handleUnknown(from);
-    }
-
-    res.sendStatus(200);
   } catch (error) {
-    logger.error(`Error processing webhook: ${error.message}`, { error });
+    logger.error(`Error processing webhook: ${error.message}`);
     res.sendStatus(500);
   }
 });
@@ -174,4 +118,12 @@ app.post('/webhook', async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   logger.info(`WhatsApp bot server is running on port ${PORT}`);
-}); 
+});
+
+// Exponer funciones para su uso en otros módulos
+module.exports = {
+  sendMessage: bot.sendMessage,
+  sendTemplate: bot.sendTemplate,
+  sendButtonMessage: bot.sendButtonMessage,
+  getDocumentUrl: bot.getDocumentUrl
+}; 
