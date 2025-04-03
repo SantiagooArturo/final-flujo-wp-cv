@@ -434,73 +434,107 @@ const enhanceCVAnalysis = async (analysis) => {
  */
 const analyzeCV = async (cvText, jobType) => {
   try {
-    const prompt = `Analiza el siguiente CV de manera detallada y personalizada. Enfócate en los aspectos específicos y únicos del candidato:
+    const prompt = `Analiza el siguiente CV de manera extremadamente detallada y personalizada para un puesto de ${jobType}. Realiza un análisis profundo y estructurado:
 
 CV:
 ${cvText}
 
 Tipo de trabajo: ${jobType}
 
-Por favor, proporciona un análisis detallado que incluya las siguientes secciones exactamente como se muestran:
+Proporciona un análisis exhaustivo con las siguientes secciones exactamente como se indican:
 
 Puntuación general: [número]/100
-[Explicación breve de la puntuación]
+[Explicación detallada de la puntuación, justificando por qué se asignó este valor en base a la experiencia, habilidades, formación y alineación con el puesto]
+
+Resumen ejecutivo:
+[Párrafo conciso de 4-6 líneas resumiendo el perfil profesional del candidato, su experiencia más relevante, y su potencial ajuste para el puesto]
 
 Fortalezas específicas:
-- [Fortaleza 1]
-- [Fortaleza 2]
-- [Fortaleza 3]
+- [Fortaleza 1 - Explicar cómo esta fortaleza beneficia directamente al puesto]
+- [Fortaleza 2 - Explicar cómo esta fortaleza beneficia directamente al puesto]
+- [Fortaleza 3 - Explicar cómo esta fortaleza beneficia directamente al puesto]
+- [Fortaleza 4 - Explicar cómo esta fortaleza beneficia directamente al puesto]
+- [Fortaleza 5 - Explicar cómo esta fortaleza beneficia directamente al puesto]
 
 Áreas de mejora:
-- [Área 1]
-- [Área 2]
-- [Área 3]
+- [Área 1 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
+- [Área 2 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
+- [Área 3 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
+- [Área 4 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
 
-Recomendaciones:
-- [Recomendación 1]
-- [Recomendación 2]
-- [Recomendación 3]
+Recomendaciones específicas para el puesto:
+- [Recomendación 1 - Acción concreta y específica que el candidato puede implementar inmediatamente]
+- [Recomendación 2 - Acción concreta y específica que el candidato puede implementar inmediatamente]
+- [Recomendación 3 - Acción concreta y específica que el candidato puede implementar inmediatamente]
+- [Recomendación 4 - Acción concreta y específica que el candidato puede implementar inmediatamente]
+- [Recomendación 5 - Acción concreta y específica que el candidato puede implementar inmediatamente]
 
 Experiencia relevante:
-- [Experiencia 1]
-- [Experiencia 2]
-- [Experiencia 3]
+- [Experiencia 1 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
+- [Experiencia 2 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
+- [Experiencia 3 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
+- [Experiencia 4 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
 
 Habilidades técnicas:
-- [Habilidad 1]
-- [Habilidad 2]
-- [Habilidad 3]
+- [Habilidad 1 - Incluir nivel de competencia (Básico/Intermedio/Avanzado/Experto) y relevancia para el puesto]
+- [Habilidad 2 - Incluir nivel de competencia y relevancia para el puesto]
+- [Habilidad 3 - Incluir nivel de competencia y relevancia para el puesto]
+- [Habilidad 4 - Incluir nivel de competencia y relevancia para el puesto]
+- [Habilidad 5 - Incluir nivel de competencia y relevancia para el puesto]
+
+Habilidades blandas:
+- [Habilidad blanda 1 - Con ejemplos específicos del CV que demuestran esta habilidad]
+- [Habilidad blanda 2 - Con ejemplos específicos del CV que demuestran esta habilidad]
+- [Habilidad blanda 3 - Con ejemplos específicos del CV que demuestran esta habilidad]
+- [Habilidad blanda 4 - Con ejemplos específicos del CV que demuestran esta habilidad]
 
 Formación académica:
-- [Formación 1]
-- [Formación 2]
-- [Formación 3]
+- [Formación 1 - Incluir institución, título, año y relevancia para el puesto]
+- [Formación 2 - Incluir institución, título, año y relevancia para el puesto]
+- [Formación 3 - Incluir institución, título, año y relevancia para el puesto]
+
+Certificaciones y cursos:
+- [Certificación 1 - Incluir entidad emisora, año y validez/relevancia actual]
+- [Certificación 2 - Incluir entidad emisora, año y validez/relevancia actual]
+- [Certificación 3 - Incluir entidad emisora, año y validez/relevancia actual]
 
 Proyectos destacados:
-- [Proyecto 1]
-- [Proyecto 2]
-- [Proyecto 3]
+- [Proyecto 1 - Incluir objetivo, tecnologías utilizadas, resultados y relevancia para el puesto]
+- [Proyecto 2 - Incluir objetivo, tecnologías utilizadas, resultados y relevancia para el puesto]
+- [Proyecto 3 - Incluir objetivo, tecnologías utilizadas, resultados y relevancia para el puesto]
+
+Análisis de competencias clave para el puesto:
+[Párrafo detallado analizando las 3-5 competencias principales requeridas para este puesto específico y cómo el candidato las cumple o no]
+
+Análisis de brecha de habilidades:
+[Análisis comparativo entre las habilidades que posee el candidato y las requeridas para el puesto, identificando claramente las habilidades faltantes o que necesitan desarrollo]
 
 Alineación con el puesto:
-[Análisis detallado de la alineación con el puesto]
+[Análisis detallado sobre cómo se alinea el perfil del candidato con los requisitos específicos del puesto de ${jobType}, indicando porcentaje aproximado de coincidencia]
 
 Puntos destacables:
-- [Punto 1]
-- [Punto 2]
-- [Punto 3]
+- [Punto 1 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
+- [Punto 2 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
+- [Punto 3 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
+- [Punto 4 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
+
+Recomendación final:
+[Conclusión sobre la idoneidad del candidato para el puesto, incluyendo una calificación de recomendación: Altamente recomendado / Recomendado / Recomendado con reservas / No recomendado]
 
 Por favor, asegúrate de:
 1. Mantener exactamente los títulos de sección como se muestran arriba
 2. Usar guiones (-) para cada punto en las listas
 3. Incluir todas las secciones en el orden especificado
-4. Proporcionar información específica y personalizada para cada sección`;
+4. Proporcionar información específica, personalizada y accionable para cada sección
+5. Basar tu análisis en datos concretos encontrados en el CV
+6. Relacionar cada punto con el puesto específico de ${jobType}`;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4o",
       messages: [
         {
           role: "system",
-          content: "Eres un experto en análisis de CVs y reclutamiento. Tu tarea es proporcionar un análisis detallado, personalizado y constructivo del CV del candidato, siguiendo exactamente el formato especificado."
+          content: "Eres un reclutador experto senior con 15 años de experiencia en selección de talento para puestos de tecnología y liderazgo. Tu especialidad es el análisis profundo de CVs para identificar candidatos de alto potencial. Proporciona evaluaciones detalladas, personalizadas, constructivas y accionables basadas en datos concretos del CV y los requisitos específicos del puesto."
         },
         {
           role: "user",
@@ -508,7 +542,7 @@ Por favor, asegúrate de:
         }
       ],
       temperature: 0.7,
-      max_tokens: 2000
+      max_tokens: 3000
     });
 
     const analysis = response.choices[0].message.content;
@@ -525,23 +559,35 @@ function parseAnalysis(analysis) {
     const sections = analysis.split('\n\n');
     const result = {
       score: 0,
+      summary: '',
       strengths: [],
       improvements: [],
       recommendations: [],
       experience: [],
       skills: [],
+      softSkills: [],
       education: [],
+      certifications: [],
       projects: [],
+      keyCompetencies: '',
+      skillsGap: '',
       alignment: '',
-      highlights: []
+      highlights: [],
+      finalRecommendation: ''
     };
-
+    
+    // Procesar cada sección
     sections.forEach(section => {
       if (section.includes('Puntuación general')) {
         const scoreMatch = section.match(/(\d+)\/100/);
         if (scoreMatch) {
           result.score = parseInt(scoreMatch[1]);
         }
+        // Capturar la explicación de la puntuación
+        const explanationLines = section.split('\n').slice(1).join('\n').trim();
+        result.scoreExplanation = explanationLines;
+      } else if (section.includes('Resumen ejecutivo')) {
+        result.summary = section.split('\n').slice(1).join('\n').trim();
       } else if (section.includes('Fortalezas específicas')) {
         result.strengths = section
           .split('\n')
@@ -552,7 +598,7 @@ function parseAnalysis(analysis) {
           .split('\n')
           .filter(line => line.trim().startsWith('-'))
           .map(line => line.replace('-', '').trim());
-      } else if (section.includes('Recomendaciones')) {
+      } else if (section.includes('Recomendaciones específicas')) {
         result.recommendations = section
           .split('\n')
           .filter(line => line.trim().startsWith('-'))
@@ -567,8 +613,18 @@ function parseAnalysis(analysis) {
           .split('\n')
           .filter(line => line.trim().startsWith('-'))
           .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Habilidades blandas')) {
+        result.softSkills = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
       } else if (section.includes('Formación académica')) {
         result.education = section
+          .split('\n')
+          .filter(line => line.trim().startsWith('-'))
+          .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Certificaciones y cursos')) {
+        result.certifications = section
           .split('\n')
           .filter(line => line.trim().startsWith('-'))
           .map(line => line.replace('-', '').trim());
@@ -577,6 +633,10 @@ function parseAnalysis(analysis) {
           .split('\n')
           .filter(line => line.trim().startsWith('-'))
           .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Análisis de competencias clave')) {
+        result.keyCompetencies = section.split('\n').slice(1).join('\n').trim();
+      } else if (section.includes('Análisis de brecha de habilidades')) {
+        result.skillsGap = section.split('\n').slice(1).join('\n').trim();
       } else if (section.includes('Alineación con el puesto')) {
         result.alignment = section.split('\n').slice(1).join('\n').trim();
       } else if (section.includes('Puntos destacables')) {
@@ -584,6 +644,8 @@ function parseAnalysis(analysis) {
           .split('\n')
           .filter(line => line.trim().startsWith('-'))
           .map(line => line.replace('-', '').trim());
+      } else if (section.includes('Recomendación final')) {
+        result.finalRecommendation = section.split('\n').slice(1).join('\n').trim();
       }
     });
 
