@@ -41,13 +41,13 @@ const handleStart = async (from) => {
     
     // Mensaje de bienvenida mejorado con emojis y estilo más personal
     const welcomeMessage = `
-¡Hola! 👋 Soy tu asistente virtual de *RevisaCV* 🤖✨
+¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
 
 Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
 
 🔍 *Análisis de CV personalizado*
 💼 *Simulación de entrevistas*
-💡 *Consejos profesionales*
+👨‍💼 *Asesoría laboral con psicólogos por videollamada*
 
 ¿Cómo te gustaría que te ayude hoy?
     `;
@@ -63,7 +63,7 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
         from,
         welcomeMessage,
         menuButtons,
-        '¡Bienvenido a RevisaCV!'
+        '¡Bienvenido a Worky!'
       );
       
       await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
@@ -140,7 +140,7 @@ const handleMenuSelection = async (from, selection) => {
     }
   } catch (error) {
     logger.error(`Error handling menu selection: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
+    //await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
   }
 };
 
@@ -491,8 +491,18 @@ const handleText = async (from, text) => {
         if (session.interactive && session.interactive.list_reply) {
           const selectedId = session.interactive.list_reply.id;
           await handlePackageSelection(from, selectedId);
+        } else if (text.toLowerCase().includes('menu') || 
+                  text.toLowerCase().includes('regresar') || 
+                  text.toLowerCase().includes('volver') ||
+                  text.toLowerCase().includes('atras') ||
+                  text.toLowerCase().includes('atrás') ||
+                  text.toLowerCase().includes('inicio')) {
+          // El usuario quiere volver al menú principal
+          await sessionService.resetSession(from);
+          await handleStart(from);
         } else {
-          // Si es texto normal, procesar como antes
+          // Intentar procesar la selección - si no coincide con un paquete,
+          // handlePackageSelection se encargará de volver a mostrar las opciones
           await handlePackageSelection(from, text);
         }
         break;
@@ -1259,15 +1269,35 @@ const handlePremiumInfo = async (from) => {
         packageSections
       );
       
+      // Añadir botón para regresar al menú principal
+      await bot.sendButtonMessage(
+        from,
+        "¿No quieres comprar créditos ahora?",
+        [{ id: "back_to_main_menu", text: "🔙 Regresar al menú principal" }],
+        "Otras opciones"
+      );
+      
       // Actualizar estado para manejar selección de paquete
       await sessionService.updateSessionState(from, 'selecting_premium_package');
       
     } catch (listError) {
       logger.warn(`Failed to send list message: ${listError.message}`);
       
-      // Fallback si falla el mensaje de lista
-      await bot.sendMessage(from, `*Paquetes disponibles*\n\n🔹 S/ 4 – 1 revisión\n\n🔹 S/ 7 – 3 revisiones\n\n🔹 S/ 10 – 6 revisiones\n\n🔹 S/ 15 – 10 revisiones`);
-      await bot.sendMessage(from, `¿Qué paquete deseas adquirir? Responde con el número de revisiones o el precio.`);
+      // En lugar de enviar una versión de texto plano del mensaje y un botón separado,
+      // enviar directamente los botones con opciones de paquetes
+      const packageButtons = [
+        { id: 'package_1', text: 'S/ 4 – 1 revisión' },
+        { id: 'package_3', text: 'S/ 7 – 3 revisiones' },
+        { id: 'package_6', text: 'S/ 10 – 6 revisiones' },
+        { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
+      ];
+      
+      await bot.sendButtonMessage(
+        from,
+        "Selecciona un paquete de revisiones:",
+        packageButtons,
+        "Paquetes disponibles"
+      );
       
       // Actualizar estado de la sesión para manejar la selección
       await sessionService.updateSessionState(from, 'selecting_premium_package');
@@ -1324,8 +1354,8 @@ const handlePackageSelection = async (from, text) => {
       packagePrice = 'S/15';
       packageReviews = '10';
     } else {
-      // Si no se reconoce el paquete, pedimos aclaración
-      await bot.sendMessage(from, 'Por favor, selecciona uno de los paquetes disponibles respondiendo con el número de revisiones o el precio.');
+      // Si no se reconoce el paquete, volver a mostrar las opciones sin mensaje de error
+      await handlePremiumInfo(from);
       return;
     }
     
@@ -1361,11 +1391,13 @@ const handlePackageSelection = async (from, text) => {
     } catch (buttonError) {
       logger.warn(`Failed to send payment confirmation buttons: ${buttonError.message}`);
       await bot.sendMessage(from, 'Después de realizar el pago, responde con "pagado". Si quieres cambiar tu paquete, responde con "volver".');
+      await sessionService.updateSessionState(from, 'confirming_payment');
     }
     
   } catch (error) {
     logger.error(`Error handling package selection: ${error.message}`);
-    await bot.sendMessage(from, 'Ocurrió un error al procesar tu selección. Por favor, intenta nuevamente o escribe !help para obtener ayuda.');
+    // En lugar de mostrar un mensaje de error, volver a las opciones de paquetes
+    await handlePremiumInfo(from);
   }
 };
 
@@ -1599,78 +1631,44 @@ Responde con un JSON que tenga los siguientes campos:
 const handleButtonReply = async (from, buttonId) => {
   try {
     logger.info(`Button reply received from user ${from}: ${buttonId}`);
-    const session = await sessionService.getOrCreateSession(from);
     
-    switch (buttonId) {
-      case 'review_cv':
-      case 'interview_simulation':
-        await handleMenuSelection(from, buttonId);
-        break;
-      case 'start_interview':
-        await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
-        await handleInterview(from);
-        break;
-      case 'start_interview_now':
-        // El usuario confirmó que está listo para iniciar la entrevista
-        await startInterviewQuestions(from);
-        break;
-      case 'cancel_interview':
-        // El usuario canceló la entrevista
-        await bot.sendMessage(from, 'Entrevista cancelada. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
-        await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-        break;
-      case 'review_cv_again':
-        // Verificar si ya ha analizado un CV usando el servicio de usuarios
-        const shouldPay = await userService.shouldUserPayForCVAnalysis(from);
-        
-        if (shouldPay) {
-          // Mostrar mensaje de versión premium si ya ha analizado un CV
-          await handlePremiumInfo(from);
-        } else {
-          // Permitir analizar otro CV
-          await sessionService.updateSession(from, { cvProcessed: false });
-          await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
-          await sessionService.updateSessionState(from, 'waiting_for_cv');
-        }
-        break;
-      case 'premium_required':
-        await handlePremiumInfo(from);
-        break;
-      case 'continue_interview':
-        // Manejar la continuación de la entrevista
-        await handleNextQuestion(from);
-        break;
-      case 'stop_interview':
-        // Manejar la finalización de la entrevista
-        await bot.sendMessage(from, 'Entrevista finalizada. ¡Gracias por tu participación! Puedes iniciar un nuevo proceso con !reset');
-        await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
-        break;
-      case 'back_to_main_menu':
-        // Reiniciar el proceso completamente
-        await sessionService.resetSession(from);
-        await handleStart(from);
-        break;
-      case 'payment_confirmed':
-        await handlePaymentConfirmation(from);
-        break;
-      case 'payment_back':
-        await handlePremiumInfo(from);
-        break;
-      // Manejar selección de paquetes desde lista interactiva
-      case 'package_1':
-      case 'package_3':
-      case 'package_6':
-      case 'package_10':
-        // Simular selección de paquete con el ID recibido
-        await handlePackageSelection(from, buttonId);
-        break;
-      default:
-        logger.warn(`Unrecognized button ID: ${buttonId}`);
-        await bot.sendMessage(from, 'Opción no reconocida. Por favor, intenta nuevamente.');
+    // Manejar diferentes botones
+    if (buttonId === 'review_cv') {
+      await handleMenuSelection(from, 'review_cv');
+    } else if (buttonId === 'interview_simulation') {
+      await handleMenuSelection(from, 'interview_simulation');
+    } else if (buttonId === 'back_to_main_menu') {
+      // Si el usuario presiona "Regresar al menú principal"
+      await sessionService.resetSession(from);
+      await handleStart(from);
+    } else if (buttonId === 'start_interview_now') {
+      await startInterviewQuestions(from);
+    } else if (buttonId === 'cancel_interview') {
+      await sessionService.resetSession(from);
+      await handleStart(from);
+    } else if (buttonId === 'start_interview') {
+      await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
+      await handleInterview(from);
+    } else if (buttonId === 'review_cv_again') {
+      await sessionService.updateSession(from, { cvProcessed: false });
+      await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
+      await sessionService.updateSessionState(from, 'waiting_for_cv');
+    } else if (buttonId === 'premium_required') {
+      await handlePremiumInfo(from);
+    } else if (buttonId === 'payment_confirmed') {
+      await handlePaymentConfirmation(from);
+    } else if (buttonId === 'payment_back') {
+      await handlePremiumInfo(from);
+    } else if (buttonId === 'package_1' || buttonId === 'package_3' || buttonId === 'package_6' || buttonId === 'package_10') {
+      // Manejar selección de paquetes desde la lista interactiva o botones
+      await handlePackageSelection(from, buttonId);
+    } else {
+      // Botón no reconocido, enviar mensaje genérico
+      await bot.sendMessage(from, 'No reconocí esa opción. Por favor, envía !start para comenzar de nuevo.');
     }
   } catch (error) {
     logger.error(`Error handling button reply: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
+    //await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente.');
   }
 };
 
