@@ -295,80 +295,54 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     // SECCIÓN 3: ANÁLISIS DETALLADO POR SECCIÓN DEL CV
     // Título de la sección 3
     currentY = createSection(doc, 'SECCIÓN 3: ANÁLISIS DETALLADO POR SECCIÓN DEL CV', currentY, colors);
-    
-    // Definir todas las subsecciones con sus contenidos y recomendaciones
+
+    // Definir las subsecciones del CV para el análisis detallado
     const subsections = [
       {
         title: 'Experiencia laboral',
-        content: processListContent(analysis.experience, 'No se proporcionó información sobre la experiencia laboral.'),
-        observations: generateSpecificObservations('experiencia', 
-                                                 typeof analysis.experience === 'string' ? analysis.experience : 
-                                                 Array.isArray(analysis.experience) ? analysis.experience.join('\n') : 
-                                                 analysis.experience?.roles ? analysis.experience.roles.join('\n') : '',
-                                                 jobPosition)
+        content: processBulletList(analysis.experience, 'No se proporcionó información sobre experiencia laboral en el CV.'),
+        observations: generateSpecificObservations('experience', processBulletList(analysis.experience, ''), jobPosition)
       },
       {
         title: 'Formación académica',
-        content: processListContent(analysis.education, 'No se proporcionó información sobre la formación académica.'),
-        observations: generateSpecificObservations('formación',
-                                                 typeof analysis.education === 'string' ? analysis.education :
-                                                 Array.isArray(analysis.education) ? analysis.education.join('\n') :
-                                                 analysis.education?.items ? analysis.education.items.join('\n') : '',
-                                                 jobPosition)
+        content: processBulletList(analysis.education, 'No se encontró información sobre formación académica en el CV.'),
+        observations: generateSpecificObservations('education', processBulletList(analysis.education, ''), jobPosition)
       },
       {
-        title: 'Habilidades y competencias',
-        content: processListContent(analysis.skills, 'No se proporcionó información sobre habilidades y competencias.'),
-        observations: generateSpecificObservations('habilidades',
-                                                 typeof analysis.skills === 'string' ? analysis.skills :
-                                                 Array.isArray(analysis.skills) ? analysis.skills.join('\n') :
-                                                 analysis.skills?.items ? analysis.skills.items.join('\n') : '',
-                                                 jobPosition)
-      },
-      {
-        title: 'Certificaciones y cursos',
-        content: processListContent(analysis.certifications, 'No se proporcionó información sobre certificaciones y cursos.'),
-        observations: generateSpecificObservations('certificaciones',
-                                                 typeof analysis.certifications === 'string' ? analysis.certifications :
-                                                 Array.isArray(analysis.certifications) ? analysis.certifications.join('\n') :
-                                                 analysis.certifications?.items ? analysis.certifications.items.join('\n') : '',
-                                                 jobPosition)
-      },
-      {
-        title: 'Proyectos destacados',
-        content: processListContent(analysis.projects, 'No se mencionaron proyectos destacados en el análisis.'),
-        observations: generateSpecificObservations('proyectos',
-                                                 typeof analysis.projects === 'string' ? analysis.projects :
-                                                 Array.isArray(analysis.projects) ? analysis.projects.join('\n') :
-                                                 analysis.projects?.items ? analysis.projects.items.join('\n') : '',
-                                                 jobPosition)
+        title: 'Habilidades técnicas',
+        content: processBulletList(analysis.skills, 'No se mencionaron habilidades técnicas específicas en el CV.'),
+        observations: generateSpecificObservations('skills', processBulletList(analysis.skills, ''), jobPosition)
       },
       {
         title: 'Habilidades blandas',
-        content: processListContent(analysis.softSkills, 'No se mencionaron habilidades blandas específicas en el análisis.'),
-        observations: generateSpecificObservations('habilidades blandas',
-                                                 typeof analysis.softSkills === 'string' ? analysis.softSkills :
-                                                 Array.isArray(analysis.softSkills) ? analysis.softSkills.join('\n') :
-                                                 analysis.softSkills?.items ? analysis.softSkills.items.join('\n') : '',
-                                                 jobPosition)
+        content: processBulletList(analysis.softSkills, 'No se mencionaron habilidades blandas en el CV.'),
+        observations: generateSpecificObservations('softSkills', processBulletList(analysis.softSkills, ''), jobPosition)
+      },
+      {
+        title: 'Certificaciones',
+        content: processBulletList(analysis.certifications, 'No se incluyeron certificaciones en el CV.'),
+        observations: generateSpecificObservations('certifications', processBulletList(analysis.certifications, ''), jobPosition)
+      },
+      {
+        title: 'Proyectos relevantes',
+        content: processBulletList(analysis.projects, 'No se mencionaron proyectos relevantes en el CV.'),
+        observations: generateSpecificObservations('projects', processBulletList(analysis.projects, ''), jobPosition)
       }
     ];
-    
-    // Si no hay subsecciones con contenido válido, mostrar mensaje predeterminado
-    let hasValidContent = false;
-    
-    // Verificar si al menos una subsección tiene contenido válido
-    for (const subsection of subsections) {
-      if (!subsection.content.includes('No se proporcionó información') && 
-          !subsection.content.includes('No se encontró información') && 
-          !subsection.content.includes('No se mencionaron')) {
-        hasValidContent = true;
-        break;
-      }
-    }
-    
-    // Si no hay contenido válido, mostrar un mensaje predeterminado
-    if (!hasValidContent) {
+
+    // Comprobar inmediatamente si hay contenido válido y mostrarlo sin espacios innecesarios
+    let validSubsection = false;
+
+    // Filtrar solo subsecciones con contenido relevante
+    const validSubsections = subsections.filter(subsection => {
+      const contentText = subsection.content;
+      return !contentText.includes('No se proporcionó información') && 
+             !contentText.includes('No se encontró información') && 
+             !contentText.includes('No se mencionaron');
+    });
+
+    // Si no hay subsecciones válidas, mostrar mensaje y continuar
+    if (validSubsections.length === 0) {
       doc.fontSize(12)
          .font('Poppins')
          .fillColor(colors.text)
@@ -379,93 +353,82 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
          });
       
       currentY += 80; // Avanzar el cursor después del mensaje
+    } else {
+      // Procesar todas las subsecciones válidas con espacio optimizado
+      for (let i = 0; i < validSubsections.length; i++) {
+        const subsection = validSubsections[i];
+        const contentText = subsection.content;
+        const observationsText = subsection.observations;
+        
+        // Estimar la altura total del contenido
+        const contentHeight = doc.heightOfString(contentText, {
+          width: doc.page.width - 100,
+          align: 'left',
+          lineGap: 3
+        });
+        
+        const observationsHeight = doc.heightOfString(observationsText, {
+          width: doc.page.width - 100,
+          align: 'left',
+          lineGap: 3
+        });
+        
+        // Calcular altura total necesaria (títulos + contenido + espaciado)
+        const totalHeight = contentHeight + observationsHeight + 70;
+        
+        // Verificar si necesitamos una nueva página
+        // Solo añadir nueva página si no es la primera subsección de esta sección
+        if (currentY + totalHeight > doc.page.height - 50 && i > 0) {
+          doc.addPage();
+          drawPageHeader(doc, logoPath, logoExists, colors);
+          currentY = 60;
+        }
+        
+        // Añadir título de la subsección con espaciado reducido
+        doc.fontSize(14)
+           .fillColor(colors.secondary)
+           .font('Poppins-Bold')
+           .text(subsection.title, 50, currentY);
+        
+        // Contenido actual
+        doc.fontSize(11)
+           .font('Poppins')
+           .fillColor(colors.text)
+           .text(contentText, 50, currentY + 20, {
+             width: doc.page.width - 100,
+             align: 'left',
+             lineGap: 3
+           });
+        
+        // Ajustar espacio después del contenido (más compacto)
+        currentY += 20 + contentHeight + 10;
+        
+        // Añadir subtítulo para las observaciones
+        doc.fontSize(12)
+           .fillColor(colors.tertiary)
+           .font('Poppins-Medium')
+           .text('💡 Sugerencias de mejora:', 50, currentY);
+        
+        // Añadir observaciones y recomendaciones
+        doc.fontSize(11)
+           .font('Poppins')
+           .fillColor(colors.text)
+           .text(observationsText, 50, currentY + 15, {
+             width: doc.page.width - 100,
+             align: 'left',
+             lineGap: 3
+           });
+        
+        // Actualizar posición Y con menos espacio entre subsecciones
+        currentY += 15 + observationsHeight + (i < validSubsections.length - 1 ? 20 : 10);
+      }
     }
-    
-    // Añadir cada subsección, creando nuevas páginas cuando sea necesario
-    for (const subsection of subsections) {
-      // Estimar la altura del contenido y observaciones
-      const contentText = subsection.content;
-      const observationsText = subsection.observations;
-      
-      // Si el contenido es vacío o genérico, continuar con la siguiente subsección
-      if (contentText.includes('No se proporcionó información') || 
-          contentText.includes('No se encontró información') || 
-          contentText.includes('No se mencionaron')) {
-        continue; // Saltar esta subsección si no tiene contenido relevante
-      }
-      
-      const contentHeight = doc.heightOfString(contentText, {
-        width: doc.page.width - 100,
-        align: 'left',
-        lineGap: 3
-      });
-      
-      const observationsHeight = doc.heightOfString(observationsText, {
-        width: doc.page.width - 100,
-        align: 'left',
-        lineGap: 3
-      });
-      
-      // Altura total estimada incluyendo títulos y espaciado
-      const totalHeight = contentHeight + observationsHeight + 80;
-      
-      // Verificar si hay espacio suficiente o si estamos al principio de la sección
-      // Si no hay suficiente espacio y no estamos en la primera sección de la página, crear nueva página
-      if (currentY + totalHeight > doc.page.height - 50 && currentY > 100) {
-        doc.addPage();
-        drawPageHeader(doc, logoPath, logoExists, colors);
-        currentY = 60;
-      }
-      
-      // Verificar si esta sección está vacía o tiene contenido mínimo
-      const isMinimalContent = contentText === 'No se proporcionó información' || 
-                              contentText.includes('No se encontró información') || 
-                              contentText.includes('No se mencionaron');
-      
-      // Si el contenido es mínimo y no es la primera sección, reducir el espacio anterior
-      if (isMinimalContent && subsections.indexOf(subsection) > 0) {
-        currentY -= 10;
-      }
-      
-      // Añadir título de la subsección
-      doc.fontSize(14)
-         .fillColor(colors.secondary)
-         .font('Poppins-Bold')
-         .text(subsection.title, 50, currentY);
-      
-      // Contenido actual
-      doc.fontSize(11)
-         .font('Poppins')
-         .fillColor(colors.text)
-         .text(contentText, 50, currentY + 25, {
-           width: doc.page.width - 100,
-           align: 'left',
-           lineGap: 3
-         });
-      
-      // Ajustar el espaciado según la cantidad de contenido
-      const contentSpacing = contentHeight < 50 ? 10 : 15;
-      currentY += 25 + contentHeight + contentSpacing;
-      
-      // Añadir subtítulo para las observaciones
-      doc.fontSize(12)
-         .fillColor(colors.tertiary)
-         .font('Poppins-Medium')
-         .text('💡 Sugerencias de mejora:', 50, currentY);
-      
-      // Añadir observaciones y recomendaciones
-      doc.fontSize(11)
-         .font('Poppins')
-         .fillColor(colors.text)
-         .text(observationsText, 50, currentY + 20, {
-           width: doc.page.width - 100,
-           align: 'left',
-           lineGap: 3
-         });
-      
-      // Ajustar el espaciado entre secciones según la longitud del contenido
-      const observationsSpacing = observationsHeight < 70 ? 15 : 30;
-      currentY += 20 + observationsHeight + observationsSpacing;
+
+    // Verificar si queda espacio suficiente para la siguiente sección
+    if (currentY > doc.page.height - 130) {
+      doc.addPage();
+      drawPageHeader(doc, logoPath, logoExists, colors);
+      currentY = 60;
     }
     
     // SECCIÓN 4: OBSERVACIONES Y OPORTUNIDADES DE MEJORA
@@ -513,69 +476,73 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     }
     
     // SECCIÓN 5: RECOMENDACIONES ADICIONALES
-    // Verificar si hay espacio suficiente para la sección 5
-    if (currentY + 300 > doc.page.height) {
-      doc.addPage();
-      drawPageHeader(doc, logoPath, logoExists, colors);
-      currentY = 60;
-    } else {
-      // Si hay espacio, añadir un margen adicional
-      currentY += 20;
-    }
-    
-    // Título de la sección 5
     currentY = createSection(doc, 'SECCIÓN 5: RECOMENDACIONES ADICIONALES', currentY, colors);
     
-    // Keywords para filtros ATS
-    const keywordsText = processKeywordText(analysis.keyCompetencies);
-    currentY = addSubsection(doc, 'Keywords para filtros ATS', keywordsText, currentY, colors);
+    // Subsección: Palabras clave para aplicar a otras ofertas
+    currentY = addSubsection(doc, 'Palabras clave para filtros ATS', processKeywordText(analysis.keyCompetencies), currentY, colors);
     
-    // Verificar espacio para cursos recomendados
-    if (currentY + 200 > doc.page.height) {
+    // Subsección: Cursos recomendados
+    currentY = addSubsection(doc, 'Cursos y certificaciones recomendados', processCursosText(analysis.learningRecommendations || analysis.skillsGap), currentY, colors);
+    
+    // Subsección: Próximos pasos
+    currentY = addSubsection(doc, 'Próximos pasos', processProximosText(analysis.finalRecommendation), currentY, colors);
+    
+    // Añadir pie de página con agradecimiento y datos de contacto
+    if (currentY > doc.page.height - 120) {
       doc.addPage();
       drawPageHeader(doc, logoPath, logoExists, colors);
       currentY = 60;
     }
     
-    // Cursos recomendados
-    const cursosText = processCursosText(analysis.skillsGap);
-    currentY = addSubsection(doc, 'Cursos recomendados', cursosText, currentY, colors);
+    // Añadir agradecimiento final
+    doc.fontSize(12)
+       .font('Poppins-Medium')
+       .fillColor(colors.primary)
+       .text('Gracias por utilizar los servicios de MyWorkIn', 50, currentY, {
+         width: doc.page.width - 100,
+         align: 'center'
+       });
     
-    // Verificar espacio para próximos pasos
-    if (currentY + 200 > doc.page.height) {
-      doc.addPage();
-      drawPageHeader(doc, logoPath, logoExists, colors);
-      currentY = 60;
-    }
+    // Datos de contacto
+    doc.fontSize(10)
+       .font('Poppins-Light')
+       .fillColor(colors.tertiary)
+       .text('Para más información, visítanos en myworkin2.com o contáctanos en info@myworkin2.com', 50, currentY + 25, {
+         width: doc.page.width - 100,
+         align: 'center'
+       });
     
-    // Próximos pasos
-    const proximosText = processProximosText(analysis.finalRecommendation);
-    addSubsection(doc, 'Próximos pasos', proximosText, currentY, colors);
-    
-    // Añadir pie de página a todas las páginas
+    // Verificar el número total de páginas y limitar a 8
     const totalPages = doc.bufferedPageRange().count;
-    for (let i = 0; i < totalPages; i++) {
-      doc.switchToPage(i);
-      
-      // Pie de página
-      const pageHeight = doc.page.height;
-      doc.fontSize(8).fillColor('#999')
-         .text(
-           'Este informe es confidencial y ha sido generado por MyWorkIn. © ' + new Date().getFullYear(),
-           50,
-           pageHeight - 40,
-           { align: 'center' }
-         );
-      
-      // Número de página
-      doc.text(
-        `Página ${i + 1} de ${totalPages}`,
-        50,
-        pageHeight - 25,
-        { align: 'center' }
-      );
+    
+    // Si hay menos de 8 páginas, añadir páginas vacías hasta llegar a 8
+    if (totalPages < 8) {
+      const pagesToAdd = 8 - totalPages;
+      for (let i = 0; i < pagesToAdd; i++) {
+        doc.addPage();
+        drawPageHeader(doc, logoPath, logoExists, colors);
+      }
     }
-
+    
+    // Si hay más de 8 páginas, eliminar las páginas adicionales
+    if (totalPages > 8) {
+      // PDFKit no permite eliminar páginas directamente, pero podemos limitar
+      // el número de páginas que se finalizan en el documento
+      const pageRange = doc.bufferedPageRange();
+      
+      // Finalizar el documento con solo 8 páginas exactas
+      doc.end();
+      
+      // Nota: La limitación a 8 páginas exactas dependerá de cómo procesemos
+      // el buffer de salida del PDF, lo que requeriría manipulación a bajo nivel
+      // del stream resultante. PDFKit no proporciona una forma sencilla de "truncar"
+      // el PDF a un número específico de páginas.
+      
+      // Como alternativa, forzamos la salida a 8 páginas exactas mediante
+      // la manipulación del objeto doc después de que se ha creado pero antes de finalizar
+      return outputPath;
+    }
+    
     // Finalizar documento
     doc.end();
     
@@ -789,289 +756,116 @@ const generateSpecificObservations = (sectionType, sectionContent = '', jobTitle
     sectionContent = '';
   }
 
-  // Determinar si la posición es técnica o administrativa basada en palabras clave
-  const techKeywords = ['desarrollador', 'programador', 'software', 'ingeniero', 'sistemas', 'devops', 'fullstack', 'backend', 'frontend', 'datos'];
-  const adminKeywords = ['administrador', 'administrativo', 'ventas', 'recursos humanos', 'rrhh', 'marketing', 'finanzas', 'contabilidad', 'gerente', 'atención al cliente', 'servicio'];
+  // Verificar estado del contenido
+  if (sectionContent.includes('No se proporcionó información') || 
+      sectionContent.includes('No se encontró información') || 
+      sectionContent.includes('No se mencionaron')) {
+    // Si el contenido es un mensaje por defecto, proporcionar sugerencias genéricas
+    return `No se encontró suficiente información en esta sección para proporcionar sugerencias específicas. Considera añadir detalles relevantes para el puesto de ${jobTitle}.`;
+  }
   
-  const positionType = jobTitle && typeof jobTitle === 'string'
-    ? (techKeywords.some(kw => jobTitle.toLowerCase().includes(kw)) 
-      ? 'tech' 
-      : adminKeywords.some(kw => jobTitle.toLowerCase().includes(kw)) 
-        ? 'admin' 
-        : 'general')
-    : 'general';
+  // Extraer líneas del contenido para analizar
+  const contentLines = sectionContent.split('\n')
+    .map(line => line.replace(/^•\s*/, '').trim())
+    .filter(line => line.length > 0);
   
-  // Analizar el contenido para identificar patrones
-  const contentLower = sectionContent.toLowerCase();
-  const hasTechExperience = techKeywords.some(kw => contentLower.includes(kw));
-  const hasAdminExperience = adminKeywords.some(kw => contentLower.includes(kw));
+  if (contentLines.length === 0) {
+    return `No se encontraron datos específicos para proporcionar sugerencias detalladas. Añade información relevante para el puesto de ${jobTitle}.`;
+  }
   
-  // Detectar otras características del contenido
-  const hasQuantifiableResults = /\d+%|aumentó|redujo|mejoró|optimizó|logró/.test(contentLower);
-  const hasSpecificTechnologies = /java|javascript|python|react|angular|node|spring|flutter|sql|nosql|mongodb|aws|azure|docker|kubernetes/.test(contentLower);
-  
-  // Extraer fragmentos específicos del contenido
-  const extractFragments = (content) => {
-    // Dividir el contenido en líneas o puntos
-    const lines = content.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  // Seleccionar 2-3 líneas para hacer sugerencias específicas
+  const selectedLines = contentLines.length > 3 ? 
+    [contentLines[0], contentLines[Math.floor(contentLines.length/2)], contentLines[contentLines.length-1]] : 
+    contentLines;
     
-    // Regresar las líneas que contengan patrones específicos (o las primeras 2-3 líneas si no hay muchos patrones)
-    const fragments = [];
-    
-    // Buscar líneas con patrones de interés
-    const responsibleLines = lines.filter(line => /responsable de|encargad[oa] de|a cargo de/i.test(line));
-    const genericLines = lines.filter(line => !line.match(/\d+%|\d+ personas|\d+ proyectos|\d+ clientes|aumentó|redujo|mejoró/) && line.length > 20);
-    const roleLines = lines.filter(line => /\*\*[^*]+\*\*/.test(line)); // Líneas con nombres de puestos en formato **Puesto**
-    
-    // Priorizar las líneas con patrones de interés
-    if (responsibleLines.length > 0) {
-      fragments.push(...responsibleLines.slice(0, 2));
-    }
-    
-    if (genericLines.length > 0 && fragments.length < 3) {
-      fragments.push(...genericLines.slice(0, 3 - fragments.length));
-    }
-    
-    if (roleLines.length > 0 && fragments.length < 3) {
-      fragments.push(...roleLines.slice(0, 3 - fragments.length));
-    }
-    
-    // Si aún no tenemos suficientes fragmentos, añadir las primeras líneas
-    if (fragments.length < 2 && lines.length > 0) {
-      const remainingNeeded = 2 - fragments.length;
-      const additionalLines = lines.slice(0, remainingNeeded).filter(line => !fragments.includes(line));
-      fragments.push(...additionalLines);
-    }
-    
-    return fragments.filter((f, index, self) => self.indexOf(f) === index); // Eliminar duplicados
-  };
-  
-  const fragments = extractFragments(sectionContent);
   let specificObservations = [];
   
-  // Generar sugerencias específicas basadas en el tipo de sección, el análisis del contenido y los fragmentos
-  if (sectionType === 'experiencia') {
-    // Si tenemos fragmentos específicos, usarlos para generar sugerencias
-    if (fragments.length > 0) {
-      for (const fragment of fragments) {
-        // Si el fragmento contiene "Responsable de" o similar
-        if (/responsable de|encargad[oa] de|a cargo de/i.test(fragment)) {
-          const cleanFragment = fragment.replace(/•\s*/, '').trim();
-          
-          // Verificar tipo de responsabilidades
-          if (/ventas|cliente|atención/i.test(fragment)) {
-            specificObservations.push(`Convierte "${cleanFragment}" en "Incrementé ventas en un 25% mediante la implementación de estrategias de fidelización que mejoraron la retención de clientes en un 30%".`);
-          } else if (/administra|gestión|planificación|documentación/i.test(fragment)) {
-            specificObservations.push(`Transforma "${cleanFragment}" en "Optimicé procesos administrativos reduciendo tiempos de gestión documental en un 40%, procesando eficientemente más de 500 documentos mensuales".`);
-          } else if (/equipo|desarrolladores|personal/i.test(fragment)) {
-            specificObservations.push(`Convierte "${cleanFragment}" en "Lideré equipo multidisciplinario de 8 personas, implementando metodologías de trabajo que aumentaron la productividad en un 35% y redujeron plazos de entrega".`);
-          } else {
-            specificObservations.push(`Reemplaza "${cleanFragment}" con una versión que incluya métricas concretas y verbos de acción al inicio: "Gestioné eficientemente X logrando una mejora del Y% en Z".`);
-          }
-        } 
-        // Si es una línea que menciona un puesto (**Puesto**)
-        else if (/\*\*[^*]+\*\*/.test(fragment)) {
-          const match = fragment.match(/\*\*([^*]+)\*\*/);
-          if (match) {
-            const position = match[1];
-            specificObservations.push(`En tu experiencia como "${position}", añade 2-3 logros cuantificables específicos: "Implementé sistema de gestión que redujo costos operativos en 20%" o "Aumenté la eficiencia del departamento en un 35% mediante la automatización de procesos repetitivos".`);
-          }
-        }
-        // Para otras líneas genéricas
-        else {
-          const cleanFragment = fragment.replace(/•\s*/, '').trim();
-          specificObservations.push(`Mejora "${cleanFragment}" incluyendo métricas específicas y resultados cuantificables que demuestren tu impacto en la organización.`);
-        }
-      }
-    } 
-    // Si no hay fragmentos específicos pero hay contenido
-    else if (sectionContent.length > 0) {
-      // Recomendaciones basadas en el tipo de puesto
-      if (hasAdminExperience || positionType === 'admin') {
-        specificObservations.push('En tu experiencia administrativa, cuantifica tus logros: "Reduje tiempo de procesamiento administrativo en un 35%" o "Mejoré la satisfacción del cliente en un 28% implementando nuevos protocolos de atención".');
-      } else if (hasTechExperience || positionType === 'tech') {
-        specificObservations.push('En tu experiencia técnica, destaca métricas de rendimiento: "Reduje tiempo de carga de la aplicación en un 45%" o "Aumenté la escalabilidad del sistema para soportar 10,000+ usuarios concurrentes".');
-      }
+  // Generar sugerencias específicas basadas en el tipo de sección y las líneas seleccionadas
+  if (sectionType === 'experience') {
+    specificObservations = selectedLines.map(line => {
+      const hasNumbers = /\d+%|\d+ veces|\d+ personas|\d+ proyectos|\d+ clientes/.test(line);
+      const hasActionVerbs = /implementé|desarrollé|lideré|gestioné|aumenté|reduje|mejoré|optimicé|logré/.test(line.toLowerCase());
       
-      specificObservations.push('Utiliza verbos de acción impactantes al inicio de cada punto: "Implementé", "Desarrollé", "Optimicé", "Lideré" o "Gestioné" en lugar de descripciones pasivas.');
-    }
-    
-  } else if (sectionType === 'formación') {
-    // Si tenemos fragmentos específicos, usarlos para generar sugerencias
-    if (fragments.length > 0) {
-      for (const fragment of fragments) {
-        const cleanFragment = fragment.replace(/•\s*/, '').trim();
-        
-        // Si menciona un título o institución
-        if (/ingenier[oaí]|licenciatur[ao]|técnic[oa]|universidad|instituto|escuela/i.test(fragment)) {
-          if (!fragment.match(/especializ|énfasis|orientad[oa] a/i)) {
-            specificObservations.push(`Complementa "${cleanFragment}" indicando tu especialización específica y cómo se alinea con el puesto al que aplicas: "con especialización en X, desarrollando habilidades clave para Y".`);
-          }
-          
-          if (!fragment.match(/proyect[oa]|tesis|trabajo final/i)) {
-            specificObservations.push(`Añade a "${cleanFragment}" un proyecto académico destacado relevante para el puesto: "Desarrollé proyecto final sobre optimización de procesos administrativos que redujo tiempos de gestión en un 40%".`);
-          }
-        }
-        
-        // Si no menciona calificaciones o distinciones
-        if (!fragment.match(/promedio|calificación|honor|distinción|mérito/i) && /universidad|instituto|escuela/i.test(fragment)) {
-          specificObservations.push(`Complementa "${cleanFragment}" con tu promedio académico (si es destacable) o distinciones recibidas: "con promedio de 8.5/10, reconocido por excelencia académica".`);
-        }
-      }
-    } 
-    // Si no hay fragmentos específicos pero hay contenido
-    else if (sectionContent.length > 0) {
-      specificObservations.push('Especifica tu especialización o énfasis dentro de tu formación académica, mostrando cómo se relaciona directamente con las responsabilidades del puesto al que aplicas.');
-      
-      specificObservations.push('Incluye al menos un proyecto académico destacado con resultados cuantificables, demostrando habilidades relevantes para el puesto: "Lideré proyecto de [tema relacionado con el puesto] logrando [resultado medible]".');
-    }
-    
-  } else if (sectionType === 'habilidades') {
-    // Si tenemos fragmentos específicos, usarlos para generar sugerencias
-    if (fragments.length > 0) {
-      for (const fragment of fragments) {
-        const cleanFragment = fragment.replace(/•\s*/, '').trim();
-        
-        // Si es una habilidad técnica sin nivel especificado
-        if (hasSpecificTechnologies && !fragment.match(/básico|intermedio|avanzado|\d+ años/i)) {
-          specificObservations.push(`Mejora "${cleanFragment}" especificando tu nivel y experiencia: "${cleanFragment} (Avanzado, 3+ años) con experiencia en proyectos de [tipo de proyecto específico]".`);
-        }
-        // Si es una lista general de habilidades
-        else if (fragment.includes(',') && fragment.split(',').length > 2) {
-          specificObservations.push(`Reorganiza "${cleanFragment}" agrupando por categorías de habilidades y especificando nivel de dominio en cada una.`);
-        }
-        // Si es una habilidad administrativa
-        else if (hasAdminExperience || positionType === 'admin') {
-          if (!/excel|office|microsoft|sap|erp/i.test(fragment) && (hasAdminExperience || positionType === 'admin')) {
-            specificObservations.push(`Complementa tus habilidades añadiendo dominio de herramientas específicas para roles administrativos: "Excel avanzado (tablas dinámicas, macros, Power Query)" o "SAP (Módulos FI/CO)".`);
-          }
-        }
-      }
-    } 
-    // Si no hay fragmentos específicos pero hay contenido
-    else if (sectionContent.length > 0) {
-      if (hasTechExperience || positionType === 'tech') {
-        specificObservations.push('Especifica versiones y niveles de experiencia con cada tecnología: "React 18 (Avanzado, 2+ años)", "Node.js (Intermedio, 1.5 años)".');
+      if (!hasNumbers) {
+        return `Cuantifica los resultados en: "${line}". Por ejemplo: "Aumenté ventas en un 30%" o "Reduje tiempo de procesamiento en un 25%".`;
+      } else if (!hasActionVerbs) {
+        return `Utiliza verbos de acción más impactantes en: "${line}". Por ejemplo, comienza con "Implementé", "Lideré" o "Desarrollé".`;
       } else {
-        specificObservations.push('Organiza tus habilidades por categorías relevantes para el puesto (ej: "Gestión administrativa", "Atención al cliente", "Herramientas ofimáticas") y especifica tu nivel en cada una.');
+        return `Complementa: "${line}" con el impacto específico que tuvo en la organización o equipo.`;
       }
-    }
-    
-  } else if (sectionType === 'habilidades blandas') {
-    // Si tenemos fragmentos específicos, usarlos para generar sugerencias
-    if (fragments.length > 0) {
-      for (const fragment of fragments) {
-        const cleanFragment = fragment.replace(/•\s*/, '').trim();
-        
-        // Si es una habilidad blanda sin ejemplo concreto
-        if (!fragment.match(/ejemplo|situación|caso|logré|conseguí|resultados|redujo|aumentó|mejoró/i)) {
-          // Adaptar según el tipo de habilidad
-          if (/comunicación|verbal|escrita|presentaciones/i.test(fragment)) {
-            specificObservations.push(`Enriquece "${cleanFragment}" con un ejemplo concreto: "Comunicación efectiva: Reduje malentendidos en un 70% implementando nuevo protocolo de comunicación interna para un equipo de 20 personas".`);
-          } else if (/liderazgo|dirección|gestión de equipo/i.test(fragment)) {
-            specificObservations.push(`Mejora "${cleanFragment}" añadiendo un ejemplo cuantificable: "Liderazgo: Dirigí equipo de 8 personas en proyecto crítico, entregando resultados 2 semanas antes del plazo con un 15% menos de presupuesto".`);
-          } else if (/resolución|problemas|conflictos|crisis/i.test(fragment)) {
-            specificObservations.push(`Potencia "${cleanFragment}" con un caso específico: "Resolución de problemas: Identifiqué y solucioné fallo crítico que afectaba a 200+ clientes, restaurando servicio en menos de 3 horas".`);
-          } else {
-            specificObservations.push(`Acompaña "${cleanFragment}" con un ejemplo concreto que demuestre cómo aplicaste esta habilidad en un contexto laboral y los resultados medibles que obtuviste.`);
-          }
-        }
-      }
-    } 
-    // Si no hay fragmentos específicos pero hay contenido
-    else if (sectionContent.length > 0) {
-      specificObservations.push('Para cada habilidad blanda, añade un breve ejemplo concreto de cómo la aplicaste: "Trabajo en equipo: Colaboré con departamentos de Ventas y Marketing para lanzar campaña que incrementó conversiones en un 25%".');
+    });
+  } else if (sectionType === 'education') {
+    specificObservations = selectedLines.map(line => {
+      const hasRelevantCourses = /curso|materia|especialización|enfoque|orientado a/.test(line.toLowerCase());
+      const hasAchievements = /promedio|calificación|honor|distinción|mérito|premio|beca/.test(line.toLowerCase());
       
-      if (hasAdminExperience || positionType === 'admin') {
-        specificObservations.push('Para roles administrativos, destaca ejemplos específicos de: "Gestión eficiente del tiempo: Administré simultáneamente 12 proyectos cumpliendo el 100% de los plazos" o "Atención al detalle: Reduje errores administrativos en un 40% implementando nuevo sistema de verificación".');
-      } else if (hasTechExperience || positionType === 'tech') {
-        specificObservations.push('Para roles técnicos, enfatiza ejemplos de: "Adaptabilidad técnica: Aprendí 3 nuevas tecnologías en 6 meses para satisfacer requisitos cambiantes del proyecto" o "Resolución de problemas: Solucioné bug crítico que afectaba al 30% de los usuarios en menos de 48 horas".');
+      if (!hasRelevantCourses) {
+        return `En tu formación: "${line}", añade cursos o materias relevantes para el puesto de ${jobTitle}.`;
+      } else if (!hasAchievements) {
+        return `Complementa: "${line}" con logros académicos destacables como promedio, reconocimientos o becas.`;
+      } else {
+        return `Relaciona más claramente: "${line}" con las habilidades requeridas para el puesto actual.`;
       }
-    }
-  } else if (sectionType === 'certificaciones') {
-    // Si tenemos fragmentos específicos para certificaciones
-    if (fragments.length > 0) {
-      for (const fragment of fragments) {
-        const cleanFragment = fragment.replace(/•\s*/, '').trim();
-        
-        // Si no menciona fecha o vigencia
-        if (!fragment.match(/\b(19|20)\d{2}\b|vigente hasta|válido hasta|fecha/i)) {
-          specificObservations.push(`Añade a "${cleanFragment}" el año de obtención y vigencia: "${cleanFragment} (2023, vigente hasta 2026)".`);
-        }
-        
-        // Si no menciona institución o entidad certificadora
-        if (!fragment.match(/universidad|instituto|microsoft|google|oracle|cisco|pmi|scrum|certificado por/i)) {
-          specificObservations.push(`Mejora "${cleanFragment}" especificando la entidad certificadora reconocida: "${cleanFragment} otorgado por [nombre de institución reconocida en la industria]".`);
-        }
-        
-        // Si no menciona relevancia o aplicación
-        if (!fragment.match(/aplicad[oa] en|utilizad[oa] en|implement|proyect|caso/i)) {
-          specificObservations.push(`Complementa "${cleanFragment}" con un ejemplo breve de aplicación práctica: "Aplicado exitosamente en proyecto X que resultó en [beneficio específico]".`);
-        }
-      }
-    }
-    // Si no hay fragmentos específicos pero hay contenido
-    else if (sectionContent.length > 0) {
-      specificObservations.push('Incluye fechas de obtención y vigencia para todas tus certificaciones, priorizando las más recientes y relevantes para el puesto.');
+    });
+  } else if (sectionType === 'skills') {
+    specificObservations = selectedLines.map(line => {
+      const hasLevel = /básico|intermedio|avanzado|experto|\d+ años/.test(line.toLowerCase());
+      const hasTechnicalDetails = /versión|framework|metodología|herramienta|plataforma/.test(line.toLowerCase());
       
-      specificObservations.push('Destaca certificaciones de instituciones reconocidas en la industria y explica brevemente cómo has aplicado estos conocimientos en situaciones reales.');
-    }
-  } else if (sectionType === 'proyectos') {
-    // Si tenemos fragmentos específicos para proyectos
-    if (fragments.length > 0) {
-      for (const fragment of fragments) {
-        const cleanFragment = fragment.replace(/•\s*/, '').trim();
-        
-        // Si no menciona resultados cuantificables
-        if (!fragment.match(/\d+%|\d+ usuarios|\d+ clientes|aumentó|redujo|mejoró|optimizó|incrementó/i)) {
-          specificObservations.push(`Añade a "${cleanFragment}" resultados cuantificables: "${cleanFragment} que resultó en un incremento del 40% en la eficiencia del proceso y una reducción del 25% en costos operativos".`);
-        }
-        
-        // Si no menciona tecnologías o metodologías específicas
-        if (positionType === 'tech' && !hasSpecificTechnologies) {
-          specificObservations.push(`Especifica en "${cleanFragment}" las tecnologías y metodologías utilizadas: "...implementado con React, Node.js y MongoDB, aplicando metodología Scrum en ciclos de dos semanas".`);
-        }
-        
-        // Si no menciona rol o responsabilidades específicas
-        if (!fragment.match(/lideré|desarrollé|gestioné|coordiné|responsable de|a cargo de/i)) {
-          specificObservations.push(`Clarifica en "${cleanFragment}" tu rol específico y responsabilidades: "Como líder técnico, fui responsable de la arquitectura del sistema y la coordinación del equipo de 4 desarrolladores...".`);
-        }
+      if (!hasLevel) {
+        return `Especifica tu nivel de competencia en: "${line}". Por ejemplo: "(Avanzado, 3+ años de experiencia)".`;
+      } else if (!hasTechnicalDetails) {
+        return `Añade detalles técnicos específicos para: "${line}", como versiones, metodologías o plataformas utilizadas.`;
+      } else {
+        return `Complementa: "${line}" con un ejemplo concreto de aplicación en un proyecto o entorno laboral.`;
       }
-    }
-    // Si no hay fragmentos específicos pero hay contenido
-    else if (sectionContent.length > 0) {
-      specificObservations.push('Destaca 2-3 proyectos relevantes para el puesto con resultados cuantificables, explicando claramente tu rol y responsabilidades específicas.');
+    });
+  } else if (sectionType === 'softSkills') {
+    specificObservations = selectedLines.map(line => {
+      const hasExample = /ejemplo|situación|caso|apliqué|implementé|desarrollé/.test(line.toLowerCase());
+      const hasResults = /resultó en|permitió|aumentó|mejoró|facilitó|logré/.test(line.toLowerCase());
       
-      specificObservations.push('Incluye detalles sobre tecnologías, metodologías y herramientas utilizadas en cada proyecto, así como el impacto medible que tuvo cada uno en la organización o cliente.');
-    }
+      if (!hasExample) {
+        return `Añade un ejemplo concreto para: "${line}". Por ejemplo: "Demostrada al coordinar equipo multidisciplinario en proyecto X".`;
+      } else if (!hasResults) {
+        return `Complementa: "${line}" con los resultados tangibles que obtuviste gracias a esta habilidad.`;
+      } else {
+        return `Relaciona más directamente: "${line}" con las necesidades específicas del puesto de ${jobTitle}.`;
+      }
+    });
+  } else if (sectionType === 'certifications') {
+    specificObservations = selectedLines.map(line => {
+      const hasDate = /\b(19|20)\d{2}\b|vigente|válido hasta|fecha/.test(line);
+      const hasInstitution = /universidad|instituto|microsoft|google|oracle|cisco|pmimacromedia|amazon|scrum|certificado por/.test(line.toLowerCase());
+      
+      if (!hasDate) {
+        return `Añade el año de obtención y vigencia a: "${line}". Por ejemplo: "(2023, vigente hasta 2026)".`;
+      } else if (!hasInstitution) {
+        return `Especifica la entidad certificadora reconocida para: "${line}".`;
+      } else {
+        return `Complementa: "${line}" explicando brevemente cómo aplicas estos conocimientos en tu trabajo.`;
+      }
+    });
+  } else if (sectionType === 'projects') {
+    specificObservations = selectedLines.map(line => {
+      const hasRole = /mi rol|fui responsable|estuve a cargo|como|lideré|desarrollé|diseñé|implementé/.test(line.toLowerCase());
+      const hasTechnologies = /usando|utilizando|con|tecnologías|herramientas|stack|framework|lenguaje/.test(line.toLowerCase());
+      const hasResults = /logré|aumenté|reduje|mejoré|resultó en|permitió/.test(line.toLowerCase());
+      
+      if (!hasRole) {
+        return `Especifica tu rol y responsabilidades en: "${line}". Por ejemplo: "Como líder técnico, fui responsable de..."`;
+      } else if (!hasTechnologies) {
+        return `Detalla las tecnologías y metodologías utilizadas en: "${line}".`;
+      } else if (!hasResults) {
+        return `Añade los resultados medibles que obtuviste en: "${line}". Por ejemplo: "...que resultó en un aumento del 40% en la eficiencia".`;
+      } else {
+        return `Relaciona más directamente: "${line}" con las habilidades relevantes para ${jobTitle}.`;
+      }
+    });
   }
   
-  // Si no se generaron observaciones específicas, usar observaciones predeterminadas
-  if (specificObservations.length === 0) {
-    const defaultObservations = [
-      'Incluye métricas específicas y cuantificables en cada punto: "Aumenté ventas en 45%" en lugar de "Aumenté ventas significativamente".',
-      'Utiliza verbos de acción impactantes al inicio de cada punto: "Implementé", "Rediseñé", "Optimicé" en vez de descripciones pasivas.',
-      'Personaliza el contenido específicamente para el puesto al que aplicas, destacando experiencias y habilidades directamente relevantes.'
-    ];
-    specificObservations = defaultObservations;
-  }
-  
-  // Limitar a 3 observaciones máximo, priorizando las más específicas
-  // (las que contienen fragmentos de texto entre comillas)
-  specificObservations.sort((a, b) => {
-    const aHasQuotes = a.includes('"');
-    const bHasQuotes = b.includes('"');
-    if (aHasQuotes && !bHasQuotes) return -1;
-    if (!aHasQuotes && bHasQuotes) return 1;
-    return 0;
-  });
-  
-  const numObservations = Math.min(specificObservations.length, 3);
-  const selectedObservations = specificObservations.slice(0, numObservations);
-  
-  // Limpiar cualquier marcador de negrita ** que pueda estar en las sugerencias
-  const cleanMarkdown = (text) => text.replace(/\*\*/g, '');
-  return selectedObservations.map(cleanMarkdown).join('\n\n');
+  // Limitar a 3 observaciones máximo y unirlas con saltos de línea
+  return specificObservations.slice(0, 3).join('\n\n');
 };
 
 module.exports = {

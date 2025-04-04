@@ -239,8 +239,14 @@ const handleDocument = async (from, document) => {
       const publicUrl = `${baseUrl}/pdf/${path.basename(pdfPath)}`;
       logger.info(`URL pública del PDF: ${publicUrl}`);
       
+      // Guardar la URL del PDF en la sesión del usuario
+      await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
+      
       // Enviar el documento PDF directamente por WhatsApp
       await bot.sendDocument(from, publicUrl, '📊 Análisis detallado de tu CV');
+      
+      // Enviar un mensaje para informar al usuario que puede solicitar la URL
+      await bot.sendMessage(from, '📝 *¿Necesitas compartir este análisis?* Usa el comando !url para obtener el enlace directo al PDF.');
       
       // Enviar mensaje con las opciones después del documento
       await sendPostCVOptions(from, analysis);
@@ -282,10 +288,32 @@ const handleText = async (from, text) => {
           await sessionService.resetSession(from);
           await handleStart(from);
           return;
+        case 'pdf':
+        case 'url':
+        case 'link':
+          // Enviar la URL del último PDF generado
+          if (session.lastPdfUrl) {
+            await bot.sendMessage(from, `📊 *Aquí está el enlace a tu PDF de análisis:*\n\n${session.lastPdfUrl}`);
+          } else {
+            await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
+          }
+          return;
         default:
           await bot.sendMessage(from, 'Comando no reconocido. Usa !help para ver los comandos disponibles.');
           return;
       }
+    }
+    
+    // Comprobar si el texto pide la URL del PDF
+    if (text.toLowerCase().includes('url') && 
+        (text.toLowerCase().includes('pdf') || text.toLowerCase().includes('análisis') || text.toLowerCase().includes('analisis'))) {
+      // Enviar la URL del último PDF generado
+      if (session.lastPdfUrl) {
+        await bot.sendMessage(from, `📊 *Aquí está el enlace a tu PDF de análisis:*\n\n${session.lastPdfUrl}`);
+      } else {
+        await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
+      }
+      return;
     }
     
     // Manejar mensajes normales según el estado
@@ -793,33 +821,29 @@ const handleUnknown = async (from) => {
 
 const handleHelp = async (from) => {
   try {
-    const helpMessage = `
-✨ *¡Hola! Aquí tienes todo lo que puedo hacer por ti* ✨
+    const helpText = `🤖 *Comandos disponibles:*
 
-📌 *Comandos disponibles:*
+!start - Inicia o reinicia el bot
+!help - Muestra esta lista de comandos
+!reset - Elimina tu sesión actual y reinicia el bot
+!url - Obtiene el enlace directo al último PDF de análisis de CV generado
 
-�� *!start* - Iniciar el asistente
-❓ *!help* - Ver esta guía de ayuda
-🎯 *!interview* - Comenzar simulación de entrevista
-🔄 *!reset* - Reiniciar todo el proceso
+📄 *Para revisar tu CV:*
+1. Elige "Revisar mi CV" en el menú principal
+2. Envía tu CV como archivo PDF o Word
+3. El bot analizará tu CV y generará un PDF personalizado con sugerencias
 
-🌟 *Mis funcionalidades:*
+🎤 *Para simular una entrevista:*
+1. Elige "Simular entrevista" en el menú principal
+2. Proporciona el nombre del puesto al que estás aplicando
+3. Responde las preguntas de la entrevista
 
-📋 *Análisis de CV*
-Envía tu currículum y te daré feedback profesional personalizado, identificando fortalezas y áreas de mejora.
-
-🎤 *Simulación de entrevista*
-Practica tus habilidades con preguntas reales y recibe retroalimentación detallada.
-
-💡 *Consejos personalizados*
-Recomendaciones específicas para mejorar tu perfil profesional.
-
-¿Listo para comenzar? ¡Envía tu CV como documento y empecemos! 📤✨
-    `;
-    await bot.sendMessage(from, helpMessage);
+Si necesitas ayuda adicional, escribe !help o contacta a nuestro equipo de soporte.`;
+    
+    await bot.sendMessage(from, helpText);
   } catch (error) {
     logger.error(`Error handling help command: ${error.message}`);
-    throw error;
+    await bot.sendMessage(from, 'Lo siento, hubo un error al mostrar la ayuda. Por favor, intenta nuevamente más tarde.');
   }
 };
 
