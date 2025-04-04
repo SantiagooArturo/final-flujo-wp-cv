@@ -96,8 +96,27 @@ const handleMenuSelection = async (from, selection) => {
         const shouldPay = await userService.shouldUserPayForCVAnalysis(from);
         
         if (shouldPay) {
-          // Si ya analizó un CV anteriormente, mostrar mensaje de premium
-          await handlePremiumInfo(from);
+          // Si ya analizó un CV anteriormente y no tiene créditos, mostrar mensaje claro
+          // con opciones de comprar o volver al menú
+          const remainingCredits = await userService.getRemainingCVCredits(from);
+          
+          if (remainingCredits <= 0) {
+            // No tiene créditos, mostrar mensaje claro
+            const noCreditsButtons = [
+              { id: 'buy_credits', text: '💰 Comprar revisiones' },
+              { id: 'back_to_main_menu', text: '🔙 Volver al Menú' }
+            ];
+            
+            await bot.sendButtonMessage(
+              from,
+              '⚠️ *Se te acabaron las revisiones de CV*\n\nActualmente no tienes créditos disponibles para analizar más CVs. ¿Quieres comprar más revisiones o volver al menú principal?',
+              noCreditsButtons,
+              'Sin créditos disponibles'
+            );
+          } else {
+            // Tiene créditos premium, mostrar información normal de premium
+            await handlePremiumInfo(from);
+          }
         } else {
           // Primero preguntar por el puesto al que aspira
           await bot.sendMessage(from, '¿A qué puesto aspiras? Por favor, describe brevemente el puesto y la industria.');
@@ -125,8 +144,8 @@ const handleMenuSelection = async (from, selection) => {
       default:
         // Opción no reconocida, mostrar menú de nuevo
         const menuButtons = [
-          { id: 'review_cv', text: 'Revisar mi CV' },
-          { id: 'interview_simulation', text: 'Simular entrevista' }
+          { id: 'review_cv', text: '📋 Revisar mi CV' },
+          { id: 'interview_simulation', text: '🎯 Simular entrevista' }
         ];
         
         await bot.sendButtonMessage(
@@ -140,7 +159,7 @@ const handleMenuSelection = async (from, selection) => {
     }
   } catch (error) {
     logger.error(`Error handling menu selection: ${error.message}`);
-    //await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
   }
 };
 
@@ -1641,6 +1660,9 @@ const handleButtonReply = async (from, buttonId) => {
       // Si el usuario presiona "Regresar al menú principal"
       await sessionService.resetSession(from);
       await handleStart(from);
+    } else if (buttonId === 'buy_credits') {
+      // Si el usuario quiere comprar créditos
+      await handlePremiumInfo(from);
     } else if (buttonId === 'start_interview_now') {
       await startInterviewQuestions(from);
     } else if (buttonId === 'cancel_interview') {
@@ -1668,6 +1690,7 @@ const handleButtonReply = async (from, buttonId) => {
     }
   } catch (error) {
     logger.error(`Error handling button reply: ${error.message}`);
+    //comentado para que no se muestre el mensaje de error, que se bugea y siempre aparece
     //await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente.');
   }
 };

@@ -292,6 +292,21 @@ const useCVCredit = async (userId) => {
   }
 };
 
+/**
+ * Obtener el número de créditos de CV disponibles para un usuario
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<number>} Número de créditos restantes
+ */
+const getRemainingCVCredits = async (userId) => {
+  try {
+    // Usar la función existente para obtener los créditos
+    return await getCVCredits(userId);
+  } catch (error) {
+    logger.error(`Error getting remaining CV credits: ${error.message}`);
+    return 0; // En caso de error, asumir que no hay créditos
+  }
+};
+
 module.exports = {
   registerOrUpdateUser,
   recordCVAnalysis,
@@ -300,5 +315,6 @@ module.exports = {
   shouldUserPayForCVAnalysis,
   getCVCredits,
   addCVCredits,
-  useCVCredit
+  useCVCredit,
+  getRemainingCVCredits
 }; 
