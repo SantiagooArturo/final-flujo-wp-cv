@@ -451,6 +451,7 @@ const handleText = async (from, text) => {
           ];
           
           if (hasAnalyzedCVBefore) {
+            //Cambiar el Premium por Otro CV pero igual
             menuButtons.push({ id: 'premium_required', text: '✨ Premium' });
           } else {
             menuButtons.push({ id: 'review_cv_again', text: '📄 Otro CV' });
@@ -1745,7 +1746,29 @@ const handleButtonReply = async (from, buttonId) => {
       await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
       await sessionService.updateSessionState(from, 'waiting_for_cv');
     } else if (buttonId === 'premium_required') {
-      await handlePremiumInfo(from);
+      // Cuando el usuario presiona "Revisar CV" después de haber analizado un CV
+      // Verificar si el usuario tiene créditos disponibles, igual que en handleMenuSelection
+      const remainingCredits = await userService.getRemainingCVCredits(from);
+      
+      if (remainingCredits <= 0) {
+        // No tiene créditos, mostrar mensaje claro
+        const noCreditsButtons = [
+          { id: 'buy_credits', text: '💰 Comprar revisiones' },
+          { id: 'back_to_main_menu', text: '🔙 Volver al Menú' }
+        ];
+        
+        await bot.sendButtonMessage(
+          from,
+          '⚠️ *Se te acabaron las revisiones de CV*\n\nActualmente no tienes créditos disponibles para analizar más CVs. ¿Quieres comprar más revisiones o volver al menú principal?',
+          noCreditsButtons,
+          'Sin créditos disponibles'
+        );
+      } else {
+        // Tiene créditos disponibles, permitir revisar otro CV
+        await sessionService.updateSession(from, { cvProcessed: false });
+        await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
+        await sessionService.updateSessionState(from, 'waiting_for_cv');
+      }
     } else if (buttonId === 'payment_confirmed') {
       await handlePaymentConfirmation(from);
     } else if (buttonId === 'payment_back') {
@@ -1759,7 +1782,7 @@ const handleButtonReply = async (from, buttonId) => {
     }
   } catch (error) {
     logger.error(`Error handling button reply: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente.');
+    //await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente.');
   }
 };
 
@@ -1779,11 +1802,11 @@ const sendPostCVOptions = async (from, analysis = null) => {
       { id: 'start_interview', text: '🎯 Simular entrevista' }
     ];
     
-    // Para la opción Premium o Otro CV, mostrar texto diferente si ya ha analizado uno antes
+    // Para la opción de revisar CV, mostrar el mismo texto independientemente si ya ha analizado uno antes
     if (hasAnalyzedCVBefore) {
-      menuButtons.push({ id: 'premium_required', text: '✨ Premium' });
+      menuButtons.push({ id: 'premium_required', text: '📋 Revisar CV' });
     } else {
-      menuButtons.push({ id: 'review_cv_again', text: '📄 Otro CV' });
+      menuButtons.push({ id: 'review_cv_again', text: '📋 Revisar CV' });
     }
     
     // Agregar la opción de regresar al menú principal
@@ -1807,7 +1830,7 @@ const sendPostCVOptions = async (from, analysis = null) => {
       // Fallback a mensaje de texto si los botones fallan
       let optionsMessage = '¿Qué te gustaría hacer ahora?\n\n1. Simular entrevista (escribe "simular")\n';
       if (hasAnalyzedCVBefore) {
-        optionsMessage += '2. Versión Premium (escribe "premium")\n';
+        optionsMessage += '2. Revisar CV (escribe "revisar")\n';
       } else {
         optionsMessage += '2. Revisar otro CV (escribe "otro cv")\n';
       }

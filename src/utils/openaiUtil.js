@@ -434,24 +434,27 @@ const enhanceCVAnalysis = async (analysis) => {
  */
 const analyzeCV = async (cvText, jobType) => {
   try {
-    logger.info(`Analizando CV para puesto: ${jobType} (longitud del texto: ${cvText.length} caracteres)`);
+    // Asegurarse de que jobType no sea undefined
+    const jobPosition = jobType || 'No especificado';
+    
+    logger.info(`Analizando CV para puesto: ${jobPosition} (longitud del texto: ${cvText.length} caracteres)`);
     
     if (!openai) {
       logger.error('OpenAI no está inicializado. Usando análisis simulado.');
-      return generateRealisticMockAnalysis(jobType);
+      return generateRealisticMockAnalysis(jobPosition);
     }
     
     if (!cvText || cvText.length < 100) {
       logger.error(`Texto del CV demasiado corto o vacío (${cvText ? cvText.length : 0} caracteres). Usando análisis simulado.`);
-      return generateRealisticMockAnalysis(jobType);
+      return generateRealisticMockAnalysis(jobPosition);
     }
 
-    const prompt = `Analiza el siguiente CV de manera extremadamente detallada y personalizada para un puesto de ${jobType}. Realiza un análisis profundo y estructurado:
+    const prompt = `Analiza el siguiente CV de manera extremadamente detallada y personalizada para un puesto de ${jobPosition}. Realiza un análisis profundo y estructurado:
 
 CV:
 ${cvText}
 
-Tipo de trabajo: ${jobType}
+Tipo de trabajo: ${jobPosition}
 
 Proporciona un análisis exhaustivo con las siguientes secciones exactamente como se indican:
 
@@ -522,7 +525,7 @@ Análisis de brecha de habilidades:
 [Análisis comparativo entre las habilidades que posee el candidato y las requeridas para el puesto, identificando claramente las habilidades faltantes o que necesitan desarrollo]
 
 Alineación con el puesto:
-[Análisis detallado sobre cómo se alinea el perfil del candidato con los requisitos específicos del puesto de ${jobType}, incluyendo un porcentaje aproximado de coincidencia]
+[Análisis detallado sobre cómo se alinea el perfil del candidato con los requisitos específicos del puesto de ${jobPosition}, incluyendo un porcentaje aproximado de coincidencia]
 
 Puntos destacables:
 - [Punto 1 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
@@ -539,7 +542,7 @@ Por favor, asegúrate de:
 3. Incluir todas las secciones en el orden especificado
 4. Proporcionar información específica, personalizada y accionable para cada sección
 5. Basar tu análisis en datos concretos encontrados en el CV
-6. Relacionar cada punto con el puesto específico de ${jobType}`;
+6. Relacionar cada punto con el puesto específico de ${jobPosition}`;
 
     // Intentar obtener respuesta de OpenAI con modelo preferido
     try {
@@ -565,7 +568,7 @@ Por favor, asegúrate de:
       // Verificar que el objeto parseado tenga datos válidos
       if (!parsedResult.summary || parsedResult.strengths.length === 0 || parsedResult.score === 0) {
         logger.warn('El análisis parseado está incompleto, utilizando análisis simulado como respaldo');
-        return generateRealisticMockAnalysis(jobType);
+        return generateRealisticMockAnalysis(jobPosition);
       }
       
       return parsedResult;
@@ -596,18 +599,18 @@ Por favor, asegúrate de:
         // Verificar que el objeto parseado tenga datos válidos
         if (!parsedResult.summary || parsedResult.strengths.length === 0 || parsedResult.score === 0) {
           logger.warn('El análisis parseado del modelo fallback está incompleto, utilizando análisis simulado');
-          return generateRealisticMockAnalysis(jobType);
+          return generateRealisticMockAnalysis(jobPosition);
         }
         
         return parsedResult;
       } catch (fallbackError) {
         logger.error(`Error con modelo fallback: ${fallbackError.message}, utilizando análisis simulado`);
-        return generateRealisticMockAnalysis(jobType);
+        return generateRealisticMockAnalysis(jobPosition);
       }
     }
   } catch (error) {
     logger.error(`Error analizando CV: ${error.message}`);
-    return generateRealisticMockAnalysis(jobType);
+    return generateRealisticMockAnalysis(jobPosition);
   }
 };
 
@@ -617,7 +620,8 @@ Por favor, asegúrate de:
  * @returns {Object} Mock analysis results with realistic data
  */
 const generateRealisticMockAnalysis = (jobType) => {
-  logger.info(`Generando análisis simulado realista para puesto: ${jobType}`);
+  const jobPosition = jobType || 'No especificado';
+  logger.info(`Generando análisis simulado realista para puesto: ${jobPosition}`);
   
   // Crear análisis básico que varía según el tipo de trabajo
   let score = Math.floor(Math.random() * 30) + 60; // Puntuación entre 60-89
@@ -625,8 +629,11 @@ const generateRealisticMockAnalysis = (jobType) => {
   let jobSpecificImprovements = [];
   let jobSpecificSkills = [];
   
+  // Verificar si tenemos un jobType válido antes de usar toLowerCase
+  const jobTypeLower = jobPosition.toLowerCase();
+  
   // Personalizar según el tipo de trabajo
-  if (jobType.toLowerCase().includes('tech lead') || jobType.toLowerCase().includes('líder técnico')) {
+  if (jobTypeLower.includes('tech lead') || jobTypeLower.includes('líder técnico')) {
     jobSpecificStrengths = [
       "Sólida experiencia técnica combinada con habilidades de liderazgo",
       "Capacidad demostrada para gestionar equipos técnicos multidisciplinarios",
@@ -642,7 +649,7 @@ const generateRealisticMockAnalysis = (jobType) => {
       "Gestión de equipos técnicos - Intermedio",
       "Resolución de problemas complejos - Avanzado"
     ];
-  } else if (jobType.toLowerCase().includes('market')) {
+  } else if (jobTypeLower.includes('market')) {
     jobSpecificStrengths = [
       "Excelente comprensión de estrategias de marketing digital",
       "Experiencia demostrada en campañas de adquisición de clientes",
@@ -678,7 +685,7 @@ const generateRealisticMockAnalysis = (jobType) => {
   
   return {
     score: score,
-    summary: `Perfil profesional con experiencia relevante para el puesto de ${jobType}. Demuestra habilidades técnicas adecuadas y formación compatible con los requisitos de la posición. Tiene potencial para contribuir efectivamente en este rol, aunque existen algunas áreas de mejora que podrían desarrollarse. Su experiencia previa proporciona una buena base para desempeñarse en las responsabilidades principales del puesto.`,
+    summary: `Perfil profesional con experiencia relevante para el puesto de ${jobPosition}. Demuestra habilidades técnicas adecuadas y formación compatible con los requisitos de la posición. Tiene potencial para contribuir efectivamente en este rol, aunque existen algunas áreas de mejora que podrían desarrollarse. Su experiencia previa proporciona una buena base para desempeñarse en las responsabilidades principales del puesto.`,
     strengths: [
       ...jobSpecificStrengths,
       "Capacidad para adaptarse a diferentes entornos de trabajo",
@@ -690,14 +697,14 @@ const generateRealisticMockAnalysis = (jobType) => {
       "Podría incluir más detalles sobre proyectos relevantes completados"
     ],
     recommendations: [
-      `Resaltar logros cuantitativos específicos relacionados con ${jobType}`,
+      `Resaltar logros cuantitativos específicos relacionados con ${jobPosition}`,
       "Personalizar más el CV para destacar experiencias relevantes al puesto",
       "Incluir sección de proyectos con resultados medibles y su impacto",
       "Especificar las tecnologías o metodologías utilizadas en cada rol",
       "Añadir referencias profesionales o testimonios relevantes"
     ],
     experience: [
-      `Posición relevante en empresa del sector (2-3 años) con responsabilidades alineadas al puesto de ${jobType}`,
+      `Posición relevante en empresa del sector (2-3 años) con responsabilidades alineadas al puesto de ${jobPosition}`,
       "Rol anterior con desarrollo de habilidades transferibles a la posición actual",
       "Participación en proyectos similares a los requeridos por el puesto"
     ],
@@ -723,12 +730,12 @@ const generateRealisticMockAnalysis = (jobType) => {
       "Curso especializado en herramientas relevantes"
     ],
     projects: [
-      `Proyecto relevante para el puesto de ${jobType} con tecnologías apropiadas`,
+      `Proyecto relevante para el puesto de ${jobPosition} con tecnologías apropiadas`,
       "Iniciativa de mejora en procesos relacionados con el rol"
     ],
-    keyCompetencies: `Las competencias clave para el puesto de ${jobType} incluyen conocimientos técnicos específicos, capacidad de gestión, habilidades de comunicación y resolución de problemas. El candidato demuestra niveles adecuados en la mayoría de estas áreas, aunque podría fortalecer algunos aspectos específicos para aumentar su idoneidad para el puesto.`,
+    keyCompetencies: `Las competencias clave para el puesto de ${jobPosition} incluyen conocimientos técnicos específicos, capacidad de gestión, habilidades de comunicación y resolución de problemas. El candidato demuestra niveles adecuados en la mayoría de estas áreas, aunque podría fortalecer algunos aspectos específicos para aumentar su idoneidad para el puesto.`,
     skillsGap: `Existe una brecha moderada entre las habilidades actuales y las óptimas para este puesto. Específicamente, se podría fortalecer en áreas como [habilidad específica del sector] y [conocimiento técnico relevante]. Sin embargo, estas brechas podrían cerrarse con capacitación específica y experiencia práctica.`,
-    alignment: `El perfil muestra una alineación de aproximadamente 75% con los requisitos del puesto de ${jobType}. Las principales fortalezas están en [área relevante], mientras que las áreas de desarrollo se encuentran en [aspecto específico].`,
+    alignment: `El perfil muestra una alineación de aproximadamente 75% con los requisitos del puesto de ${jobPosition}. Las principales fortalezas están en [área relevante], mientras que las áreas de desarrollo se encuentran en [aspecto específico].`,
     highlights: [
       "Experiencia relevante en un sector similar",
       "Formación adecuada para el puesto",

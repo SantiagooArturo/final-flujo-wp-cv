@@ -571,16 +571,16 @@ function capitalizeFirstLetter(string) {
   return string.charAt(0).toUpperCase() + string.slice(1);
 }
 
+// Función para limpiar marcadores markdown **
+const cleanMarkdownFormatting = (text) => {
+  return text.replace(/\*\*/g, '').replace(/\*/g, '');
+};
+
 // Función para procesar contenido de listas
 const processListContent = (content, defaultText) => {
   if (!content) {
     return defaultText;
   }
-  
-  // Función para limpiar marcadores markdown **
-  const cleanMarkdownFormatting = (text) => {
-    return text.replace(/\*\*/g, '');
-  };
   
   // Si es un array, formatear como lista con viñetas
   if (Array.isArray(content)) {
@@ -614,9 +614,9 @@ function processBulletList(items, defaultText) {
     return defaultText;
   }
   
-  // Función para limpiar marcadores markdown **
+  // Función para limpiar marcadores markdown ** y *
   const cleanMarkdownFormatting = (text) => {
-    return text.replace(/\*\*/g, '');
+    return text.replace(/\*\*/g, '').replace(/\*/g, '');
   };
   
   let content = '';
@@ -633,9 +633,9 @@ function processNumberedList(items, defaultText) {
     return defaultText;
   }
   
-  // Función para limpiar marcadores markdown **
+  // Función para limpiar marcadores markdown ** y *
   const cleanMarkdownFormatting = (text) => {
-    return text.replace(/\*\*/g, '');
+    return text.replace(/\*\*/g, '').replace(/\*/g, '');
   };
   
   let content = '';
