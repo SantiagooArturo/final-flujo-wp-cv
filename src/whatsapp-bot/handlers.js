@@ -1585,11 +1585,28 @@ Responde con un JSON que tenga los siguientes campos:
         // Restablecer el estado de CV procesado para permitir un nuevo análisis
         await sessionService.updateSession(from, { cvProcessed: false });
         
-        // Enviar instrucciones para usar los créditos
-        await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar.');
+        // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
+        const postPaymentButtons = [
+          { id: 'review_cv', text: '📋 Revisar mi CV' },
+          { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
+        ];
         
-        // Actualizar el estado de la sesión
-        await sessionService.updateSessionState(from, 'waiting_for_cv');
+        try {
+          await bot.sendButtonMessage(
+            from, 
+            '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
+            postPaymentButtons,
+            'Opciones después del pago'
+          );
+          
+          // Actualizar el estado de la sesión a "payment_completed"
+          await sessionService.updateSessionState(from, 'payment_completed');
+        } catch (buttonError) {
+          logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
+          // Si no se pueden enviar los botones, enviar mensaje normal
+          await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
+          await sessionService.updateSessionState(from, 'waiting_for_cv');
+        }
       } else {
         // El pago no es válido
         logger.warn(`Invalid payment image from user ${from}: ${analysisResult.reason}`);
@@ -1607,11 +1624,28 @@ Responde con un JSON que tenga los siguientes campos:
         // Restablecer el estado de CV procesado para permitir un nuevo análisis
         await sessionService.updateSession(from, { cvProcessed: false });
         
-        // Enviar instrucciones para usar los créditos
-        await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar.');
+        // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
+        const postPaymentButtons = [
+          { id: 'review_cv', text: '📋 Revisar mi CV' },
+          { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
+        ];
         
-        // Actualizar el estado de la sesión
-        await sessionService.updateSessionState(from, 'waiting_for_cv');
+        try {
+          await bot.sendButtonMessage(
+            from, 
+            '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
+            postPaymentButtons,
+            'Opciones después del pago'
+          );
+          
+          // Actualizar el estado de la sesión a "payment_completed"
+          await sessionService.updateSessionState(from, 'payment_completed');
+        } catch (buttonError) {
+          logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
+          // Si no se pueden enviar los botones, enviar mensaje normal
+          await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
+          await sessionService.updateSessionState(from, 'waiting_for_cv');
+        }
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
@@ -1628,11 +1662,28 @@ Responde con un JSON que tenga los siguientes campos:
       // Restablecer el estado de CV procesado para permitir un nuevo análisis
       await sessionService.updateSession(from, { cvProcessed: false });
       
-      // Enviar instrucciones para usar los créditos
-      await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar.');
+      // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
+      const postPaymentButtons = [
+        { id: 'review_cv', text: '📋 Revisar mi CV' },
+        { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
+      ];
       
-      // Actualizar el estado de la sesión
-      await sessionService.updateSessionState(from, 'waiting_for_cv');
+      try {
+        await bot.sendButtonMessage(
+          from, 
+          '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
+          postPaymentButtons,
+          'Opciones después del pago'
+        );
+        
+        // Actualizar el estado de la sesión a "payment_completed"
+        await sessionService.updateSessionState(from, 'payment_completed');
+      } catch (buttonError) {
+        logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
+        // Si no se pueden enviar los botones, enviar mensaje normal
+        await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
+        await sessionService.updateSessionState(from, 'waiting_for_cv');
+      }
     }
     
   } catch (error) {
@@ -1650,6 +1701,24 @@ Responde con un JSON que tenga los siguientes campos:
 const handleButtonReply = async (from, buttonId) => {
   try {
     logger.info(`Button reply received from user ${from}: ${buttonId}`);
+    
+    // Obtener la sesión actual para verificar el estado
+    const session = await sessionService.getOrCreateSession(from);
+    
+    // Si estamos en el estado payment_completed, manejar los botones de post-pago
+    if (session.state === 'payment_completed') {
+      if (buttonId === 'review_cv') {
+        // El usuario quiere revisar su CV después del pago
+        await bot.sendMessage(from, 'Por favor, envía el CV que deseas analizar.');
+        await sessionService.updateSessionState(from, 'waiting_for_cv');
+        return;
+      } else if (buttonId === 'back_to_main_menu') {
+        // El usuario quiere ir al menú principal después del pago
+        await sessionService.resetSession(from);
+        await handleStart(from);
+        return;
+      }
+    }
     
     // Manejar diferentes botones
     if (buttonId === 'review_cv') {
@@ -1690,8 +1759,7 @@ const handleButtonReply = async (from, buttonId) => {
     }
   } catch (error) {
     logger.error(`Error handling button reply: ${error.message}`);
-    //comentado para que no se muestre el mensaje de error, que se bugea y siempre aparece
-    //await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente.');
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente.');
   }
 };
 
