@@ -68,9 +68,10 @@ const generateImprovedText = async (prompt, options = {}) => {
 /**
  * Enhance CV analysis results using OpenAI
  * @param {Object} analysis - The original CV analysis
+ * @param {string} jobTitle - The job title for which the analysis is being done
  * @returns {Promise<Object>} Enhanced analysis
  */
-const enhanceCVAnalysis = async (analysis) => {
+const enhanceCVAnalysis = async (analysis, jobTitle) => {
   if (!openai) {
     logger.warn('OpenAI no está inicializado. Devolviendo análisis original.');
     return analysis;
@@ -80,76 +81,163 @@ const enhanceCVAnalysis = async (analysis) => {
     // Create a copy of the analysis to avoid modifying the original
     const enhancedAnalysis = JSON.parse(JSON.stringify(analysis));
     
-    // Enhance the summary using OpenAI
-    const summaryPrompt = `
-    Dado este resumen básico de CV: "${analysis.summary}"
-    
-    Genera un resumen más detallado y profesional que sea más útil para el candidato. 
-    El resumen debe ser en español, contener aproximadamente 3-4 oraciones, y ser específico y útil.
-    `;
-    
-    enhancedAnalysis.summary = await generateImprovedText(summaryPrompt, {
-      max_tokens: 250,
-      temperature: 0.7
-    });
-    
-    // Enhance basic info suggestions
-    if (analysis.basicInfo && analysis.basicInfo.suggestions) {
-      const basicInfoPrompt = `
-      Estas son sugerencias para mejorar la información básica de un CV: "${analysis.basicInfo.suggestions}"
-      
-      Proporciona sugerencias más detalladas y útiles sobre cómo mejorar la sección de información básica de un CV.
-      Incluye consejos concretos sobre el formato, estilo y qué tipo de información incluir.
+    // Mejorar el resumen
+    if (enhancedAnalysis.summary) {
+      logger.info('Mejorando el resumen...');
+      const summaryPrompt = `
+        Basándote en este resumen de CV: "${enhancedAnalysis.summary}"
+        
+        Mejora este resumen haciéndolo más estructurado y profesional. Incluye una evaluación clara del candidato
+        en relación con el puesto de "${jobTitle}". Destaca las principales fortalezas y áreas de mejora.
+        
+        Mantén la información factual original pero mejora su presentación.
       `;
       
-      enhancedAnalysis.basicInfo.suggestions = await generateImprovedText(basicInfoPrompt, {
-        max_tokens: 200
-      });
-    }
-    
-    // Enhance experience suggestions
-    if (analysis.experience && analysis.experience.suggestions) {
-      const experiencePrompt = `
-      Estas son sugerencias para mejorar la sección de experiencia de un CV: "${analysis.experience.suggestions}"
-      
-      La persona tiene estos roles: ${analysis.experience.roles ? analysis.experience.roles.join(', ') : 'No especificados'}
-      Con aproximadamente ${analysis.experience.years || 'desconocidos'} años de experiencia.
-      
-      Proporciona consejos detallados sobre cómo mejorar la sección de experiencia laboral, 
-      incluyendo cómo destacar logros, usar verbos de acción y cuantificar resultados.
-      `;
-      
-      enhancedAnalysis.experience.suggestions = await generateImprovedText(experiencePrompt, {
-        max_tokens: 250
-      });
-    }
-    
-    // Enhance recommendations
-    if (analysis.recommendations && analysis.recommendations.length > 0) {
-      const recommendations = analysis.recommendations.join('\n');
-      const recommendationsPrompt = `
-      Estas son recomendaciones generales para mejorar un CV: "${recommendations}"
-      
-      Proporciona 3-5 recomendaciones más específicas, detalladas y accionables para mejorar este CV.
-      Cada recomendación debe ser clara, concisa y útil para que el candidato pueda implementarla inmediatamente.
-      `;
-      
-      const enhancedRecs = await generateImprovedText(recommendationsPrompt, {
-        max_tokens: 350,
+      enhancedAnalysis.summary = await generateImprovedText(summaryPrompt, {
+        max_tokens: 250,
         temperature: 0.7
       });
-      
-      // Split the enhanced recommendations into an array
-      enhancedAnalysis.recommendations = enhancedRecs
-        .split('\n')
-        .filter(rec => rec.trim())
-        .map(rec => rec.replace(/^\d+\.\s*/, '').trim());
     }
+    
+    // Mejorar las sugerencias para la sección de experiencia
+    if (enhancedAnalysis.experience && typeof enhancedAnalysis.experience === 'object') {
+      logger.info('Mejorando sugerencias para experiencia...');
+      const experienceItems = Array.isArray(enhancedAnalysis.experience) 
+        ? enhancedAnalysis.experience.join('\n') 
+        : Array.isArray(enhancedAnalysis.experience.roles) 
+          ? enhancedAnalysis.experience.roles.join('\n')
+          : typeof enhancedAnalysis.experience === 'string' 
+            ? enhancedAnalysis.experience
+            : '';
+      
+      if (experienceItems) {
+        const expPrompt = `
+          Basándote en estos elementos de experiencia laboral del CV:
+          "${experienceItems}"
+          
+          Para un candidato que aplica al puesto de "${jobTitle}",
+          
+          Genera 3-5 sugerencias ULTRA ESPECÍFICAS y accionables para mejorar esta sección.
+          
+          IMPORTANTE:
+          1. Las sugerencias deben hacer referencia directa a fragmentos EXACTOS del texto original.
+          2. Cita textualmente las partes que necesitan mejora y ofrece ejemplos concretos de cómo reescribirlas.
+          3. Enfócate en:
+             - Cómo convertir descripciones genéricas en logros cuantificables
+             - Cómo reemplazar verbos pasivos con verbos de acción más impactantes
+             - Cómo añadir métricas específicas relevantes para el puesto
+          4. Provee ejemplos específicos como "Cambia 'Responsable de atención al cliente' por 'Gestioné la atención de 50+ clientes diarios mejorando la satisfacción un 35% mediante...'".
+          5. NO des consejos genéricos aplicables a cualquier CV.
+          
+          Formatea cada sugerencia como un punto separado con ejemplos concretos de "antes y después".
+        `;
+        
+        const enhancedSuggestions = await generateImprovedText(expPrompt, {
+          max_tokens: 300
+        });
+        if (typeof enhancedAnalysis.experience === 'object') {
+          enhancedAnalysis.experience.suggestions = enhancedSuggestions;
+        } else {
+          enhancedAnalysis.experience = {
+            roles: Array.isArray(enhancedAnalysis.experience) ? enhancedAnalysis.experience : [enhancedAnalysis.experience],
+            suggestions: enhancedSuggestions
+          };
+        }
+      }
+    }
+    
+    // Mejoras para cada sección
+    const sections = [
+      { key: 'education', name: 'formación académica' },
+      { key: 'skills', name: 'habilidades técnicas' },
+      { key: 'softSkills', name: 'habilidades blandas' },
+      { key: 'certifications', name: 'certificaciones' },
+      { key: 'projects', name: 'proyectos' }
+    ];
+    
+    for (const section of sections) {
+      if (enhancedAnalysis[section.key]) {
+        logger.info(`Mejorando sugerencias para ${section.name}...`);
+        
+        const sectionItems = Array.isArray(enhancedAnalysis[section.key]) 
+          ? enhancedAnalysis[section.key].join('\n') 
+          : typeof enhancedAnalysis[section.key] === 'object' && enhancedAnalysis[section.key].items
+            ? enhancedAnalysis[section.key].items.join('\n')
+            : typeof enhancedAnalysis[section.key] === 'string'
+              ? enhancedAnalysis[section.key]
+              : '';
+        
+        if (sectionItems) {
+          const sectionPrompt = `
+            Basándote en estos elementos de ${section.name} del CV:
+            "${sectionItems}"
+            
+            Para un candidato que aplica al puesto de "${jobTitle}",
+            
+            Genera 3 sugerencias ULTRA ESPECÍFICAS y accionables para mejorar esta sección.
+            
+            IMPORTANTE:
+            1. Las sugerencias DEBEN hacer referencia directa a fragmentos EXACTOS del texto original.
+            2. Cita textualmente las partes que necesitan mejora y ofrece ejemplos concretos de cómo reescribirlas.
+            3. Para cada sugerencia, proporciona:
+               - El texto original exacto que necesita mejora (entre comillas)
+               - Una versión mejorada específica (no genérica)
+               - Explica brevemente por qué esta mejora impactará positivamente
+            4. NO des consejos genéricos aplicables a cualquier CV.
+            
+            Formatea cada sugerencia como un punto separado con ejemplos concretos de "antes y después".
+          `;
+          
+          const enhancedSuggestions = await generateImprovedText(sectionPrompt, {
+            max_tokens: 300
+          });
+          
+          if (typeof enhancedAnalysis[section.key] === 'object') {
+            enhancedAnalysis[section.key].suggestions = enhancedSuggestions;
+          } else {
+            enhancedAnalysis[section.key] = {
+              items: Array.isArray(enhancedAnalysis[section.key]) ? enhancedAnalysis[section.key] : [enhancedAnalysis[section.key]],
+              suggestions: enhancedSuggestions
+            };
+          }
+        }
+      }
+    }
+    
+    // Mejorar recomendaciones finales
+    logger.info('Mejorando recomendaciones...');
+    const finalPrompt = `
+      Basándote en todo este análisis de CV para un candidato al puesto de "${jobTitle}":
+      
+      Fortalezas: ${Array.isArray(enhancedAnalysis.strengths) ? enhancedAnalysis.strengths.join(', ') : enhancedAnalysis.strengths || 'No especificadas'}
+      Áreas de mejora: ${Array.isArray(enhancedAnalysis.improvements) ? enhancedAnalysis.improvements.join(', ') : enhancedAnalysis.improvements || 'No especificadas'}
+      
+      Genera 5 recomendaciones EXTREMADAMENTE ESPECÍFICAS y accionables para mejorar el CV completo.
+      
+      IMPORTANTE:
+      1. Cada recomendación debe ser ULTRA específica, detallada y personalizada para este candidato y puesto.
+      2. Para cada recomendación, especifica:
+         - Acción concreta a realizar (qué cambiar exactamente)
+         - Ejemplo específico de implementación (cómo hacerlo)
+         - Impacto esperado para los reclutadores
+      3. Incluye recomendaciones sobre palabras clave para ATS, formato, adaptación al puesto específico.
+      4. Evita consejos genéricos como "añadir más logros" - en su lugar especifica qué logros exactamente.
+      
+      Numera las recomendaciones del 1 al 5, cada una con suficiente detalle para ser implementada inmediatamente.
+    `;
+    
+    enhancedAnalysis.recommendations = (await generateImprovedText(finalPrompt, {
+      max_tokens: 400,
+      temperature: 0.7
+    }))
+      .split(/\d+\.\s+/)
+      .filter(item => item.trim().length > 0)
+      .map(item => item.trim());
     
     return enhancedAnalysis;
   } catch (error) {
-    logger.error(`Error al mejorar el análisis con OpenAI: ${error.message}`);
-    return analysis;
+    logger.error('Error en enhanceCVAnalysis:', error);
+    throw error;
   }
 };
 

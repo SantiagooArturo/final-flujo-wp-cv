@@ -12,6 +12,7 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@fontsource/poppins": "^5.2.5",
     "axios": "^1.6.7",
     "chart.js": "^4.4.8",
     "cors": "^2.8.5",

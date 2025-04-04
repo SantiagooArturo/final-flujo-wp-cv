@@ -30,7 +30,7 @@ const handleStart = async (from) => {
     
     // Si está en medio de una entrevista, notificar y no resetear
     if (interviewStates.includes(currentSession.state)) {
-      await bot.sendMessage(from, 'Ya tienes una entrevista en curso. Para reiniciar, envía !reset primero.');
+      await bot.sendMessage(from, '⚠️ *¡Espera un momento!* Ya tienes una entrevista en curso. Para reiniciar, envía *!reset* primero. ¡Ánimo con tu entrevista actual! 🚀');
       logger.info(`Start command ignored for user ${from} due to active interview session`);
       return;
     }
@@ -39,51 +39,44 @@ const handleStart = async (from) => {
     await sessionService.resetSession(from);
     logger.info(`Session reset for user ${from}`);
     
-    // Intentar enviar el saludo usando plantilla, pero tener un mensaje alternativo en caso de error
+    // Mensaje de bienvenida mejorado con emojis y estilo más personal
+    const welcomeMessage = `
+¡Hola! 👋 Soy tu asistente virtual de *RevisaCV* 🤖✨
+
+Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
+
+🔍 *Análisis de CV personalizado*
+💼 *Simulación de entrevistas*
+💡 *Consejos profesionales*
+
+¿Cómo te gustaría que te ayude hoy?
+    `;
+    
+    // Intentar enviar botones para una mejor experiencia
     try {
-      await bot.sendTemplate(from, 'saludo');
-      logger.info(`Template saludo sent successfully to ${from}`);
-    } catch (templateError) {
-      logger.warn(`Failed to send template, using text message instead: ${templateError.message}`);
-      // Enviar mensaje de texto alternativo
-      await bot.sendMessage(from, '¡Hola! Bienvenido a Worky. Estamos aquí para ayudarte con tu carrera profesional.');
+      const menuButtons = [
+        { id: 'review_cv', text: '📋 Revisar mi CV' },
+        { id: 'interview_simulation', text: '🎯 Simular entrevista' }
+      ];
+      
+      await bot.sendButtonMessage(
+        from,
+        welcomeMessage,
+        menuButtons,
+        '¡Bienvenido a RevisaCV!'
+      );
+      
+      await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+    } catch (buttonError) {
+      logger.warn(`Failed to send button message, using text fallback: ${buttonError.message}`);
+      
+      // Mensaje de texto alternativo si fallan los botones
+      await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
+      await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
     }
-    
-    // Después del saludo, en lugar de pedir directamente el CV, mostrar opciones
-    setTimeout(async () => {
-      try {
-        // Definir las opciones del menú
-        const menuButtons = [
-          { id: 'review_cv', text: 'Revisar mi CV' },
-          { id: 'interview_simulation', text: 'Simular entrevista' }
-        ];
-        
-        // Enviar mensaje con botones
-        await bot.sendButtonMessage(
-          from,
-          'Selecciona una opción para continuar:',
-          menuButtons,
-          '¿En qué puedo ayudarte hoy?'
-        );
-        
-        // Actualizar estado a menu_selection
-        await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
-        logger.info(`Menu options sent to user ${from}`);
-      } catch (buttonError) {
-        logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-        // Enviar mensaje de texto alternativo para las opciones
-        await bot.sendMessage(from, 'Selecciona una opción para continuar:\n\n1. Revisar mi CV (escribe "revisar")\n2. Simular entrevista (escribe "entrevista")');
-        await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
-      }
-    }, 1000); // Pequeño retraso para asegurar que el mensaje de saludo se muestra primero
-    
   } catch (error) {
-    logger.error(`Error handling start command: ${error.message}`);
-    try {
-      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta nuevamente.');
-    } catch (sendError) {
-      logger.error(`Failed to send error message: ${sendError.message}`);
-    }
+    logger.error(`Error in handleStart: ${error.message}`);
+    await bot.sendMessage(from, '😓 Lo siento, ha ocurrido un error al iniciar. Por favor, intenta nuevamente enviando *!start*.');
   }
 };
 
@@ -200,7 +193,7 @@ const handleDocument = async (from, document) => {
     await sessionService.updateSession(from, { cvProcessed: true });
 
     // Enviar mensaje de procesamiento
-    await bot.sendMessage(from, 'Gracias por enviar tu CV. Lo analizaré y te daré retroalimentación.');
+    await bot.sendMessage(from, '📄 *¡Gracias por compartir tu CV!* 🙏\n\nEstoy analizándolo detalladamente para ofrecerte retroalimentación valiosa. Este proceso puede tomar entre 1-2 minutos... ⏳');
 
     // Procesar el CV
     logger.info(`Processing CV for user ${from} with URL: ${documentUrl}`);
@@ -231,10 +224,9 @@ const handleDocument = async (from, document) => {
     // Registrar el análisis en el historial permanente de usuario
     await userService.recordCVAnalysis(from, analysis, jobPosition || 'No especificado');
 
-    // Ya no enviar el análisis en texto, solo informar que será enviado en PDF
-    await bot.sendMessage(from, 'He analizado tu CV. Te enviaré un informe detallado en PDF.');
-    logger.info(`Analysis processing completed for user ${from}`);
-
+    // Enviar mensaje de análisis completado, indicando que se está generando el PDF
+    await bot.sendMessage(from, '✅ *¡Análisis completado!* 🎉\n\nHe revisado cuidadosamente tu CV y he preparado un informe detallado con todas mis observaciones. Estoy generando tu PDF personalizado...');
+    
     // Generar PDF con el análisis
     try {
       logger.info('Generando PDF del análisis de CV');
@@ -242,71 +234,29 @@ const handleDocument = async (from, document) => {
       const pdfPath = await generateCVAnalysisPDF(analysis, jobPosition || 'No especificado', candidateName);
       logger.info(`PDF generado en: ${pdfPath}`);
       
-      // Enviar PDF
-      if (pdfPath) {
-        const publicUrl = `${process.env.HOST}:${process.env.PORT}/pdf/${pdfPath.split('/').pop()}`;
-        await bot.sendMessage(from, `Aquí tienes el análisis detallado de tu CV:\n${publicUrl}`);
-      }
+      // Preparar la URL pública del PDF
+      const baseUrl = process.env.PUBLIC_URL || `${process.env.HOST}:${process.env.PORT}`;
+      const publicUrl = `${baseUrl}/pdf/${path.basename(pdfPath)}`;
+      logger.info(`URL pública del PDF: ${publicUrl}`);
+      
+      // Enviar el documento PDF directamente por WhatsApp
+      await bot.sendDocument(from, publicUrl, '📊 Análisis detallado de tu CV');
+      
+      // Enviar mensaje con las opciones después del documento
+      await sendPostCVOptions(from, analysis);
     } catch (pdfError) {
-      logger.error(`Error generating PDF: ${pdfError.message}`);
-      // Enviar el análisis resumido en texto como fallback
+      logger.error(`Error generating or sending PDF: ${pdfError.message}`);
+      
+      // Enviar mensaje de error y el análisis resumido en texto como fallback
+      await bot.sendMessage(from, '⚠️ *Hubo un problema al generar el PDF* ⚠️\n\nTe envío el análisis en formato de texto:');
       await bot.sendMessage(from, formatAnalysisResults(analysis));
+      
+      // Mostrar botones de opciones post-CV
+      await sendPostCVOptions(from, analysis);
     }
-    
-    // Esperar un poco antes de mostrar las opciones
-    setTimeout(async () => {
-      try {
-        // Obtener sesión actualizada ya que podría haber cambiado
-        const updatedSession = await sessionService.getOrCreateSession(from);
-        
-        // En lugar de verificar la sesión, verificar el historial permanente
-        const totalAnalysisCount = await userService.getCVAnalysisCount(from);
-        const hasAnalyzedCVBefore = totalAnalysisCount > 1;
-        
-        // Definir las opciones del menú post-análisis
-        let menuButtons = [
-          { id: 'start_interview', text: 'Simular entrevista' }
-        ];
-        
-        // Para la opción de revisar otro CV, mostrar texto diferente si ya ha analizado uno antes
-        if (hasAnalyzedCVBefore) {
-          menuButtons.push({ id: 'premium_required', text: 'Premium' });
-        } else {
-          menuButtons.push({ id: 'review_cv_again', text: 'Otro CV' });
-        }
-        
-        // Actualizar estado antes de enviar los botones
-        await sessionService.updateSessionState(from, 'post_cv_options');
-        
-        try {
-          await bot.sendButtonMessage(
-            from,
-            '¿Qué te gustaría hacer ahora?',
-            menuButtons,
-            'Opciones disponibles:'
-          );
-          logger.info(`Post-CV analysis options sent to user ${from}`);
-        } catch (buttonError) {
-          logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-          
-          let optionsMessage = '¿Qué te gustaría hacer ahora?\n\n1. Simular entrevista (escribe "simular")\n';
-          if (hasAnalyzedCVBefore) {
-            optionsMessage += '2. Versión Premium (escribe "premium")';
-          } else {
-            optionsMessage += '2. Revisar otro CV (escribe "otro cv")';
-          }
-          
-          await bot.sendMessage(from, optionsMessage);
-        }
-      } catch (optionsError) {
-        logger.error(`Error sending post-analysis options: ${optionsError.message}`);
-        await bot.sendMessage(from, 'Puedes escribir "simular" para iniciar una simulación de entrevista o "!start" para reiniciar.');
-      }
-    }, 2000);
-    
   } catch (error) {
     logger.error(`Error handling document: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu CV. Por favor, inténtalo de nuevo.');
+    await bot.sendMessage(from, `⚠️ Lo siento, ocurrió un error al procesar tu CV: ${error.message}. Por favor, intenta nuevamente más tarde.`);
   }
 };
 
@@ -419,13 +369,13 @@ const handleText = async (from, text) => {
           const hasAnalyzedCVBefore = totalAnalysisCount > 1;
           
           let menuButtons = [
-            { id: 'start_interview', text: 'Simular entrevista' }
+            { id: 'start_interview', text: '🎯 Simular entrevista' }
           ];
           
           if (hasAnalyzedCVBefore) {
-            menuButtons.push({ id: 'premium_required', text: 'Premium' });
+            menuButtons.push({ id: 'premium_required', text: '✨ Premium' });
           } else {
-            menuButtons.push({ id: 'review_cv_again', text: 'Otro CV' });
+            menuButtons.push({ id: 'review_cv_again', text: '📄 Otro CV' });
           }
           
           await bot.sendButtonMessage(
@@ -468,7 +418,7 @@ const handleText = async (from, text) => {
         break;
       case sessionService.SessionState.QUESTION_ASKED:
         // Usuario respondiendo a una pregunta de entrevista con texto (no ideal)
-        await bot.sendMessage(from, 'Por favor, responde a la pregunta con un mensaje de audio o video para que pueda evaluar tu respuesta.');
+        await bot.sendMessage(from, '🎤 *¡Prefiero escucharte!* Por favor, responde a la pregunta con un mensaje de *audio* o *video* para que pueda evaluar mejor tu respuesta. ¡Esto hará el análisis mucho más completo! 😊');
         break;
       case sessionService.SessionState.INTERVIEW_COMPLETED:
         // Cuando recibimos cualquier mensaje después de completar la entrevista,
@@ -618,41 +568,32 @@ const handleAudio = async (from, audio) => {
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
         await bot.sendMessage(from, `
-¡Felicidades! Has completado todas las preguntas de la entrevista.
+🎉 *¡FELICIDADES!* 🎉
 
-Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
 
-Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
+
+¡Te deseo mucho éxito en tus entrevistas reales! 🚀
         `);
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
       } else {
         // Preguntar si quiere continuar usando botones
-        setTimeout(async () => {
-          try {
-            const continueButtons = [
-              { id: 'continue_interview', text: 'Si' },
-              { id: 'stop_interview', text: 'Detener' }
-            ];
-            
-            await bot.sendButtonMessage(
-              from,
-              '¿Quieres continuar con la siguiente pregunta?',
-              continueButtons,
-              'Continuar entrevista'
-            );
-            
-            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
-            logger.info(`Asked user ${from} if wants to continue interview with buttons`);
-          } catch (buttonError) {
-            logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-            await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
-            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
-          }
-        }, 2000);
+        await bot.sendButtonMessage(
+          from,
+          '¿Quieres continuar con la siguiente pregunta? 🤔',
+          [
+            { id: 'continue_interview', text: '✅ Sí, continuar' },
+            { id: 'stop_interview', text: '❌ Detener' }
+          ],
+          '🎯 Progreso de entrevista'
+        );
       }
     } catch (processingError) {
       logger.error(`Error procesando audio: ${processingError.message}`);
-      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu audio. Por favor, intenta nuevamente.');
+      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta. ¿Podrías intentar nuevamente? Asegúrate de que el audio/video sea claro. ¡Gracias por tu paciencia! 🙏');
     }
   } catch (error) {
     logger.error(`Error handling audio: ${error.message}`);
@@ -749,37 +690,28 @@ const handleVideo = async (from, video) => {
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
         await bot.sendMessage(from, `
-¡Felicidades! Has completado todas las preguntas de la entrevista.
+🎉 *¡FELICIDADES!* 🎉
 
-Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
 
-Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
+
+¡Te deseo mucho éxito en tus entrevistas reales! 🚀
         `);
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
       } else {
         // Preguntar si quiere continuar usando botones
-        setTimeout(async () => {
-          try {
-            const continueButtons = [
-              { id: 'continue_interview', text: 'Si' },
-              { id: 'stop_interview', text: 'Detener' }
-            ];
-            
-            await bot.sendButtonMessage(
-              from,
-              '¿Quieres continuar con la siguiente pregunta?',
-              continueButtons,
-              'Continuar entrevista'
-            );
-            
-            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
-            logger.info(`Asked user ${from} if wants to continue interview with buttons`);
-          } catch (buttonError) {
-            logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-            await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
-            await sessionService.updateSessionState(from, sessionService.SessionState.ANSWER_RECEIVED);
-          }
-        }, 2000);
+        await bot.sendButtonMessage(
+          from,
+          '¿Quieres continuar con la siguiente pregunta? 🤔',
+          [
+            { id: 'continue_interview', text: '✅ Sí, continuar' },
+            { id: 'stop_interview', text: '❌ Detener' }
+          ],
+          '🎯 Progreso de entrevista'
+        );
       }
     } catch (processingError) {
       logger.error(`Error procesando video: ${processingError.message}`);
@@ -817,34 +749,27 @@ const handleSimulatedAnswer = async (from, session) => {
     if (updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
       // Entrevista completada
       await bot.sendMessage(from, `
-¡Felicidades! Has completado todas las preguntas de la entrevista.
+🎉 *¡FELICIDADES!* 🎉
 
-Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
 
-Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
+
+¡Te deseo mucho éxito en tus entrevistas reales! 🚀
       `);
     } else {
       // Preguntar si quiere continuar usando botones
-      setTimeout(async () => {
-        try {
-          const continueButtons = [
-            { id: 'continue_interview', text: 'Si' },
-            { id: 'stop_interview', text: 'Detener' }
-          ];
-          
-          await bot.sendButtonMessage(
-            from,
-            '¿Quieres continuar con la siguiente pregunta?',
-            continueButtons,
-            'Continuar entrevista'
-          );
-          
-          logger.info(`Asked user ${from} if wants to continue interview with buttons`);
-        } catch (buttonError) {
-          logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-          await bot.sendMessage(from, '¿Quieres continuar con la siguiente pregunta? Responde "sí" para continuar.');
-        }
-      }, 2000);
+      await bot.sendButtonMessage(
+        from,
+        '¿Quieres continuar con la siguiente pregunta? 🤔',
+        [
+          { id: 'continue_interview', text: '✅ Sí, continuar' },
+          { id: 'stop_interview', text: '❌ Detener' }
+        ],
+        '🎯 Progreso de entrevista'
+      );
     }
     
   } catch (error) {
@@ -869,19 +794,27 @@ const handleUnknown = async (from) => {
 const handleHelp = async (from) => {
   try {
     const helpMessage = `
-*Comandos disponibles:*
+✨ *¡Hola! Aquí tienes todo lo que puedo hacer por ti* ✨
 
-!start - Iniciar el bot
-!help - Mostrar esta ayuda
-!interview - Iniciar simulación de entrevista
-!reset - Reiniciar el proceso
+📌 *Comandos disponibles:*
 
-*Funcionalidades:*
-- Análisis de CV
-- Simulación de entrevista
-- Retroalimentación personalizada
+�� *!start* - Iniciar el asistente
+❓ *!help* - Ver esta guía de ayuda
+🎯 *!interview* - Comenzar simulación de entrevista
+🔄 *!reset* - Reiniciar todo el proceso
 
-Para comenzar, envía tu CV como documento.
+🌟 *Mis funcionalidades:*
+
+📋 *Análisis de CV*
+Envía tu currículum y te daré feedback profesional personalizado, identificando fortalezas y áreas de mejora.
+
+🎤 *Simulación de entrevista*
+Practica tus habilidades con preguntas reales y recibe retroalimentación detallada.
+
+💡 *Consejos personalizados*
+Recomendaciones específicas para mejorar tu perfil profesional.
+
+¿Listo para comenzar? ¡Envía tu CV como documento y empecemos! 📤✨
     `;
     await bot.sendMessage(from, helpMessage);
   } catch (error) {
@@ -988,58 +921,89 @@ Por favor, responde con un mensaje de audio o video.
 };
 
 const formatAnalysisResults = (analysis) => {
+  // Función para agregar emojis según categoría
+  const getCategoryEmoji = (category) => {
+    const emojis = {
+      experience: '💼',
+      education: '🎓',
+      skills: '🔧',
+      softSkills: '🤝',
+      projects: '🚀',
+      improvements: '📈',
+      recommendations: '💡',
+      alignment: '🎯'
+    };
+    return emojis[category] || '✨';
+  };
+
   return `
-*Análisis Detallado de tu CV*
+✨ *ANÁLISIS DE TU CURRÍCULUM* ✨
 
-*Puntuación General:* ${analysis.score}/100
+📊 *Puntuación:* ${analysis.score}/100
 
-*Puntos Destacables:*
-${analysis.highlights.map(h => `- ${h}`).join('\n')}
+📝 *Resumen Ejecutivo:*
+${analysis.summary}
 
-*Fortalezas Específicas:*
-${analysis.strengths.map(s => `- ${s}`).join('\n')}
+${getCategoryEmoji('experience')} *Experiencia Relevante:*
+${analysis.experience.map(exp => `• ${exp}`).join('\n')}
 
-*Experiencia Relevante:*
-${analysis.experience.map(e => `- ${e}`).join('\n')}
+${getCategoryEmoji('education')} *Formación Académica:*
+${analysis.education.map(edu => `• ${edu}`).join('\n')}
 
-*Habilidades Técnicas:*
-${analysis.skills.map(s => `- ${s}`).join('\n')}
+${getCategoryEmoji('skills')} *Habilidades Técnicas:*
+${analysis.skills.map(skill => `• ${skill}`).join('\n')}
 
-*Formación Académica:*
-${analysis.education.map(e => `- ${e}`).join('\n')}
+${getCategoryEmoji('softSkills')} *Habilidades Blandas:*
+${analysis.softSkills.map(skill => `• ${skill}`).join('\n')}
 
-*Proyectos Destacados:*
-${analysis.projects.map(p => `- ${p}`).join('\n')}
+${getCategoryEmoji('projects')} *Proyectos Destacados:*
+${analysis.projects.map(p => `• ${p}`).join('\n')}
 
-*Áreas de Mejora:*
-${analysis.improvements.map(i => `- ${i}`).join('\n')}
+${getCategoryEmoji('improvements')} *Oportunidades de Mejora:*
+${analysis.improvements.map(i => `• ${i}`).join('\n')}
 
-*Recomendaciones Personalizadas:*
-${analysis.recommendations.map(r => `- ${r}`).join('\n')}
+${getCategoryEmoji('recommendations')} *Recomendaciones Personalizadas:*
+${analysis.recommendations.map(r => `• ${r}`).join('\n')}
 
-*Análisis de Alineación con el Puesto:*
+${getCategoryEmoji('alignment')} *Análisis de Alineación con el Puesto:*
 ${analysis.alignment}
+
+¡Ánimo! Con pequeños ajustes, tu CV puede tener un gran impacto. 💪
   `;
 };
 
 const formatInterviewFeedback = (feedback, question) => {
+  // Obtener emoji para la calificación
+  const getScoreEmoji = (score) => {
+    if (score >= 9) return '🌟';
+    if (score >= 7) return '✅';
+    if (score >= 5) return '⚠️';
+    return '❗';
+  };
+  
+  const scoreEmoji = getScoreEmoji(feedback.score);
+  
   return `
-*Análisis de tu respuesta*
+✨ *ANÁLISIS DE TU RESPUESTA* ✨
 
-*Pregunta:* ${question.question}
+🎯 *Pregunta:* 
+${question.question}
 
-*Calificación:* ${feedback.score}/10
+${scoreEmoji} *Calificación: ${feedback.score}/10*
 
-*Resumen:* ${feedback.summary}
+📝 *Resumen:* 
+${feedback.summary}
 
-*Fortalezas:*
-${feedback.strengths.map(s => `- ${s}`).join('\n')}
+💪 *Fortalezas:*
+${feedback.strengths.map(s => `• ✓ ${s}`).join('\n')}
 
-*Áreas de mejora:*
-${feedback.weaknesses.map(w => `- ${w}`).join('\n')}
+🔍 *Oportunidades de mejora:*
+${feedback.weaknesses.map(w => `• ${w}`).join('\n')}
 
-*Recomendaciones:*
-${feedback.suggestions.map(s => `- ${s}`).join('\n')}
+💡 *Recomendaciones:*
+${feedback.suggestions.map(s => `• 💡 ${s}`).join('\n')}
+
+¡Sigue practicando, vas por buen camino! 🚀
   `;
 };
 
@@ -1056,11 +1020,15 @@ const handleNextQuestion = async (from) => {
     // Verificar si ya se completaron todas las preguntas
     if (session.currentQuestion >= 3) {
       await bot.sendMessage(from, `
-¡Felicidades! Has completado todas las preguntas de la entrevista.
+🎉 *¡FELICIDADES!* 🎉
 
-Gracias por participar en esta simulación. Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
 
-Si deseas reiniciar el proceso, puedes enviar !reset en cualquier momento.
+✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+
+🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
+
+¡Te deseo mucho éxito en tus entrevistas reales! 🚀
       `);
       await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
       return;
@@ -1175,8 +1143,9 @@ const handlePremiumInfo = async (from) => {
         await sessionService.updateSessionState(from, 'post_cv_options');
         
         const menuButtons = [
-          { id: 'start_interview', text: 'Simular entrevista' },
-          { id: 'premium_required', text: 'Premium' }
+          { id: 'start_interview', text: '🎯 Simular entrevista' },
+          { id: 'premium_required', text: '✨ Premium' },
+          { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
         ];
         
         try {
@@ -1256,6 +1225,11 @@ const handleButtonReply = async (from, buttonId) => {
         await bot.sendMessage(from, 'Entrevista finalizada. ¡Gracias por tu participación! Puedes iniciar un nuevo proceso con !reset');
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
         break;
+      case 'back_to_main_menu':
+        // Reiniciar el proceso completamente
+        await sessionService.resetSession(from);
+        await handleStart(from);
+        break;
       default:
         logger.warn(`Unrecognized button ID: ${buttonId}`);
         await bot.sendMessage(from, 'Opción no reconocida. Por favor, intenta nuevamente.');
@@ -1263,6 +1237,64 @@ const handleButtonReply = async (from, buttonId) => {
   } catch (error) {
     logger.error(`Error handling button reply: ${error.message}`);
     await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu selección. Por favor, intenta nuevamente con !start.');
+  }
+};
+
+/**
+ * Muestra los botones de opciones después del análisis de CV
+ * @param {string} from - Número de teléfono del usuario
+ * @param {Object} analysis - Resultados del análisis (opcional)
+ */
+const sendPostCVOptions = async (from, analysis = null) => {
+  try {
+    // Obtener el historial permanente de análisis de CVs
+    const totalAnalysisCount = await userService.getCVAnalysisCount(from);
+    const hasAnalyzedCVBefore = totalAnalysisCount > 1;
+    
+    // Definir las opciones del menú post-análisis
+    let menuButtons = [
+      { id: 'start_interview', text: '🎯 Simular entrevista' }
+    ];
+    
+    // Para la opción Premium o Otro CV, mostrar texto diferente si ya ha analizado uno antes
+    if (hasAnalyzedCVBefore) {
+      menuButtons.push({ id: 'premium_required', text: '✨ Premium' });
+    } else {
+      menuButtons.push({ id: 'review_cv_again', text: '📄 Otro CV' });
+    }
+    
+    // Agregar la opción de regresar al menú principal
+    menuButtons.push({ id: 'back_to_main_menu', text: '🔙 Regresar al menú' });
+    
+    // Actualizar estado de la sesión para manejar correctamente la respuesta
+    await sessionService.updateSessionState(from, 'post_cv_options');
+    
+    try {
+      // Enviar mensaje con botones interactivos
+      await bot.sendButtonMessage(
+        from,
+        '¿Qué te gustaría hacer ahora?',
+        menuButtons,
+        'Opciones disponibles:'
+      );
+      logger.info(`Post-CV analysis options sent to user ${from}`);
+    } catch (buttonError) {
+      logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
+      
+      // Fallback a mensaje de texto si los botones fallan
+      let optionsMessage = '¿Qué te gustaría hacer ahora?\n\n1. Simular entrevista (escribe "simular")\n';
+      if (hasAnalyzedCVBefore) {
+        optionsMessage += '2. Versión Premium (escribe "premium")\n';
+      } else {
+        optionsMessage += '2. Revisar otro CV (escribe "otro cv")\n';
+      }
+      optionsMessage += '3. Regresar al menú principal (escribe "!start")';
+      
+      await bot.sendMessage(from, optionsMessage);
+    }
+  } catch (error) {
+    logger.error(`Error sending post-CV options: ${error.message}`);
+    await bot.sendMessage(from, 'Puedes escribir "simular" para iniciar una simulación de entrevista o "!start" para reiniciar.');
   }
 };
 
@@ -1281,5 +1313,6 @@ module.exports = {
   handlePremiumInfo,
   startInterviewQuestions,
   handleButtonReply,
-  formatAnalysisResults
+  formatAnalysisResults,
+  sendPostCVOptions
 }; 
