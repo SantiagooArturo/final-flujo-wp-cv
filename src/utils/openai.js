@@ -90,6 +90,9 @@ const enhanceCVAnalysis = async (analysis, jobTitle) => {
         Mejora este resumen haciéndolo más estructurado y profesional. Incluye una evaluación clara del candidato
         en relación con el puesto de "${jobTitle}". Destaca las principales fortalezas y áreas de mejora.
         
+        El resumen debe ser conciso pero impactante, destacando la experiencia relevante, habilidades clave y 
+        potencial alineación con el puesto. Usa un tono profesional y convincente.
+        
         Mantén la información factual original pero mejora su presentación.
       `;
       
@@ -117,23 +120,31 @@ const enhanceCVAnalysis = async (analysis, jobTitle) => {
           
           Para un candidato que aplica al puesto de "${jobTitle}",
           
-          Genera 3-5 sugerencias ULTRA ESPECÍFICAS y accionables para mejorar esta sección.
+          Genera 3-5 sugerencias ULTRAESPECÍFICAS y accionables para mejorar esta sección.
           
-          IMPORTANTE:
-          1. Las sugerencias deben hacer referencia directa a fragmentos EXACTOS del texto original.
-          2. Cita textualmente las partes que necesitan mejora y ofrece ejemplos concretos de cómo reescribirlas.
-          3. Enfócate en:
-             - Cómo convertir descripciones genéricas en logros cuantificables
-             - Cómo reemplazar verbos pasivos con verbos de acción más impactantes
-             - Cómo añadir métricas específicas relevantes para el puesto
-          4. Provee ejemplos específicos como "Cambia 'Responsable de atención al cliente' por 'Gestioné la atención de 50+ clientes diarios mejorando la satisfacción un 35% mediante...'".
-          5. NO des consejos genéricos aplicables a cualquier CV.
+          INSTRUCCIONES CRÍTICAS:
+          1. Cada sugerencia debe:
+             - Citar TEXTUALMENTE fragmentos exactos del CV original que necesitan mejora
+             - Proporcionar una reescritura completa y detallada con métricas, impacto y logros cuantificables
+             - Incluir ejemplos claros de "ANTES vs. DESPUÉS" que muestren la transformación
+
+          2. Enfócate en:
+             - Reemplazar descripciones genéricas de responsabilidades con logros concretos y cuantificados
+             - Añadir métricas específicas (porcentajes, cantidades, tiempos) a cada logro
+             - Usar verbos de alto impacto al inicio de cada punto (Optimicé, Lideré, Reduje, Incrementé)
+             - Destacar resultados tangibles y su impacto en la organización
           
-          Formatea cada sugerencia como un punto separado con ejemplos concretos de "antes y después".
+          3. Formato requerido para cada sugerencia:
+             "ANTES: [cita textual del CV original]
+             DESPUÉS: [reescritura completa y mejorada con métricas]
+             POR QUÉ FUNCIONA: [breve explicación de por qué esta versión es más efectiva]"
+          
+          Proporciona ejemplos extremadamente específicos y detallados, no consejos genéricos.
         `;
         
         const enhancedSuggestions = await generateImprovedText(expPrompt, {
-          max_tokens: 300
+          max_tokens: 500,
+          temperature: 0.7
         });
         if (typeof enhancedAnalysis.experience === 'object') {
           enhancedAnalysis.experience.suggestions = enhancedSuggestions;
@@ -174,22 +185,47 @@ const enhanceCVAnalysis = async (analysis, jobTitle) => {
             
             Para un candidato que aplica al puesto de "${jobTitle}",
             
-            Genera 3 sugerencias ULTRA ESPECÍFICAS y accionables para mejorar esta sección.
+            Genera 3-5 sugerencias ULTRAESPECÍFICAS y accionables para mejorar esta sección.
             
-            IMPORTANTE:
-            1. Las sugerencias DEBEN hacer referencia directa a fragmentos EXACTOS del texto original.
-            2. Cita textualmente las partes que necesitan mejora y ofrece ejemplos concretos de cómo reescribirlas.
-            3. Para cada sugerencia, proporciona:
-               - El texto original exacto que necesita mejora (entre comillas)
-               - Una versión mejorada específica (no genérica)
-               - Explica brevemente por qué esta mejora impactará positivamente
-            4. NO des consejos genéricos aplicables a cualquier CV.
+            INSTRUCCIONES CLAVE:
+            1. Cada sugerencia debe:
+               - Citar TEXTUALMENTE fragmentos exactos del CV original
+               - Proporcionar una versión completamente reescrita y mejorada
+               - Incluir un formato claro de "ANTES vs. DESPUÉS"
+               - Explicar brevemente por qué la mejora es efectiva para el puesto de ${jobTitle}
             
-            Formatea cada sugerencia como un punto separado con ejemplos concretos de "antes y después".
+            2. Para ${section.name} específicamente:
+               ${section.key === 'education' ? 
+                 `- Muestra cómo relacionar la formación directamente con requisitos del puesto
+                  - Sugiere cómo destacar proyectos académicos relevantes con resultados cuantificables
+                  - Proporciona ejemplos de cómo mencionar logros académicos con impacto` : 
+                section.key === 'skills' ? 
+                 `- Identifica habilidades críticas para ${jobTitle} que faltan o están subdestacadas
+                  - Muestra cómo reformular cada habilidad con nivel de expertise y ejemplos de aplicación
+                  - Sugiere un formato optimizado para destacar las habilidades más relevantes` :
+                section.key === 'softSkills' ? 
+                 `- Transforma cada habilidad blanda en un ejemplo concreto y cuantificable
+                  - Muestra cómo conectar cada habilidad con un logro específico relevante para ${jobTitle}
+                  - Sugiere cómo demostrar estas habilidades con ejemplos de situaciones laborales reales` :
+                section.key === 'certifications' ? 
+                 `- Identifica certificaciones específicas de la industria que fortalecerían el perfil
+                  - Muestra cómo presentar cada certificación destacando su relevancia para ${jobTitle}
+                  - Sugiere cómo vincular cada certificación con aplicaciones prácticas en el rol` :
+                 `- Transforma cada descripción de proyecto en un caso de éxito con métricas de impacto
+                  - Muestra cómo estructurar la descripción: problema, solución, tecnologías, resultados
+                  - Sugiere cómo destacar aspectos del proyecto más relevantes para ${jobTitle}`}
+            
+            3. Formato requerido para cada sugerencia:
+               "ANTES: [cita textual del CV original]
+               DESPUÉS: [reescritura completa y mejorada]
+               POR QUÉ MEJORA: [explicación breve de por qué esta versión es más efectiva para ${jobTitle}]"
+            
+            Asegúrate de que cada sugerencia sea extremadamente específica y aplicable inmediatamente.
           `;
           
           const enhancedSuggestions = await generateImprovedText(sectionPrompt, {
-            max_tokens: 300
+            max_tokens: 500,
+            temperature: 0.7
           });
           
           if (typeof enhancedAnalysis[section.key] === 'object') {
@@ -212,22 +248,43 @@ const enhanceCVAnalysis = async (analysis, jobTitle) => {
       Fortalezas: ${Array.isArray(enhancedAnalysis.strengths) ? enhancedAnalysis.strengths.join(', ') : enhancedAnalysis.strengths || 'No especificadas'}
       Áreas de mejora: ${Array.isArray(enhancedAnalysis.improvements) ? enhancedAnalysis.improvements.join(', ') : enhancedAnalysis.improvements || 'No especificadas'}
       
-      Genera 5 recomendaciones EXTREMADAMENTE ESPECÍFICAS y accionables para mejorar el CV completo.
+      Genera EXACTAMENTE 5 recomendaciones ULTRA-ESPECÍFICAS y transformadoras para mejorar el CV.
       
-      IMPORTANTE:
-      1. Cada recomendación debe ser ULTRA específica, detallada y personalizada para este candidato y puesto.
-      2. Para cada recomendación, especifica:
-         - Acción concreta a realizar (qué cambiar exactamente)
-         - Ejemplo específico de implementación (cómo hacerlo)
-         - Impacto esperado para los reclutadores
-      3. Incluye recomendaciones sobre palabras clave para ATS, formato, adaptación al puesto específico.
-      4. Evita consejos genéricos como "añadir más logros" - en su lugar especifica qué logros exactamente.
+      REQUISITOS CRÍTICOS:
+      1. Cada recomendación debe:
+         - Identificar un problema CONCRETO en el CV actual
+         - Proporcionar una solución DETALLADA Y ACCIONABLE
+         - Incluir un EJEMPLO ESPECÍFICO de implementación
+         - Explicar el IMPACTO esperado en procesos de selección y entrevistas
       
-      Numera las recomendaciones del 1 al 5, cada una con suficiente detalle para ser implementada inmediatamente.
+      2. Las recomendaciones deben cubrir:
+         - Optimización para sistemas ATS (palabras clave específicas para ${jobTitle})
+         - Transformación de logros (con métricas cuantificables y porcentajes)
+         - Estructura y formato (sugerencias concretas, no generales)
+         - Adaptación específica al sector/industria de ${jobTitle}
+         - Diferenciación competitiva (elementos específicos que destacarán al candidato)
+      
+      3. Cada recomendación debe ser TAN ESPECÍFICA que el candidato pueda implementarla inmediatamente:
+         - Redactar exactamente los cambios sugeridos, incluyendo frases completas
+         - Proporcionar ejemplos concretos de "antes y después"
+         - Incluir palabras, términos y métricas específicas para usar
+      
+      4. NADA de recomendaciones genéricas como "añadir más logros" - en su lugar especifica:
+         - Qué logros exactamente (con ejemplos específicos y redactados)
+         - Cómo formularlos (con métricas precisas y resultados cuantificados)
+         - Dónde ubicarlos en el CV (secciones específicas)
+      
+      Formatea cada recomendación de manera estructurada y numerada (1-5) con:
+      - PROBLEMA: [Identificación clara del problema o carencia]
+      - SOLUCIÓN: [Descripción detallada de la solución propuesta]
+      - EJEMPLO: [Ejemplo concreto de implementación]
+      - IMPACTO: [Explicación del impacto esperado]
+      
+      Haz que cada recomendación sea extremadamente específica y aplicable al contexto del candidato y del puesto de ${jobTitle}.
     `;
     
     enhancedAnalysis.recommendations = (await generateImprovedText(finalPrompt, {
-      max_tokens: 400,
+      max_tokens: 800,
       temperature: 0.7
     }))
       .split(/\d+\.\s+/)

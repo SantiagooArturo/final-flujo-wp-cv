@@ -123,18 +123,11 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // GRÁFICO DE PUNTUACIÓN
     // Determinar color basado en la puntuación
-    let scoreColor;
-    if (score >= 80) {
-      scoreColor = '#1e88e5'; // Azul
-    } else if (score >= 60) {
-      scoreColor = '#fb8c00'; // Naranja
-    } else {
-      scoreColor = '#c62828'; // Rojo
-    }
-
-    // Posición del círculo de puntuación
+    let scoreColor = colors.primary; // Usar el color azul principal siempre
+    
+    // Posición del círculo de puntuación (subir 15 unidades)
     const scoreX = doc.page.width - 120;
-    const scoreY = 105;
+    const scoreY = 90; // Antes era 105
     const circleRadius = 50;
 
     // Dibujar círculo exterior con borde de color
@@ -152,15 +145,15 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     const scoreTextWidth = doc.widthOfString(scoreText);
     const scoreTextHeight = doc.heightOfString(scoreText);
 
-    // Posicionar el texto centrado
+    // Posicionar el texto centrado (ajustar la posición vertical para mejor centrado)
     const scoreTextX = scoreX - (scoreTextWidth / 2);
-    const scoreTextY = scoreY - (scoreTextHeight / 2) - 5;
+    const scoreTextY = scoreY - (scoreTextHeight / 2) - 3;
 
-    // Dibujar el número
+    // Dibujar el número con el color azul principal
     doc.fillColor(scoreColor)
        .text(scoreText, scoreTextX, scoreTextY);
 
-    // Texto "puntos" debajo
+    // Texto "puntos" debajo (ajustar posición)
     doc.font('Poppins')
        .fontSize(14);
     const puntosText = 'puntos';
@@ -168,7 +161,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     doc.fillColor('#333333')
        .text(puntosText, scoreX - (puntosWidth / 2), scoreY + 15);
 
-    // Texto "de 100" debajo
+    // Texto "de 100" debajo (ajustar posición)
     doc.font('Poppins-Light')
        .fontSize(12);
     const de100Text = 'de 100';
@@ -361,11 +354,45 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
       }
     ];
     
+    // Si no hay subsecciones con contenido válido, mostrar mensaje predeterminado
+    let hasValidContent = false;
+    
+    // Verificar si al menos una subsección tiene contenido válido
+    for (const subsection of subsections) {
+      if (!subsection.content.includes('No se proporcionó información') && 
+          !subsection.content.includes('No se encontró información') && 
+          !subsection.content.includes('No se mencionaron')) {
+        hasValidContent = true;
+        break;
+      }
+    }
+    
+    // Si no hay contenido válido, mostrar un mensaje predeterminado
+    if (!hasValidContent) {
+      doc.fontSize(12)
+         .font('Poppins')
+         .fillColor(colors.text)
+         .text('No se pudo generar un análisis detallado por secciones del CV. Esto puede deberse a que el CV no contiene suficiente información estructurada para cada sección o el formato no permitió extraer los datos correctamente.', 50, currentY + 20, {
+           width: doc.page.width - 100,
+           align: 'left',
+           lineGap: 3
+         });
+      
+      currentY += 80; // Avanzar el cursor después del mensaje
+    }
+    
     // Añadir cada subsección, creando nuevas páginas cuando sea necesario
     for (const subsection of subsections) {
       // Estimar la altura del contenido y observaciones
       const contentText = subsection.content;
       const observationsText = subsection.observations;
+      
+      // Si el contenido es vacío o genérico, continuar con la siguiente subsección
+      if (contentText.includes('No se proporcionó información') || 
+          contentText.includes('No se encontró información') || 
+          contentText.includes('No se mencionaron')) {
+        continue; // Saltar esta subsección si no tiene contenido relevante
+      }
       
       const contentHeight = doc.heightOfString(contentText, {
         width: doc.page.width - 100,
@@ -960,6 +987,62 @@ const generateSpecificObservations = (sectionType, sectionContent = '', jobTitle
       } else if (hasTechExperience || positionType === 'tech') {
         specificObservations.push('Para roles técnicos, enfatiza ejemplos de: "Adaptabilidad técnica: Aprendí 3 nuevas tecnologías en 6 meses para satisfacer requisitos cambiantes del proyecto" o "Resolución de problemas: Solucioné bug crítico que afectaba al 30% de los usuarios en menos de 48 horas".');
       }
+    }
+  } else if (sectionType === 'certificaciones') {
+    // Si tenemos fragmentos específicos para certificaciones
+    if (fragments.length > 0) {
+      for (const fragment of fragments) {
+        const cleanFragment = fragment.replace(/•\s*/, '').trim();
+        
+        // Si no menciona fecha o vigencia
+        if (!fragment.match(/\b(19|20)\d{2}\b|vigente hasta|válido hasta|fecha/i)) {
+          specificObservations.push(`Añade a "${cleanFragment}" el año de obtención y vigencia: "${cleanFragment} (2023, vigente hasta 2026)".`);
+        }
+        
+        // Si no menciona institución o entidad certificadora
+        if (!fragment.match(/universidad|instituto|microsoft|google|oracle|cisco|pmi|scrum|certificado por/i)) {
+          specificObservations.push(`Mejora "${cleanFragment}" especificando la entidad certificadora reconocida: "${cleanFragment} otorgado por [nombre de institución reconocida en la industria]".`);
+        }
+        
+        // Si no menciona relevancia o aplicación
+        if (!fragment.match(/aplicad[oa] en|utilizad[oa] en|implement|proyect|caso/i)) {
+          specificObservations.push(`Complementa "${cleanFragment}" con un ejemplo breve de aplicación práctica: "Aplicado exitosamente en proyecto X que resultó en [beneficio específico]".`);
+        }
+      }
+    }
+    // Si no hay fragmentos específicos pero hay contenido
+    else if (sectionContent.length > 0) {
+      specificObservations.push('Incluye fechas de obtención y vigencia para todas tus certificaciones, priorizando las más recientes y relevantes para el puesto.');
+      
+      specificObservations.push('Destaca certificaciones de instituciones reconocidas en la industria y explica brevemente cómo has aplicado estos conocimientos en situaciones reales.');
+    }
+  } else if (sectionType === 'proyectos') {
+    // Si tenemos fragmentos específicos para proyectos
+    if (fragments.length > 0) {
+      for (const fragment of fragments) {
+        const cleanFragment = fragment.replace(/•\s*/, '').trim();
+        
+        // Si no menciona resultados cuantificables
+        if (!fragment.match(/\d+%|\d+ usuarios|\d+ clientes|aumentó|redujo|mejoró|optimizó|incrementó/i)) {
+          specificObservations.push(`Añade a "${cleanFragment}" resultados cuantificables: "${cleanFragment} que resultó en un incremento del 40% en la eficiencia del proceso y una reducción del 25% en costos operativos".`);
+        }
+        
+        // Si no menciona tecnologías o metodologías específicas
+        if (positionType === 'tech' && !hasSpecificTechnologies) {
+          specificObservations.push(`Especifica en "${cleanFragment}" las tecnologías y metodologías utilizadas: "...implementado con React, Node.js y MongoDB, aplicando metodología Scrum en ciclos de dos semanas".`);
+        }
+        
+        // Si no menciona rol o responsabilidades específicas
+        if (!fragment.match(/lideré|desarrollé|gestioné|coordiné|responsable de|a cargo de/i)) {
+          specificObservations.push(`Clarifica en "${cleanFragment}" tu rol específico y responsabilidades: "Como líder técnico, fui responsable de la arquitectura del sistema y la coordinación del equipo de 4 desarrolladores...".`);
+        }
+      }
+    }
+    // Si no hay fragmentos específicos pero hay contenido
+    else if (sectionContent.length > 0) {
+      specificObservations.push('Destaca 2-3 proyectos relevantes para el puesto con resultados cuantificables, explicando claramente tu rol y responsabilidades específicas.');
+      
+      specificObservations.push('Incluye detalles sobre tecnologías, metodologías y herramientas utilizadas en cada proyecto, así como el impacto medible que tuvo cada uno en la organización o cliente.');
     }
   }
   

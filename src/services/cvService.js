@@ -65,46 +65,81 @@ class CVService {
     try {
       logger.info(`Analizando CV para puesto: ${position} (longitud del texto: ${cvText.length} caracteres)`);
       
-      const systemPrompt = `Eres un experto en reclutamiento y recursos humanos. Debes analizar un currículum vitae para el puesto de "${position}" y proporcionar un análisis detallado y personalizado.
+      const systemPrompt = `Eres un experto senior en reclutamiento y recursos humanos con 15+ años de experiencia evaluando CVs para ${position}. Tu análisis será extremadamente detallado, personalizado y accionable.
       
-      El análisis debe incluir:
-      1. Una evaluación de la alineación entre el perfil del candidato y los requisitos del puesto de ${position}.
-      2. Un puntaje general de 0-100 que refleje cuán adecuado es el CV para el puesto.
-      3. Un resumen ejecutivo del perfil profesional del candidato.
-      4. Fortalezas específicas del CV relacionadas con el puesto de ${position}.
-      5. Áreas de mejora concretas para optimizar el CV para este puesto específico.
-      6. Recomendaciones accionables para mejorar el CV con enfoque en el puesto de ${position}.
-      7. Análisis de las competencias clave requeridas para el puesto.
-      8. Cualquier brecha de habilidades o experiencia entre el perfil actual y el ideal para ${position}.
+      INSTRUCCIONES CRÍTICAS PARA EL ANÁLISIS:
       
-      IMPORTANTE SOBRE LAS RECOMENDACIONES:
-      - Todas las recomendaciones deben ser extremadamente específicas y puntuales, nunca generales.
-      - Para cada área de mejora, sugiere exactamente qué palabras, frases o elementos debe agregar la persona.
-      - Incluye ejemplos concretos de redacción para cada sección del CV que necesite mejora.
-      - Especifica términos técnicos, habilidades y logros cuantificables que deben añadirse, con ejemplos exactos.
-      - Sugiere palabras clave específicas del sector (ATS) que el candidato debería incluir.
-      - Para la experiencia laboral, proporciona ejemplos concretos de cómo redactar los logros con cifras y métricas.
+      1. EVALUACIÓN GENERAL:
+         - Evalúa meticulosamente la alineación entre el perfil y los requisitos exactos del puesto de ${position}.
+         - Asigna un puntaje de 0-100 basado en criterios cuantificables (experiencia relevante, habilidades técnicas, formación).
       
-      Utiliza un tono profesional pero amigable, y sé honesto pero constructivo en tus observaciones.
-      Asegúrate de que todas tus recomendaciones sean específicas para el puesto de ${position} y la industria correspondiente.
+      2. ANÁLISIS ESPECÍFICO:
+         - Examina cada sección del CV y proporciona retroalimentación ultraespecífica.
+         - Identifica fortalezas evidentes y brechas concretas respecto al puesto de ${position}.
+         - Señala EXACTAMENTE qué términos, frases y logros deberían incluirse y cómo deberían redactarse.
+      
+      3. RECOMENDACIONES TRANSFORMADORAS:
+         - Cada recomendación debe ser extremadamente específica, directamente implementable y transformadora.
+         - REESCRIBE ejemplos concretos usando los datos del CV para mostrar el "antes y después".
+         - Para cada punto de experiencia/habilidad, sugiere una versión mejorada con métricas, resultados e impacto.
+      
+      4. SUGERENCIAS POR SECCIONES:
+         EXPERIENCIA:
+         - Analiza cada posición y proporciona reescrituras exactas con verbos de alto impacto.
+         - Convierte descripciones genéricas en logros cuantificados (ej: "Reduje costos operativos en 32% implementando...").
+         - Identifica las responsabilidades más relevantes para ${position} y muestra cómo destacarlas con datos precisos.
+         
+         HABILIDADES:
+         - Lista exactamente qué habilidades críticas para ${position} faltan o están subdimensionadas.
+         - Especifica el nivel necesario de cada competencia para el puesto.
+         - Proporciona ejemplos de cómo demostrar estas habilidades con logros pasados.
+         
+         FORMACIÓN:
+         - Muestra cómo resaltar aspectos de la formación que se alinean con ${position}.
+         - Sugiere exactamente cómo mencionar proyectos académicos relevantes con resultados medibles.
+         
+         CERTIFICACIONES:
+         - Identifica certificaciones específicas de la industria que fortalecerían el perfil.
+         - Sugiere cómo presentar las certificaciones actuales vinculándolas a resultados profesionales.
+      
+      5. EJEMPLOS TRANSFORMADORES:
+         - Para CADA sección y recomendación, proporciona ejemplos de redacción del "antes vs. después":
+           • ANTES: "Responsable de contabilidad en empresa XYZ."
+           • DESPUÉS: "Lideré departamento contable de 5 personas en XYZ Corp, implementando controles que redujeron errores de conciliación en 47% y acortaron el cierre mensual de 5 a 2 días."
+      
+      REQUISITOS PARA LA RESPUESTA:
       
       Devuelve tu análisis en formato JSON con los siguientes campos:
       - score (número): Puntuación general de 0-100.
-      - summary (string): Resumen ejecutivo del perfil.
-      - strengths (array): Lista de fortalezas (máximo 5).
-      - improvements (array): Lista de áreas de mejora (máximo 5), con ejemplos concretos de corrección.
-      - recommendations (array): Lista de recomendaciones accionables (máximo 5), extremadamente específicas y con ejemplos.
-      - experience (array): Comentarios sobre la experiencia relevante, incluyendo ejemplos de redacción.
-      - skills (array): Habilidades técnicas identificadas, con nivel si es posible.
-      - softSkills (array): Habilidades blandas identificadas.
-      - education (array): Comentarios sobre formación académica.
-      - certifications (array): Certificaciones o cursos relevantes.
-      - projects (array): Proyectos destacables mencionados.
-      - keyCompetencies (string): Análisis de competencias clave para ${position}.
-      - skillsGap (string): Análisis de brechas entre habilidades actuales y deseadas, con ejemplos concretos de habilidades necesarias.
-      - alignment (string): Explicación de cuánto se alinea el perfil con el puesto (incluir porcentaje).
-      - highlights (array): Aspectos destacables para resaltar al postular, con ejemplos de redacción.
-      - finalRecommendation (string): Recomendación final, por ejemplo "Altamente recomendado", "Recomendado con reservas", "No recomendado para este puesto".`;
+      - summary (string): Resumen ejecutivo del perfil, destacando fortalezas y limitaciones clave para ${position}.
+      - strengths (array): 3-5 fortalezas específicas, detallando exactamente por qué son valiosas para ${position}.
+      - improvements (array): 3-5 áreas de mejora con ejemplos concretos, incluyendo redacciones sugeridas.
+      - recommendations (array): 5 recomendaciones ultraespecíficas, cada una con ejemplo "antes/después".
+      - experience (object): 
+          * roles (array): Lista de experiencias identificadas.
+          * suggestions (string): 3-5 sugerencias específicas sobre cómo mejorar esta sección, con ejemplos antes/después.
+      - skills (object):
+          * items (array): Lista de habilidades identificadas.
+          * suggestions (string): Sugerencias para mejorar esta sección, incluyendo habilidades faltantes críticas para ${position}.
+      - softSkills (object):
+          * items (array): Lista de habilidades blandas identificadas.
+          * suggestions (string): Cómo mejorar esta sección vinculando cada habilidad con ejemplos cuantificables.
+      - education (object):
+          * items (array): Formación identificada.
+          * suggestions (string): Cómo optimizar esta sección para ${position}.
+      - certifications (object):
+          * items (array): Certificaciones identificadas.
+          * suggestions (string): Certificaciones recomendadas específicas con justificación.
+      - projects (object):
+          * items (array): Proyectos destacables identificados.
+          * suggestions (string): Cómo mejorar la descripción de proyectos con métricas de impacto.
+      - keyCompetencies (string): Análisis detallado de competencias CRÍTICAS para ${position}, indicando cuáles posee y cuáles faltan.
+      - skillsGap (string): Análisis específico de brechas entre habilidades actuales y requeridas, con ejemplos de cómo cerrarlas.
+      - alignment (string): Porcentaje preciso de alineación con justificación detallada.
+      - highlights (array): 3-5 aspectos concretos a destacar en entrevistas, con ejemplos de cómo articularlos.
+      - finalRecommendation (string): Evaluación final, incluyendo "Altamente recomendado", "Recomendado con reservas", o "No recomendado para este puesto".
+      - keywordsSuggestions (array): 10-15 palabras clave específicas del sector para optimizar el CV para los filtros ATS.
+      - relevantSectorExperience (string): Análisis de la experiencia directamente relevante para el sector/industria.`;
 
       // Usar GPT-4 preferentemente para análisis más detallado
       try {
@@ -125,9 +160,20 @@ class CVService {
           // Parsear el resultado a objeto JSON
           const analysis = JSON.parse(resultText);
           
+          // Añadir log detallado para verificar la estructura y contenido del análisis
+          logger.info(`Estructura del análisis: ${JSON.stringify(Object.keys(analysis))}`);
+          logger.info(`Valor de 'score': ${analysis.score}`);
+          logger.info(`Valor de 'summary': ${analysis.summary ? analysis.summary.substring(0, 100) + '...' : 'undefined'}`);
+          logger.info(`Experiencia: ${typeof analysis.experience} - ${Array.isArray(analysis.experience) ? analysis.experience.length + ' items' : 'no es array'}`);
+          logger.info(`Education: ${typeof analysis.education} - ${Array.isArray(analysis.education) ? analysis.education.length + ' items' : 'no es array'}`);
+          
           // Mejorar el análisis con sugerencias más específicas y detalladas
           logger.info(`Mejorando el análisis con enhanceCVAnalysis para puesto: ${position}`);
           const enhancedAnalysis = await openai.enhanceCVAnalysis(analysis, position);
+          
+          // Verificar el resultado mejorado
+          logger.info(`Estructura mejorada: ${JSON.stringify(Object.keys(enhancedAnalysis))}`);
+          logger.info(`Experiencia mejorada: ${typeof enhancedAnalysis.experience} - ${JSON.stringify(enhancedAnalysis.experience).substring(0, 150) + '...'}`);
           
           return enhancedAnalysis;
         } catch (parseError) {
