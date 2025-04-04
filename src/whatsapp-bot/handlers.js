@@ -234,19 +234,41 @@ const handleDocument = async (from, document) => {
       const pdfPath = await generateCVAnalysisPDF(analysis, jobPosition || 'No especificado', candidateName);
       logger.info(`PDF generado en: ${pdfPath}`);
       
-      // Preparar la URL pública del PDF
-      const baseUrl = process.env.PUBLIC_URL || `${process.env.HOST}:${process.env.PORT}`;
-      const publicUrl = `${baseUrl}/pdf/${path.basename(pdfPath)}`;
-      logger.info(`URL pública del PDF: ${publicUrl}`);
+      // Subir el PDF al servidor FTP
+      let publicUrl = '';
+      try {
+        const { uploadFileToFTP } = require('../utils/ftpUploader');
+        // Generar un nombre de archivo único
+        const timestamp = new Date().getTime();
+        const userId = from.replace(/\D/g, ''); // Eliminar caracteres no numéricos
+        const customFileName = `analisis_cv_${userId}_${timestamp}.pdf`;
+        
+        // Subir el archivo y obtener la URL pública
+        publicUrl = await uploadFileToFTP(pdfPath, customFileName);
+        logger.info(`PDF subido exitosamente al servidor FTP. URL pública: ${publicUrl}`);
+        
+        // Guardar la URL en la sesión del usuario
+        await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
+      } catch (ftpError) {
+        logger.error(`Error al subir PDF por FTP: ${ftpError.message}`);
+        // Fallback a URL local en caso de error
+        const baseUrl = process.env.PUBLIC_URL || `${process.env.HOST}:${process.env.PORT}`;
+        publicUrl = `${baseUrl}/pdf/${path.basename(pdfPath)}`;
+        logger.info(`Fallback a URL local: ${publicUrl}`);
+        await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
+      }
       
-      // Guardar la URL del PDF en la sesión del usuario
-      await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
+      // Intentar enviar el documento PDF desde la URL pública
+      try {
+        await bot.sendDocument(from, publicUrl, '📊 Análisis detallado de tu CV');
+      } catch (docError) {
+        logger.error(`Error sending document from URL: ${docError.message}`);
+        // Si falla, intentar enviar el mensaje con la URL
+        await bot.sendMessage(from, '📄 *Tu análisis de CV está listo*\n\nDebido a limitaciones técnicas, no puedo enviarte el PDF directamente, pero puedes acceder a él a través del siguiente enlace:');
+      }
       
-      // Enviar el documento PDF directamente por WhatsApp
-      await bot.sendDocument(from, publicUrl, '📊 Análisis detallado de tu CV');
-      
-      // Enviar un mensaje para informar al usuario que puede solicitar la URL
-      await bot.sendMessage(from, '📝 *¿Necesitas compartir este análisis?* Usa el comando !url para obtener el enlace directo al PDF.');
+      // Enviar un mensaje con la URL para acceso web
+      await bot.sendMessage(from, `📝 *Tu análisis está listo* 📝\n\nPuedes acceder a tu análisis en cualquier momento desde este enlace:\n${publicUrl}\n\nRecuerda guardarlo para referencia futura.`);
       
       // Enviar mensaje con las opciones después del documento
       await sendPostCVOptions(from, analysis);
