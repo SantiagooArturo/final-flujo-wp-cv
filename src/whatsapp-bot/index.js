@@ -79,10 +79,24 @@ app.post('/webhook', async (req, res) => {
               
               if (message.type === 'text') {
                 await handlers.handleText(to, message.text.body);
-              } else if (message.type === 'interactive' && message.interactive.type === 'button_reply') {
-                await handlers.handleButtonReply(to, message.interactive.button_reply.id);
+              } else if (message.type === 'interactive') {
+                if (message.interactive.type === 'button_reply') {
+                  await handlers.handleButtonReply(to, message.interactive.button_reply.id);
+                } else if (message.interactive.type === 'list_reply') {
+                  // Para list_reply, actualizamos la sesión con la información de la selección
+                  // y luego manejamos como si fuera un botón
+                  const sessionService = require('../core/sessionService');
+                  const session = await sessionService.getOrCreateSession(to);
+                  await sessionService.updateSession(to, { 
+                    interactive: message.interactive 
+                  });
+                  
+                  await handlers.handleButtonReply(to, message.interactive.list_reply.id);
+                }
               } else if (message.type === 'document') {
                 await handlers.handleDocument(to, message.document);
+              } else if (message.type === 'image') {
+                await handlers.handleImage(to, message.image);
               } else if (message.type === 'audio') {
                 await handlers.handleAudio(to, message.audio);
               } else if (message.type === 'video') {

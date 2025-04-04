@@ -176,10 +176,119 @@ const getCVAnalysisCount = async (userId) => {
 const shouldUserPayForCVAnalysis = async (userId, freeLimit = 1) => {
   try {
     const analysisCount = await getCVAnalysisCount(userId);
+    
+    // Verificar si el usuario tiene créditos disponibles
+    const userCredits = await getCVCredits(userId);
+    if (userCredits > 0) {
+      return false; // No debe pagar si tiene créditos
+    }
+    
     return analysisCount >= freeLimit;
   } catch (error) {
     logger.error(`Error checking if user should pay: ${error.message}`);
     return false; // Ante la duda, permitir el análisis gratuito
+  }
+};
+
+/**
+ * Obtener la cantidad de créditos de CV disponibles para un usuario
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<number>} Número de créditos disponibles
+ */
+const getCVCredits = async (userId) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, unable to get credits');
+      return 0;
+    }
+
+    const db = firebaseConfig.getFirestore();
+    
+    // Obtener usuario
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      return 0;
+    }
+    
+    const userData = userDoc.data();
+    return userData.cvCredits || 0;
+  } catch (error) {
+    logger.error(`Error getting CV credits: ${error.message}`);
+    return 0;
+  }
+};
+
+/**
+ * Añadir créditos de CV a un usuario
+ * @param {string} userId - ID del usuario
+ * @param {number} credits - Cantidad de créditos a añadir
+ * @returns {Promise<number>} Nuevo total de créditos
+ */
+const addCVCredits = async (userId, credits) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, unable to add credits');
+      return credits;
+    }
+
+    const db = firebaseConfig.getFirestore();
+    
+    // Obtener usuario
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    const userDoc = await userRef.get();
+    
+    let currentCredits = 0;
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      currentCredits = userData.cvCredits || 0;
+    } else {
+      // Crear usuario si no existe
+      await registerOrUpdateUser(userId, { cvCredits: 0 });
+    }
+    
+    // Actualizar créditos
+    const newCredits = currentCredits + credits;
+    await userRef.update({
+      cvCredits: newCredits,
+      lastCreditUpdate: new Date()
+    });
+    
+    logger.info(`Added ${credits} CV credits for user ${userId}. New total: ${newCredits}`);
+    return newCredits;
+  } catch (error) {
+    logger.error(`Error adding CV credits: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Usar un crédito de CV
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<boolean>} True si se pudo usar un crédito
+ */
+const useCVCredit = async (userId) => {
+  try {
+    const credits = await getCVCredits(userId);
+    
+    if (credits <= 0) {
+      return false; // No hay créditos disponibles
+    }
+    
+    const db = firebaseConfig.getFirestore();
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    
+    await userRef.update({
+      cvCredits: credits - 1,
+      lastCreditUsed: new Date()
+    });
+    
+    logger.info(`Used 1 CV credit for user ${userId}. Remaining: ${credits - 1}`);
+    return true;
+  } catch (error) {
+    logger.error(`Error using CV credit: ${error.message}`);
+    return false;
   }
 };
 
@@ -188,5 +297,8 @@ module.exports = {
   recordCVAnalysis,
   hasUserAnalyzedCV,
   getCVAnalysisCount,
-  shouldUserPayForCVAnalysis
+  shouldUserPayForCVAnalysis,
+  getCVCredits,
+  addCVCredits,
+  useCVCredit
 }; 

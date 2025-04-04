@@ -238,6 +238,54 @@ class WhatsAppBot {
     }
   }
 
+  /**
+   * Envía un mensaje interactivo con lista de opciones
+   * @param {string} to - Número de teléfono del destinatario
+   * @param {string} headerText - Texto del encabezado
+   * @param {string} bodyText - Texto principal del mensaje
+   * @param {string} buttonText - Texto del botón para abrir la lista
+   * @param {Array} sections - Array de secciones con opciones
+   * @returns {Promise<Object>} Respuesta de la API
+   */
+  async sendListMessage(to, headerText, bodyText, buttonText, sections) {
+    try {
+      const payload = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to,
+        type: 'interactive',
+        interactive: {
+          type: 'list',
+          header: {
+            type: 'text',
+            text: headerText
+          },
+          body: {
+            text: bodyText
+          },
+          footer: {
+            text: 'Selecciona un paquete para continuar'
+          },
+          action: {
+            button: buttonText,
+            sections: sections
+          }
+        }
+      };
+
+      const response = await axios.post(
+        `${this.apiUrl}/messages`,
+        payload,
+        { headers: this.headers }
+      );
+      logger.info(`Interactive list message sent successfully to ${to}`);
+      return response.data;
+    } catch (error) {
+      logger.error(`Error sending interactive list message: ${error.message}`);
+      throw error;
+    }
+  }
+
   async handleWebhook(body) {
     try {
       // Validar que el body tenga la estructura esperada

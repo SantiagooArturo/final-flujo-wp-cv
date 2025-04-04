@@ -877,6 +877,84 @@ const generateMockCVAnalysis = () => {
   };
 };
 
+/**
+ * Analiza una imagen utilizando el modelo de visión de OpenAI
+ * @param {string} imageBase64 - Imagen en formato base64
+ * @param {string} systemPrompt - Instrucciones para el sistema
+ * @param {string} userPrompt - Prompt del usuario
+ * @returns {Promise<string>} - Análisis de la imagen
+ */
+const analyzeImage = async (imageBase64, systemPrompt, userPrompt) => {
+  if (!openai) {
+    logger.error('OpenAI no está inicializado. Usa initializeOpenAI primero.');
+    throw new Error('OpenAI no está inicializado');
+  }
+
+  try {
+    logger.info('Analizando imagen con OpenAI Vision');
+    
+    // Crear el contenido del mensaje con la imagen
+    const imageUrl = `data:image/jpeg;base64,${imageBase64}`;
+    
+    // Intentar primero con gpt-4o
+    try {
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: userPrompt },
+              {
+                type: "image_url",
+                image_url: { url: imageUrl }
+              }
+            ]
+          }
+        ],
+        max_tokens: 800
+      });
+
+      logger.info('Análisis de imagen completado con éxito');
+      return response.choices[0].message.content.trim();
+    } catch (error) {
+      // Si falla con gpt-4o, intentar con un modelo alternativo que soporte visión
+      logger.warn(`Error usando gpt-4o para análisis de imagen: ${error.message}. Intentando con modelo alternativo.`);
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4-vision-preview",  // Modelo alternativo que soporta visión
+        messages: [
+          {
+            role: "system",
+            content: systemPrompt
+          },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: userPrompt },
+              {
+                type: "image_url",
+                image_url: { url: imageUrl }
+              }
+            ]
+          }
+        ],
+        max_tokens: 800
+      });
+
+      logger.info('Análisis de imagen completado con modelo alternativo');
+      return response.choices[0].message.content.trim();
+    }
+  } catch (error) {
+    logger.error(`Error al analizar imagen con OpenAI: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
   initializeOpenAI,
   generateImprovedText,
@@ -887,5 +965,6 @@ module.exports = {
   enhanceCVAnalysis,
   analyzeCV,
   generateMockCVAnalysis,
-  generateRealisticMockAnalysis
+  generateRealisticMockAnalysis,
+  analyzeImage
 }; 
