@@ -727,7 +727,7 @@ const handleVideo = async (from, video) => {
     const session = await sessionService.getOrCreateSession(from);
     
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
-      await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta en video.');
+      //await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta en video.');
       return;
     }
 
