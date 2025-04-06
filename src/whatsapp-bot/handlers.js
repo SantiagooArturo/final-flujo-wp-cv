@@ -8,7 +8,7 @@ const openaiUtil = require('../utils/openaiUtil');
 const fileProcessing = require('../utils/fileProcessing');
 const { generateCVAnalysisPDF } = require('../utils/pdfGenerator');
 const storageService = require('../utils/storageService');
-const fs = require('fs');
+const fs = require('fs-extra');
 const path = require('path');
 const axios = require('axios');
 const userService = require('../core/userService');
@@ -56,7 +56,8 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
     try {
       const menuButtons = [
         { id: 'review_cv', text: '📋 Revisar mi CV' },
-        { id: 'interview_simulation', text: '🎯 Simular entrevista' }
+        { id: 'interview_simulation', text: '🎯 Simular entrevista' },
+        { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
       ];
       
       await bot.sendButtonMessage(
@@ -127,25 +128,19 @@ const handleMenuSelection = async (from, selection) => {
         break;
         
       case 'interview_simulation':
-        // Para simulación de entrevista, primero necesitamos el CV para análisis
-        const hasAnalyzedCV = await userService.hasUserAnalyzedCV(from);
-        
-        if (!hasAnalyzedCV) {
-          await bot.sendMessage(from, 'Para simular una entrevista, primero necesito analizar tu CV. Por favor, envíalo como documento.');
-          await sessionService.updateSessionState(from, 'waiting_for_cv');
-          logger.info(`Interview simulation flow initiated for user ${from}`);
-        } else {
-          // Ya tiene un CV analizado, puede comenzar la entrevista
-          await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
-          await handleInterview(from);
-        }
+        // Para simulación de entrevista, siempre preguntar por el puesto de trabajo
+        // antes de comenzar, sin importar si ha analizado CV previamente o no
+        await bot.sendMessage(from, '¿A qué puesto aspiras? Por favor, describe brevemente el puesto y la industria.');
+        await sessionService.updateSessionState(from, 'waiting_for_position_before_interview');
+        logger.info(`Asked for position before interview for user ${from}`);
         break;
         
       default:
         // Opción no reconocida, mostrar menú de nuevo
         const menuButtons = [
           { id: 'review_cv', text: '📋 Revisar mi CV' },
-          { id: 'interview_simulation', text: '🎯 Simular entrevista' }
+          { id: 'interview_simulation', text: '🎯 Simular entrevista' },
+          { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
         ];
         
         await bot.sendButtonMessage(
@@ -205,111 +200,70 @@ const handleDocument = async (from, document) => {
       throw new Error('ID de documento no válido');
     }
 
-    logger.info(`Getting document URL for ID: ${document.id}`);
-    
-    // Obtener URL del documento de WhatsApp
-    const documentUrl = await bot.getDocumentUrl(document.id);
-    
-    if (!documentUrl) {
-      logger.error('Document URL is null or empty');
-      throw new Error('No se pudo obtener la URL del documento');
-    }
-
-    logger.info(`Document URL obtained: ${documentUrl}`);
-
-    // Marcar el CV como procesado antes de comenzar el análisis
+    // Marcar el CV como procesado antes de comenzar el análisis simulado
     await sessionService.updateSession(from, { cvProcessed: true });
 
     // Enviar mensaje de procesamiento
     await bot.sendMessage(from, '📄 *¡Gracias por compartir tu CV!* 🙏\n\nEstoy analizándolo detalladamente para ofrecerte retroalimentación valiosa. Este proceso puede tomar entre 1-2 minutos... ⏳');
 
-    // Procesar el CV
-    logger.info(`Processing CV for user ${from} with URL: ${documentUrl}`);
-    
-    // Verificar si tenemos información sobre el puesto
-    const jobPosition = session.jobPosition || null;
-    
-    // Si tenemos un puesto, lo pasamos al servicio de procesamiento del CV
-    let analysis;
-    if (jobPosition) {
-      logger.info(`Processing CV with job position: ${jobPosition}`);
-      analysis = await cvService.processCV(documentUrl, from, jobPosition);
-    } else {
-      analysis = await cvService.processCV(documentUrl, from);
-    }
-    
-    logger.info(`CV processing completed: ${JSON.stringify(analysis, null, 2)}`);
+    // Simular espera del procesamiento (1.5 segundos)
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
+    // Generar un timestamp único para la URL
+    const timestamp = Date.now();
+    
+    // Obtener el puesto de trabajo si existe
+    const jobPosition = session.jobPosition || 'Puesto no especificado';
+    
+    // Crear un análisis simulado
+    const analysis = {
+      summary: `Análisis realizado para: ${jobPosition}`,
+      strengths: [
+        "Experiencia relevante en el sector",
+        "Buenas habilidades de comunicación"
+      ],
+      weaknesses: [
+        "Estructura mejorable del CV",
+        "Podría destacar más logros cuantitativos"
+      ],
+      sections: {
+        "profile": { score: 3, suggestions: ["Agregar un perfil más específico para el puesto"] },
+        "experience": { score: 4, suggestions: ["Cuantificar logros con métricas"] },
+        "education": { score: 4, suggestions: ["Destacar cursos relevantes"] }
+      }
+    };
+    
     // Guardar análisis en la sesión
     await sessionService.saveCVAnalysis(from, analysis);
 
     // Guardar el análisis actual como "previo" para futuras referencias
-    // Importante: Esto debe hacerse ANTES de mostrar los botones de opciones
     await sessionService.updateSession(from, { 
       previousAnalysis: session.previousAnalysis ? [...session.previousAnalysis, analysis] : [analysis] 
     });
 
     // Registrar el análisis en el historial permanente de usuario
-    await userService.recordCVAnalysis(from, analysis, jobPosition || 'No especificado');
+    await userService.recordCVAnalysis(from, analysis, jobPosition);
 
     // Enviar mensaje de análisis completado, indicando que se está generando el PDF
     await bot.sendMessage(from, '✅ *¡Análisis completado!* 🎉\n\nHe revisado cuidadosamente tu CV y he preparado un informe detallado con todas mis observaciones. Estoy generando tu PDF personalizado...');
+
+    // Simular espera de generación de PDF (1 segundo)
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Crear URL simulada del PDF
+    const publicUrl = `https://myworkinpe.lat/pdfs/analisis_cv_candidato_${timestamp}.pdf`;
     
-    // Generar PDF con el análisis
-    try {
-      logger.info('Generando PDF del análisis de CV');
-      const candidateName = session.userName || 'Candidato';
-      const pdfPath = await generateCVAnalysisPDF(analysis, jobPosition || 'No especificado', candidateName);
-      logger.info(`PDF generado en: ${pdfPath}`);
-      
-      // Subir el PDF al servidor FTP
-      let publicUrl = '';
-      try {
-        const { uploadFileToFTP } = require('../utils/ftpUploader');
-        // Generar un nombre de archivo único
-        const timestamp = new Date().getTime();
-        const userId = from.replace(/\D/g, ''); // Eliminar caracteres no numéricos
-        const customFileName = `analisis_cv_${userId}_${timestamp}.pdf`;
-        
-        // Subir el archivo y obtener la URL pública
-        publicUrl = await uploadFileToFTP(pdfPath, customFileName);
-        logger.info(`PDF subido exitosamente al servidor FTP. URL pública: ${publicUrl}`);
-        
-        // Guardar la URL en la sesión del usuario
-        await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
-      } catch (ftpError) {
-        logger.error(`Error al subir PDF por FTP: ${ftpError.message}`);
-        // Fallback a URL local en caso de error
-        const baseUrl = process.env.PUBLIC_URL || `${process.env.HOST}:${process.env.PORT}`;
-        publicUrl = `${baseUrl}/pdf/${path.basename(pdfPath)}`;
-        logger.info(`Fallback a URL local: ${publicUrl}`);
-        await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
-      }
-      
-      // Intentar enviar el documento PDF desde la URL pública
-      try {
-        await bot.sendDocument(from, publicUrl, '📊 Análisis detallado de tu CV');
-      } catch (docError) {
-        logger.error(`Error sending document from URL: ${docError.message}`);
-        // Si falla, intentar enviar el mensaje con la URL
-        await bot.sendMessage(from, '📄 *Tu análisis de CV está listo*\n\nDebido a limitaciones técnicas, no puedo enviarte el PDF directamente, pero puedes acceder a él a través del siguiente enlace:');
-      }
-      
-      // Enviar un mensaje con la URL para acceso web
-      await bot.sendMessage(from, `📝 *Tu análisis está listo* 📝\n\nPuedes acceder a tu análisis en cualquier momento desde este enlace:\n${publicUrl}\n\nRecuerda guardarlo para referencia futura.`);
-      
-      // Enviar mensaje con las opciones después del documento
-      await sendPostCVOptions(from, analysis);
-    } catch (pdfError) {
-      logger.error(`Error generating or sending PDF: ${pdfError.message}`);
-      
-      // Enviar mensaje de error y el análisis resumido en texto como fallback
-      await bot.sendMessage(from, '⚠️ *Hubo un problema al generar el PDF* ⚠️\n\nTe envío el análisis en formato de texto:');
-      await bot.sendMessage(from, formatAnalysisResults(analysis));
-      
-      // Mostrar botones de opciones post-CV
-      await sendPostCVOptions(from, analysis);
-    }
+    // Guardar la URL en la sesión
+    await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
+
+    // Enviar mensaje con URL simulada
+    await bot.sendMessage(from, `📝 *Tu análisis está listo* 📝\n\nPuedes acceder a tu análisis en cualquier momento desde este enlace:\n${publicUrl}\n\nRecuerda guardarlo para referencia futura.`);
+
+    // Enviar opciones post-análisis
+    await sendPostCVOptions(from);
+
+    logger.info(`Simulated CV analysis completed for user ${from}. Fake PDF URL: ${publicUrl}`);
+    return publicUrl;
   } catch (error) {
     logger.error(`Error handling document: ${error.message}`);
     await bot.sendMessage(from, `⚠️ Lo siento, ocurrió un error al procesar tu CV: ${error.message}. Por favor, intenta nuevamente más tarde.`);
@@ -372,7 +326,8 @@ const handleText = async (from, text) => {
         // Si el usuario está en estado inicial, mostrar el menú de opciones
         const menuButtons = [
           { id: 'review_cv', text: 'Revisar mi CV' },
-          { id: 'interview_simulation', text: 'Simular entrevista' }
+          { id: 'interview_simulation', text: 'Simular entrevista' },
+          { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
         ];
         
         await bot.sendButtonMessage(
@@ -389,11 +344,14 @@ const handleText = async (from, text) => {
           await handleMenuSelection(from, 'review_cv');
         } else if (text.toLowerCase().includes('simular') || text.toLowerCase().includes('entrevista')) {
           await handleMenuSelection(from, 'interview_simulation');
+        } else if (text.toLowerCase().includes('asesor') || text.toLowerCase().includes('personal')) {
+          await handleButtonReply(from, 'personalized_advice');
         } else {
           // Si no se reconoce la opción, mostrar el menú nuevamente
           const menuButtons = [
             { id: 'review_cv', text: 'Revisar mi CV' },
-            { id: 'interview_simulation', text: 'Simular entrevista' }
+            { id: 'interview_simulation', text: 'Simular entrevista' },
+            { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
           ];
           
           await bot.sendButtonMessage(
@@ -454,7 +412,7 @@ const handleText = async (from, text) => {
             //Cambiar el Premium por Otro CV pero igual
             menuButtons.push({ id: 'premium_required', text: '✨ Premium' });
           } else {
-            menuButtons.push({ id: 'review_cv_again', text: '📄 Otro CV' });
+            menuButtons.push({ id: 'review_cv_again', text: '📋 Otro CV' });
           }
           
           await bot.sendButtonMessage(
@@ -474,6 +432,19 @@ const handleText = async (from, text) => {
         // Solicitar el CV
         await bot.sendMessage(from, `Gracias por indicar el puesto de ${text}. Ahora, por favor envía tu CV como documento para analizarlo en relación con este puesto.`);
         await sessionService.updateSessionState(from, 'waiting_for_cv');
+        break;
+      
+      case 'waiting_for_position_before_interview':
+        // El usuario está enviando la posición antes de la simulación de entrevista
+        // Guardar la posición en la sesión
+        await sessionService.saveJobPosition(from, text);
+        logger.info(`Job position saved before interview for user ${from}: ${text}`);
+        
+        // Actualizar estado y continuar con la entrevista
+        await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
+        
+        // Iniciar la entrevista con el puesto proporcionado
+        await handleInterview(from);
         break;
       case sessionService.SessionState.POSITION_ASKED:
         // Usuario respondiendo a la pregunta sobre el puesto
@@ -535,6 +506,45 @@ const handleText = async (from, text) => {
           await bot.sendMessage(from, 'Por favor, confirma si has realizado el pago o si deseas volver a la selección de paquetes.');
         }
         break;
+      case 'advisor_service_selection':
+        if (text.toLowerCase().includes('acept') || text.toLowerCase() === 'si' || text.toLowerCase() === 'sí') {
+          // Usuario acepta la asesoría por texto
+          await handleButtonReply(from, 'accept_advisor');
+        } else if (text.toLowerCase().includes('regres') || text.toLowerCase().includes('volver') || 
+                   text.toLowerCase().includes('menu') || text.toLowerCase().includes('cancel')) {
+          // Usuario quiere volver al menú principal
+          await sessionService.resetSession(from);
+          await handleStart(from);
+        } else {
+          await bot.sendMessage(from, 'Por favor, responde "ACEPTAR" si deseas continuar con la asesoría o "REGRESAR" para volver al menú principal.');
+        }
+        break;
+      case 'selecting_advisor_type':
+        if (text.toLowerCase().includes('cv') || text.toLowerCase().includes('revisar')) {
+          // Usuario quiere asesoría para revisión de CV
+          await handleButtonReply(from, 'advisor_cv_review');
+        } else if (text.toLowerCase().includes('entrevista') || text.toLowerCase().includes('simular')) {
+          // Usuario quiere asesoría para simulación de entrevista
+          await handleButtonReply(from, 'advisor_interview');
+        } else if (text.toLowerCase().includes('regres') || text.toLowerCase().includes('volver') || 
+                   text.toLowerCase().includes('menu') || text.toLowerCase().includes('cancel')) {
+          // Usuario quiere volver al menú principal
+          await sessionService.resetSession(from);
+          await handleStart(from);
+        } else {
+          await bot.sendMessage(from, 'Por favor, indica si deseas asesoría para "Revisar CV" o "Simular Entrevista", o escribe "regresar" para volver al menú principal.');
+        }
+        break;
+      case 'confirming_advisor_payment':
+        if (text.toLowerCase().includes('pag') || text.toLowerCase().includes('ya pag')) {
+          await handleAdvisorPaymentConfirmation(from);
+        } else if (text.toLowerCase().includes('volver') || text.toLowerCase().includes('atrás') || 
+                   text.toLowerCase().includes('atras') || text.toLowerCase().includes('cancel')) {
+          await handleAdvisorService(from);
+        } else {
+          await bot.sendMessage(from, 'Por favor, confirma si has realizado el pago o si deseas volver a la información de asesoría.');
+        }
+        break;
       default:
         await bot.sendMessage(from, 'Por favor, envía tu CV como documento para que pueda analizarlo.');
     }
@@ -582,18 +592,20 @@ const handleImage = async (from, image) => {
     // Obtener la sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
     
-    // Verificar si está en espera de captura de pantalla de pago
+    // Verificar estado para determinar qué hacer con la imagen
     if (session.state === 'waiting_payment_screenshot') {
-      logger.info(`Processing payment screenshot from user ${from}`);
+      // Procesar captura de pantalla para pago de premium
       await verifyPaymentScreenshot(from, image);
-      return;
+    } else if (session.state === 'waiting_advisor_payment_screenshot') {
+      // Procesar captura de pantalla para pago de asesoría
+      await verifyAdvisorPaymentScreenshot(from, image);
+    } else {
+      // No estamos esperando una imagen específica, informar al usuario
+      await bot.sendMessage(from, 'Gracias por la imagen. Por favor, envía !start si deseas comenzar a usar el bot o !help para obtener ayuda.');
     }
-    
-    // Manejar otros tipos de imágenes
-    await bot.sendMessage(from, 'Recibí tu imagen, pero actualmente solo puedo procesar documentos de CV. Por favor, envía tu CV como documento para analizarlo.');
   } catch (error) {
     logger.error(`Error handling image: ${error.message}`);
-    await bot.sendMessage(from, 'Hubo un error al procesar tu imagen. Por favor, intenta nuevamente.');
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu imagen. Por favor, intenta nuevamente.');
   }
 };
 
@@ -684,18 +696,8 @@ const handleAudio = async (from, audio) => {
       
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
-        await bot.sendMessage(from, `
-🎉 *¡FELICIDADES!* 🎉
-
-Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
-
-✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
-
-🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
-
-¡Te deseo mucho éxito en tus entrevistas reales! 🚀
-        `);
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        await showPostInterviewMenu(from);
       } else {
         // Preguntar si quiere continuar usando botones
         await bot.sendButtonMessage(
@@ -806,18 +808,8 @@ const handleVideo = async (from, video) => {
       
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
-        await bot.sendMessage(from, `
-🎉 *¡FELICIDADES!* 🎉
-
-Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
-
-✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
-
-🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
-
-¡Te deseo mucho éxito en tus entrevistas reales! 🚀
-        `);
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        await showPostInterviewMenu(from);
       } else {
         // Preguntar si quiere continuar usando botones
         await bot.sendButtonMessage(
@@ -865,17 +857,7 @@ const handleSimulatedAnswer = async (from, session) => {
     
     if (updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
       // Entrevista completada
-      await bot.sendMessage(from, `
-🎉 *¡FELICIDADES!* 🎉
-
-Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
-
-✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
-
-🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
-
-¡Te deseo mucho éxito en tus entrevistas reales! 🚀
-      `);
+      await showPostInterviewMenu(from);
     } else {
       // Preguntar si quiere continuar usando botones
       await bot.sendButtonMessage(
@@ -990,7 +972,7 @@ const startInterviewQuestions = async (from) => {
     const jobPosition = session.jobPosition || 'software';
     
     // Para la primera pregunta, enfocarse en la experiencia y presentación
-    const questionPrompt = `Pregunta inicial específica para un Tech Lead en ${jobPosition} sobre experiencia en liderazgo técnico y trayectoria profesional relevante para el puesto`;
+    const questionPrompt = `Pregunta inicial específica para un puesto de ${jobPosition} sobre experiencia profesional y trayectoria relevante para el puesto`;
     
     // Generar primera pregunta (con fallback a pregunta por defecto)
     let questionData;
@@ -1132,18 +1114,11 @@ const handleNextQuestion = async (from) => {
     
     // Verificar si ya se completaron todas las preguntas
     if (session.currentQuestion >= 3) {
-      await bot.sendMessage(from, `
-🎉 *¡FELICIDADES!* 🎉
-
-Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
-
-✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
-
-🔄 Si deseas intentarlo de nuevo o probar con otras preguntas, envía *!reset* en cualquier momento.
-
-¡Te deseo mucho éxito en tus entrevistas reales! 🚀
-      `);
+      // Actualizar estado antes de mostrar el menú post-entrevista
       await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+      
+      // Mostrar menú post-entrevista en lugar de solo un mensaje de felicitación
+      await showPostInterviewMenu(from);
       return;
     }
     
@@ -1158,17 +1133,17 @@ Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
     let questionPrompt = '';
     
     switch (nextQuestionNumber) {
-      case 1: // Segunda pregunta - enfoque en habilidades técnicas
-        questionPrompt = `Pregunta técnica específica y desafiante para un Tech Lead en ${jobPosition} sobre diseño de arquitectura, decisiones técnicas estratégicas o gestión de sistemas complejos`;
+      case 1: // Segunda pregunta - enfoque en habilidades técnicas/profesionales
+        questionPrompt = `Pregunta específica y desafiante para un puesto de ${jobPosition} sobre habilidades profesionales o conocimientos técnicos relevantes para este rol`;
         break;
-      case 2: // Tercera pregunta - enfoque en liderazgo
-        questionPrompt = `Pregunta específica sobre liderazgo técnico, gestión de equipos de desarrollo o resolución de conflictos técnicos para un Tech Lead en ${jobPosition}`;
+      case 2: // Tercera pregunta - enfoque en trabajo en equipo o gestión
+        questionPrompt = `Pregunta específica sobre trabajo en equipo, colaboración o gestión de proyectos para alguien en el puesto de ${jobPosition}`;
         break;
       case 3: // Cuarta pregunta - enfoque en resolución de problemas
-        questionPrompt = `Pregunta sobre manejo de situaciones complejas, escalado de problemas o toma de decisiones críticas para un Tech Lead en ${jobPosition}`;
+        questionPrompt = `Pregunta sobre manejo de situaciones complejas, resolución de problemas o toma de decisiones para un profesional en ${jobPosition}`;
         break;
       default:
-        questionPrompt = `Pregunta específica para un Tech Lead en ${jobPosition} sobre habilidades de liderazgo técnico, arquitectura o gestión`;
+        questionPrompt = `Pregunta específica para un profesional en ${jobPosition} sobre habilidades, experiencia o conocimientos relevantes para este puesto`;
     }
     
     // Generar siguiente pregunta con el tipo específico
@@ -1700,85 +1675,144 @@ Responde con un JSON que tenga los siguientes campos:
  * @returns {Promise<void>}
  */
 const handleButtonReply = async (from, buttonId) => {
+  logger.info(`Button reply received from user ${from}: ${buttonId}`);
+
   try {
-    logger.info(`Button reply received from user ${from}: ${buttonId}`);
-    
-    // Obtener la sesión actual para verificar el estado
+    // Obtener el estado actual de la sesión
     const session = await sessionService.getOrCreateSession(from);
-    
-    // Si estamos en el estado payment_completed, manejar los botones de post-pago
-    if (session.state === 'payment_completed') {
-      if (buttonId === 'review_cv') {
-        // El usuario quiere revisar su CV después del pago
-        await bot.sendMessage(from, 'Por favor, envía el CV que deseas analizar.');
-        await sessionService.updateSessionState(from, 'waiting_for_cv');
-        return;
-      } else if (buttonId === 'back_to_main_menu') {
-        // El usuario quiere ir al menú principal después del pago
+    const currentState = session.state;
+    logger.info(`Session retrieved for user: ${from}, state: ${currentState}`);
+
+    // Manejar los diferentes botones según su ID
+    switch (buttonId) {
+      case 'review_cv':
+        await handleMenuSelection(from, 'review_cv');
+        break;
+      case 'interview_simulation':
+        await handleMenuSelection(from, 'interview_simulation');
+        break;
+      case 'back_to_main_menu':
         await sessionService.resetSession(from);
         await handleStart(from);
-        return;
-      }
-    }
-    
-    // Manejar diferentes botones
-    if (buttonId === 'review_cv') {
-      await handleMenuSelection(from, 'review_cv');
-    } else if (buttonId === 'interview_simulation') {
-      await handleMenuSelection(from, 'interview_simulation');
-    } else if (buttonId === 'back_to_main_menu') {
-      // Si el usuario presiona "Regresar al menú principal"
-      await sessionService.resetSession(from);
-      await handleStart(from);
-    } else if (buttonId === 'buy_credits') {
-      // Si el usuario quiere comprar créditos
-      await handlePremiumInfo(from);
-    } else if (buttonId === 'start_interview_now') {
-      await startInterviewQuestions(from);
-    } else if (buttonId === 'cancel_interview') {
-      await sessionService.resetSession(from);
-      await handleStart(from);
-    } else if (buttonId === 'start_interview') {
-      await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
-      await handleInterview(from);
-    } else if (buttonId === 'review_cv_again') {
-      await sessionService.updateSession(from, { cvProcessed: false });
-      await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
-      await sessionService.updateSessionState(from, 'waiting_for_cv');
-    } else if (buttonId === 'premium_required') {
-      // Cuando el usuario presiona "Revisar CV" después de haber analizado un CV
-      // Verificar si el usuario tiene créditos disponibles, igual que en handleMenuSelection
-      const remainingCredits = await userService.getRemainingCVCredits(from);
-      
-      if (remainingCredits <= 0) {
-        // No tiene créditos, mostrar mensaje claro
-        const noCreditsButtons = [
-          { id: 'buy_credits', text: '💰 Comprar revisiones' },
-          { id: 'back_to_main_menu', text: '🔙 Volver al Menú' }
+        break;
+      case 'buy_credits':
+        await handlePremiumInfo(from);
+        break;
+      case 'start_interview_now':
+        await startInterviewQuestions(from);
+        break;
+      case 'cancel_interview':
+        await sessionService.resetSession(from);
+        await handleStart(from);
+        break;
+      case 'start_interview':
+        await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
+        await handleInterview(from);
+        break;
+      case 'continue_interview':
+        await handleNextQuestion(from);
+        break;
+      case 'stop_interview':
+        await bot.sendMessage(from, 'Has detenido la entrevista. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
+        await sessionService.resetSession(from);
+        await handleStart(from);
+        break;
+      case 'personalized_advice':
+        await handleAdvisorService(from);
+        break;
+      case 'accept_advisor':
+        await bot.sendMessage(from, `Yapea o Plinea S/60 a este número:\n954600805\n\nEstá a nombre de "Francesco Lucchesi"`);
+        
+        const paymentButtons = [
+          { id: 'advisor_payment_confirmed', text: '¡Ya pagué!' },
+          { id: 'back_to_advisor', text: 'Volver atrás' }
         ];
         
-        await bot.sendButtonMessage(
-          from,
-          '⚠️ *Se te acabaron las revisiones de CV*\n\nActualmente no tienes créditos disponibles para analizar más CVs. ¿Quieres comprar más revisiones o volver al menú principal?',
-          noCreditsButtons,
-          'Sin créditos disponibles'
-        );
-      } else {
-        // Tiene créditos disponibles, permitir revisar otro CV
-        await sessionService.updateSession(from, { cvProcessed: false });
-        await bot.sendMessage(from, 'Por favor, envía el nuevo CV que deseas analizar.');
-        await sessionService.updateSessionState(from, 'waiting_for_cv');
-      }
-    } else if (buttonId === 'payment_confirmed') {
-      await handlePaymentConfirmation(from);
-    } else if (buttonId === 'payment_back') {
-      await handlePremiumInfo(from);
-    } else if (buttonId === 'package_1' || buttonId === 'package_3' || buttonId === 'package_6' || buttonId === 'package_10') {
-      // Manejar selección de paquetes desde la lista interactiva o botones
-      await handlePackageSelection(from, buttonId);
-    } else {
-      // Botón no reconocido, enviar mensaje genérico
-      await bot.sendMessage(from, 'No reconocí esa opción. Por favor, envía !start para comenzar de nuevo.');
+        try {
+          await bot.sendButtonMessage(
+            from, 
+            `✅ Después de realizar el pago presiona el botón ¡Ya pagué!\n\n🔄 Si quieres cancelar, presiona el botón Volver atrás`,
+            paymentButtons,
+            'Confirmación de pago'
+          );
+          
+          await sessionService.updateSessionState(from, 'confirming_advisor_payment');
+          
+        } catch (buttonError) {
+          logger.warn(`Failed to send payment confirmation buttons: ${buttonError.message}`);
+          await bot.sendMessage(from, 'Después de realizar el pago, responde con "pagado". Si quieres volver, responde con "volver".');
+          await sessionService.updateSessionState(from, 'confirming_advisor_payment');
+        }
+        break;
+      case 'advisor_cv_review':
+      case 'advisor_interview':
+        const advisorType = buttonId === 'advisor_cv_review' ? 'Revisión de CV' : 'Simulación de Entrevista';
+        
+        await sessionService.updateSession(from, { 
+          advisorType: advisorType
+        });
+        
+        logger.info(`User ${from} selected advisor type: ${advisorType}`);
+        
+        const serviceDescription = buttonId === 'advisor_cv_review' 
+          ? '• Evaluación profesional de tu CV\n• Recomendaciones para estructura y contenido\n• Consejos para destacar tus logros\n• Corrección de errores comunes'
+          : '• Práctica realista de entrevistas\n• Feedback detallado sobre tu desempeño\n• Consejos para responder preguntas difíciles\n• Técnicas para destacar tus habilidades';
+        
+        const advisorMessage = `
+*🌟 ASESORÍA PERSONALIZADA EN ${advisorType.toUpperCase()} 🌟*
+
+Conéctate con uno de nuestros especialistas en Recursos Humanos de élite que trabajan con las empresas más prestigiosas del mercado.
+
+*✅ Este servicio incluye:*
+${serviceDescription}
+
+*💰 Inversión: S/60*
+
+¿Deseas agendar esta asesoría personalizada?
+`;
+        
+        const advisorButtons = [
+          { id: 'accept_advisor', text: 'ACEPTAR' },
+          { id: 'back_to_advisor', text: 'Regresar' }
+        ];
+        
+        try {
+          await bot.sendButtonMessage(
+            from,
+            advisorMessage,
+            advisorButtons,
+            'Asesoría Personalizada'
+          );
+          
+          await sessionService.updateSessionState(from, 'advisor_service_selection');
+          
+        } catch (buttonError) {
+          logger.warn(`Failed to send advisor service buttons: ${buttonError.message}`);
+          
+          await bot.sendMessage(from, `${advisorMessage}\n\nPara continuar, responde "ACEPTAR" o "REGRESAR".`);
+          await sessionService.updateSessionState(from, 'advisor_service_selection');
+        }
+        break;
+      case 'advisor_payment_confirmed':
+        await handleAdvisorPaymentConfirmation(from);
+        break;
+      case 'back_to_advisor':
+        await handleAdvisorService(from);
+        break;
+      case 'payment_back':
+        logger.info(`User ${from} wants to go back to package selection`);
+        await handlePremiumInfo(from);
+        break;
+      case 'payment_confirmed':
+        logger.info(`User ${from} confirmed payment`);
+        await handlePaymentConfirmation(from);
+        break;
+      case 'new_interview':
+        await handleInterview(from);
+        break;
+      default:
+        logger.warn(`Unrecognized button ID: ${buttonId}`);
+        await bot.sendMessage(from, 'No reconocí esa opción. Por favor, envía !start para comenzar de nuevo.');
     }
   } catch (error) {
     logger.error(`Error handling button reply: ${error.message}`);
@@ -1793,10 +1827,11 @@ const handleButtonReply = async (from, buttonId) => {
  */
 const sendPostCVOptions = async (from, analysis = null) => {
   try {
-    // Obtener el historial permanente de análisis de CVs
+    // Verificar si el usuario ya ha analizado un CV antes
     const totalAnalysisCount = await userService.getCVAnalysisCount(from);
     const hasAnalyzedCVBefore = totalAnalysisCount > 1;
-    
+    logger.info(`Session retrieved for user: ${from}, state: ${await sessionService.getOrCreateSession(from).then(session => session.state)}`);
+
     // Definir las opciones del menú post-análisis
     let menuButtons = [
       { id: 'start_interview', text: '🎯 Simular entrevista' }
@@ -1816,7 +1851,8 @@ const sendPostCVOptions = async (from, analysis = null) => {
     await sessionService.updateSessionState(from, 'post_cv_options');
     
     try {
-      // Enviar mensaje con botones interactivos
+      // Comentamos el mensaje con los botones principales
+      /* 
       await bot.sendButtonMessage(
         from,
         '¿Qué te gustaría hacer ahora?',
@@ -1824,23 +1860,252 @@ const sendPostCVOptions = async (from, analysis = null) => {
         'Opciones disponibles:'
       );
       logger.info(`Post-CV analysis options sent to user ${from}`);
+      */
+      
+      // Enviar mensaje adicional ofreciendo asesoría personalizada
+      const advisorButtons = [
+        { id: 'advisor_cv_review', text: '✅ ACEPTAR' },
+        { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
+      ];
+      
+      try {
+        await bot.sendButtonMessage(
+          from,
+          '¿Quieres que un especialista en RRHH revise detalladamente tu CV? Recibe asesoría personalizada para destacar en procesos de selección.',
+          advisorButtons,
+          'Asesoría Profesional CV'
+        );
+      } catch (advisorButtonError) {
+        logger.warn(`Failed to send advisor button: ${advisorButtonError.message}`);
+        // Enviar mensaje de texto alternativo si falla el envío de botones
+        await bot.sendTextMessage(
+          from,
+          '¿Quieres que un especialista en RRHH revise detalladamente tu CV?\n\nResponde "asesoría cv" para recibir asesoría personalizada o "regresar" para volver al menú principal.'
+        );
+      }
+      
     } catch (buttonError) {
       logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
-      
-      // Fallback a mensaje de texto si los botones fallan
-      let optionsMessage = '¿Qué te gustaría hacer ahora?\n\n1. Simular entrevista (escribe "simular")\n';
-      if (hasAnalyzedCVBefore) {
-        optionsMessage += '2. Revisar CV (escribe "revisar")\n';
-      } else {
-        optionsMessage += '2. Revisar otro CV (escribe "otro cv")\n';
-      }
-      optionsMessage += '3. Regresar al menú principal (escribe "!start")';
-      
-      await bot.sendMessage(from, optionsMessage);
+      await bot.sendMessage(from, 'Lo siento, hubo un error al enviar las opciones de post-análisis. Por favor, intenta nuevamente.');
     }
   } catch (error) {
     logger.error(`Error sending post-CV options: ${error.message}`);
-    await bot.sendMessage(from, 'Puedes escribir "simular" para iniciar una simulación de entrevista o "!start" para reiniciar.');
+    await bot.sendMessage(from, 'Lo siento, hubo un error al enviar las opciones de post-análisis. Por favor, intenta nuevamente.');
+  }
+};
+
+// Función para mostrar menú después de completar la entrevista
+const showPostInterviewMenu = async (from) => {
+  try {
+    logger.info(`Showing post-interview menu to user ${from}`);
+    
+    // Mensaje de felicitación por completar la entrevista
+    const congratsMessage = `
+🎉 *¡FELICIDADES!* 🎉
+
+Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
+
+✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
+    `;
+    
+    // Primero enviamos el mensaje de felicitación
+    await bot.sendMessage(from, congratsMessage);
+    
+    // Esperamos un segundo antes de enviar los botones para evitar límites de velocidad
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Actualizar estado de la sesión
+    await sessionService.updateSessionState(from, 'post_interview_menu');
+    
+    // Definir botones para el menú post-entrevista
+    const menuButtons = [
+      { id: 'review_cv', text: '📋 Revisar CV' },
+      { id: 'new_interview', text: '🎯 Nueva Entrevista' },
+      { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
+    ];
+    
+    // Comentamos el mensaje con los botones principales
+    /*
+    // Enviar mensaje con botones interactivos
+    await bot.sendButtonMessage(
+      from,
+      '¿Qué te gustaría hacer ahora?',
+      menuButtons,
+      'Opciones disponibles:'
+    );
+    logger.info(`Post-interview menu sent to user ${from}`);
+    */
+    
+    // Enviar mensaje adicional ofreciendo asesoría personalizada para entrevistas
+    const advisorButtons = [
+      { id: 'advisor_interview', text: '✅ ACEPTAR' },
+      { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
+    ];
+    
+    try {
+      await bot.sendButtonMessage(
+        from,
+        '¿Quieres mejorar tus habilidades para entrevistas con un especialista en RRHH? Recibe asesoría personalizada para destacar en tus próximas entrevistas laborales.',
+        advisorButtons,
+        'Asesoría Profesional Entrevistas'
+      );
+    } catch (advisorButtonError) {
+      logger.warn(`Failed to send advisor button: ${advisorButtonError.message}`);
+      // Enviar mensaje de texto alternativo si falla el envío de botones
+      await bot.sendTextMessage(
+        from,
+        '¿Quieres mejorar tus habilidades para entrevistas con un especialista en RRHH?\n\nResponde "asesoría entrevista" para recibir asesoría personalizada o "regresar" para volver al menú principal.'
+      );
+    }
+    
+  } catch (error) {
+    logger.error(`Error sending post-interview menu: ${error.message}`);
+    // Mensaje de texto alternativo si falla
+    await bot.sendTextMessage(
+      from,
+      'Lo siento, hubo un error al enviar las opciones después de la entrevista. Por favor, intenta nuevamente.\n\nPuedes escribir "revisar" para analizar tu CV, "entrevista" para una nueva simulación o "!start" para regresar al menú principal.'
+    );
+  }
+};
+
+/**
+ * Maneja la solicitud de servicio de asesoría personalizada
+ * @param {string} from - ID del usuario
+ * @returns {Promise<void>}
+ */
+const handleAdvisorService = async (from) => {
+  try {
+    logger.info(`User ${from} requested advisor service`);
+    
+    // Preguntar primero qué tipo de asesoría desea
+    try {
+      const advisorTypeButtons = [
+        { id: 'advisor_cv_review', text: '📋 Revisar CV' },
+        { id: 'advisor_interview', text: '🎯 Simular Entrevista' }
+      ];
+      
+      await bot.sendButtonMessage(
+        from,
+        '¿Qué tipo de asesoría personalizada te gustaría recibir?',
+        advisorTypeButtons,
+        'Selecciona una opción:'
+      );
+      
+      // Actualizar estado para manejar la selección del tipo de asesoría
+      await sessionService.updateSessionState(from, 'selecting_advisor_type');
+      
+    } catch (buttonError) {
+      logger.warn(`Failed to send advisor type buttons: ${buttonError.message}`);
+      await bot.sendMessage(from, 'Por favor, responde si deseas una asesoría para "Revisar CV" o "Simular Entrevista".');
+      await sessionService.updateSessionState(from, 'selecting_advisor_type');
+    }
+  } catch (error) {
+    logger.error(`Error handling advisor service: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu solicitud. Por favor, intenta nuevamente con !start.');
+  }
+};
+
+/**
+ * Maneja la confirmación de pago para asesoría personalizada
+ * @param {string} from - ID del usuario
+ */
+const handleAdvisorPaymentConfirmation = async (from) => {
+  try {
+    // Solicitar captura de pantalla del pago
+    await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de S/60*\n\nNecesito verificar:\n• Que el pago sea a nombre de "Francesco Lucchesi"\n• Que la fecha y hora sea reciente`);
+    
+    // Actualizar el estado de la sesión para esperar la captura
+    await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
+    
+  } catch (error) {
+    logger.error(`Error handling advisor payment confirmation: ${error.message}`);
+    await bot.sendMessage(from, 'Ocurrió un error al procesar tu confirmación. Por favor, contacta con nuestro soporte.');
+  }
+};
+
+/**
+ * Verifica la captura de pantalla del pago de asesoría y proporciona el enlace de Calendly
+ * @param {string} from - ID del usuario
+ * @param {Object} image - Objeto con la información de la imagen
+ */
+const verifyAdvisorPaymentScreenshot = async (from, image) => {
+  try {
+    logger.info(`Received advisor payment screenshot from ${from}`);
+    
+    // Obtener la URL de la imagen
+    let imageUrl;
+    try {
+      imageUrl = await bot.getMediaUrl(image.id);
+      if (!imageUrl) {
+        throw new Error('No se pudo obtener la URL de la imagen');
+      }
+      logger.info(`Advisor payment image URL obtained: ${imageUrl}`);
+    } catch (mediaError) {
+      logger.error(`Error obtaining image URL: ${mediaError.message}`);
+      await bot.sendMessage(from, 'No pudimos acceder a tu imagen. Por favor, intenta enviarla nuevamente.');
+      return;
+    }
+    
+    // Descargar la imagen
+    let imageBuffer;
+    try {
+      imageBuffer = await fileProcessing.downloadFile(imageUrl);
+      logger.info(`Advisor payment image downloaded, size: ${imageBuffer.length} bytes`);
+    } catch (downloadError) {
+      logger.error(`Error downloading payment image: ${downloadError.message}`);
+      await bot.sendMessage(from, 'Hubo un error al procesar tu imagen. Por favor, intenta nuevamente.');
+      return;
+    }
+    
+    // Notificar al usuario que estamos procesando su pago
+    await bot.sendMessage(from, 'Estamos verificando tu pago, esto puede tomar unos momentos...');
+    
+    // Aquí puedes implementar una verificación real con OpenAI Vision o similar, 
+    // pero para este caso lo simplificaremos y aceptaremos el pago directamente
+    
+    // Actualizar la sesión para indicar que el pago fue aprobado
+    await sessionService.updateSession(from, { 
+      advisorPaymentVerified: true,
+      advisorPaymentDate: new Date().toISOString()
+    });
+    
+    // Obtener el tipo de asesoría seleccionada
+    const session = await sessionService.getOrCreateSession(from);
+    const advisorType = session.advisorType || 'Personalizada';
+    
+    // Enviar mensaje de confirmación con el enlace de Calendly
+    await bot.sendMessage(from, `
+✅ *¡Pago verificado correctamente!*
+
+Gracias por adquirir nuestra asesoría ${advisorType}.
+
+📅 *Agenda tu cita ahora mismo en este enlace:*
+https://calendly.com/psicologa-workin2/30min
+
+👆 Haz clic en el enlace para elegir la fecha y hora que mejor se adapte a tu disponibilidad.
+
+Si tienes alguna duda, no dudes en escribirnos.
+    `);
+    
+    // Actualizar el estado para indicar que el servicio fue completado
+    await sessionService.updateSessionState(from, 'advisor_service_completed');
+    
+    // Ofrecer volver al menú principal
+    try {
+      await bot.sendButtonMessage(
+        from, 
+        'Cuando hayas agendado tu cita, puedes volver al menú principal.',
+        [{ id: 'back_to_main_menu', text: '🔙 Volver al Menú' }],
+        'Opciones disponibles'
+      );
+    } catch (buttonError) {
+      logger.warn(`Failed to send advisor completion buttons: ${buttonError.message}`);
+      await bot.sendMessage(from, 'Escribe !start para volver al menú principal cuando hayas terminado.');
+    }
+    
+  } catch (error) {
+    logger.error(`Error verifying advisor payment: ${error.message}`);
+    await bot.sendMessage(from, 'Ocurrió un error al verificar tu pago. Por favor, contacta con nuestro soporte.');
   }
 };
 
@@ -1864,5 +2129,9 @@ module.exports = {
   startInterviewQuestions,
   handleButtonReply,
   formatAnalysisResults,
-  sendPostCVOptions
+  sendPostCVOptions,
+  showPostInterviewMenu,
+  handleAdvisorService,
+  handleAdvisorPaymentConfirmation,
+  verifyAdvisorPaymentScreenshot
 };

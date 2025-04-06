@@ -84,14 +84,20 @@ app.post('/webhook', async (req, res) => {
                   await handlers.handleButtonReply(to, message.interactive.button_reply.id);
                 } else if (message.interactive.type === 'list_reply') {
                   // Para list_reply, actualizamos la sesión con la información de la selección
-                  // y luego manejamos como si fuera un botón
                   const sessionService = require('../core/sessionService');
                   const session = await sessionService.getOrCreateSession(to);
                   await sessionService.updateSession(to, { 
                     interactive: message.interactive 
                   });
                   
-                  await handlers.handleButtonReply(to, message.interactive.list_reply.id);
+                  // Verificar si estamos en el estado de selección de paquetes
+                  if (session.state === 'selecting_premium_package') {
+                    // Enviar directamente a handlePackageSelection con el ID de la selección
+                    await handlers.handlePackageSelection(to, message.interactive.list_reply.id);
+                  } else {
+                    // Para otros casos de list_reply, tratar como botón
+                    await handlers.handleButtonReply(to, message.interactive.list_reply.id);
+                  }
                 }
               } else if (message.type === 'document') {
                 await handlers.handleDocument(to, message.document);

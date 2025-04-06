@@ -5,10 +5,12 @@ const path = require('path');
 const logger = require('./logger');
 
 // Rutas a los archivos de fuentes Poppins
-const POPPINS_REGULAR = path.join(process.cwd(), 'src', 'assets', 'fonts', 'Poppins-Regular.ttf');
-const POPPINS_BOLD = path.join(process.cwd(), 'src', 'assets', 'fonts', 'Poppins-Bold.ttf');
-const POPPINS_MEDIUM = path.join(process.cwd(), 'src', 'assets', 'fonts', 'Poppins-Medium.ttf');
-const POPPINS_LIGHT = path.join(process.cwd(), 'src', 'assets', 'fonts', 'Poppins-Light.ttf');
+const POPPINS_REGULAR = path.join(__dirname, '../fonts/Poppins-Regular.ttf');
+const POPPINS_BOLD = path.join(__dirname, '../fonts/Poppins-Bold.ttf');
+const POPPINS_MEDIUM = path.join(__dirname, '../fonts/Poppins-Medium.ttf');
+const POPPINS_LIGHT = path.join(__dirname, '../fonts/Poppins-Light.ttf');
+
+const LOGO_PATH = path.join(__dirname, '../resources/logo.png');
 
 /**
  * Genera un PDF profesional con el análisis del CV
@@ -34,7 +36,9 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // Definir ruta del archivo a generar
     const timestamp = new Date().getTime();
-    const filename = `cv_analysis_${timestamp}.pdf`;
+    // Usar formato antiguo de nombre de archivo
+    const userId = candidateName.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const filename = `analisis_cv_${userId}_${timestamp}.pdf`;
     const outputPath = path.join(tempDir, filename);
     
     // Crear un nuevo documento PDF extendido
@@ -49,13 +53,20 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
       bufferPages: true
     });
     
-    // Registrar fuentes personalizadas
+    // Verificar si las fuentes existen
+    let fontsAvailable = false;
     try {
-      if (await fs.pathExists(POPPINS_REGULAR)) {
+      if (await fs.pathExists(POPPINS_REGULAR) && 
+          await fs.pathExists(POPPINS_BOLD) && 
+          await fs.pathExists(POPPINS_MEDIUM) && 
+          await fs.pathExists(POPPINS_LIGHT)) {
+        
+        // Registrar fuentes personalizadas si existen
         doc.registerFont('Poppins', POPPINS_REGULAR);
         doc.registerFont('Poppins-Bold', POPPINS_BOLD);
         doc.registerFont('Poppins-Medium', POPPINS_MEDIUM);
         doc.registerFont('Poppins-Light', POPPINS_LIGHT);
+        fontsAvailable = true;
         logger.info('Fuentes Poppins registradas correctamente');
       } else {
         logger.warn('No se encontraron las fuentes Poppins, usando fuentes por defecto');
@@ -73,45 +84,42 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // Definir colores
     const colors = {
-      primary: '#024579',         // Azul principal (antes verde)
-      secondary: '#1e88e5',       // Azul
-      tertiary: '#fb8c00',        // Naranja
-      accent: '#6a1b9a',          // Púrpura
-      danger: '#c62828',          // Rojo
-      dark: '#263238',            // Azul oscuro
-      light: '#f5f5f5',           // Gris claro
-      title: '#024579',           // Azul para títulos (antes verde)
-      text: '#37474f',            // Gris azulado para texto
-      progressBar: '#024579',     // Azul para barras de progreso (antes verde)
-      progressBg: '#e3f2fd',      // Azul claro para fondo de barras (antes verde claro)
-      lightBg: '#e8f5fd'          // Azul muy claro para fondos (antes verde muy claro)
+      primary: '#5170FF',    // Azul principal
+      secondary: '#1F2937',  // Gris oscuro para títulos secundarios
+      accent: '#4FD1C5',     // Verde agua para acentos
+      bg: '#F9FAFB',         // Gris muy claro para fondos
+      lightBg: '#EDF2F7',    // Gris claro para fondos secundarios
+      text: '#4A5568',       // Gris para texto normal
+      success: '#48BB78',    // Verde para elementos positivos
+      warning: '#ED8936',    // Naranja para advertencias
+      danger: '#E53E3E',     // Rojo para errores o peligros
     };
     
     // Intentar cargar el logo
-    let logoPath = path.join(process.cwd(), 'src', 'assets', 'images', 'myworkinlogo.png');
+    let logoPath = LOGO_PATH;
     let logoExists = await fs.pathExists(logoPath);
     
     // ========= NUEVO DISEÑO DEL PDF =========
     
     // ENCABEZADO
     // Usar la función para dibujar el encabezado en la primera página
-    drawPageHeader(doc, logoPath, logoExists, colors);
+    drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
     
     // TÍTULO DEL INFORME
     doc.fontSize(24)
        .fillColor(colors.primary)
-       .font('Poppins-Bold')
+       .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
        .text('INFORME DE REVISIÓN DE CV', 50, 60, {align: 'left'});
 
     // DATOS DEL CANDIDATO
     doc.fontSize(14)
        .fillColor(colors.dark)
-       .font('Poppins-Bold')
+       .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
        .text(`Nombre del candidato: ${candidateName}`, 50, 100);
        
     doc.fontSize(14)
        .fillColor(colors.dark)
-       .font('Poppins-Medium')
+       .font(fontsAvailable ? 'Poppins-Medium' : 'Helvetica')
        .text(`Puesto al que postula: ${capitalizeFirstLetter(jobPosition)}`, 50, 125);
        
     // Línea separadora
@@ -137,7 +145,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
 
     // Tamaño de fuente adaptado según el número de dígitos
     const fontSize = score < 100 ? 36 : 30;
-    doc.font('Poppins-Bold')
+    doc.font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
        .fontSize(fontSize);
 
     // Calcular dimensiones para centrar perfectamente
@@ -154,7 +162,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
        .text(scoreText, scoreTextX, scoreTextY);
 
     // Texto "puntos" debajo (ajustar posición)
-    doc.font('Poppins')
+    doc.font(fontsAvailable ? 'Poppins' : 'Helvetica')
        .fontSize(14);
     const puntosText = 'puntos';
     const puntosWidth = doc.widthOfString(puntosText);
@@ -162,7 +170,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
        .text(puntosText, scoreX - (puntosWidth / 2), scoreY + 15);
 
     // Texto "de 100" debajo (ajustar posición)
-    doc.font('Poppins-Light')
+    doc.font(fontsAvailable ? 'Poppins-Light' : 'Helvetica')
        .fontSize(12);
     const de100Text = 'de 100';
     const de100Width = doc.widthOfString(de100Text);
@@ -172,13 +180,13 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     // SECCIÓN 1: RESUMEN DEL CANDIDATO
     // Título de sección con fondo verde claro
     let currentY = 170;
-    currentY = createSection(doc, 'SECCIÓN 1: RESUMEN DEL CANDIDATO', currentY, colors);
+    currentY = createSection(doc, 'SECCIÓN 1: RESUMEN DEL CANDIDATO', currentY, colors, fontsAvailable);
     
     // Texto del resumen
     const summaryText = analysis.summary || 'No se proporcionó un resumen ejecutivo en el análisis.';
     
     doc.fontSize(11)
-       .font('Poppins')
+       .font(fontsAvailable ? 'Poppins' : 'Helvetica')
        .fillColor(colors.text)
        .text(summaryText, 50, currentY, {
          width: doc.page.width - 100,
@@ -196,13 +204,13 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // SECCIÓN 2: ASPECTOS CLAVE EVALUADOS
     // Título de sección
-    currentY = createSection(doc, 'SECCIÓN 2: ASPECTOS CLAVE EVALUADOS', currentY, colors);
+    currentY = createSection(doc, 'SECCIÓN 2: ASPECTOS CLAVE EVALUADOS', currentY, colors, fontsAvailable);
     
     // Dibujar barra de progreso con porcentaje
     const drawProgressBar = (x, y, width, percentage, label) => {
       // Texto para el nombre de la categoría (colocado encima de la barra)
       doc.fontSize(11)
-         .font('Poppins-Medium')
+         .font(fontsAvailable ? 'Poppins-Medium' : 'Helvetica')
          .fillColor(colors.dark)
          .text(label, x, y - 20, {width: width});
 
@@ -219,7 +227,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
       
       // Etiqueta de porcentaje
       doc.fontSize(9)
-         .font('Poppins-Bold')
+         .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
          .fillColor('#ffffff')
          .text(`${Math.round(percentage)}%`, x + width * progress - 25, y + 3);
     };
@@ -235,7 +243,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // Subtítulo: Brechas frente al rol
     doc.fontSize(14)
-       .font('Poppins-Bold')
+       .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
        .fillColor(colors.secondary)
        .text('Brechas frente al rol', 50, currentY);
        
@@ -243,7 +251,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     let brechasText = analysis.skillsGap || 'No se identificaron brechas específicas en el perfil frente al rol.';
     
     doc.fontSize(11)
-       .font('Poppins')
+       .font(fontsAvailable ? 'Poppins' : 'Helvetica')
        .fillColor(colors.text)
        .text(brechasText, 50, currentY + 25, {
          width: doc.page.width - 100,
@@ -263,7 +271,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // Subtítulo: Enfoque del CV
     doc.fontSize(14)
-       .font('Poppins-Bold')
+       .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
        .fillColor(colors.secondary)
        .text('Enfoque del CV', 50, currentY);
        
@@ -271,7 +279,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     let enfoqueText = analysis.alignment || 'No se proporcionó información sobre el enfoque del CV.';
     
     doc.fontSize(11)
-       .font('Poppins')
+       .font(fontsAvailable ? 'Poppins' : 'Helvetica')
        .fillColor(colors.text)
        .text(enfoqueText, 50, currentY + 25, {
          width: doc.page.width - 100,
@@ -286,47 +294,47 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     currentY = currentY + enfoqueHeight + 55; // 25 (margen de texto) + 30 (espacio extra)
     
     // Verificar si queda espacio suficiente para la siguiente sección
-    if (currentY > doc.page.height - 150) {
+    if (currentY > doc.page.height - 130) {
       doc.addPage();
-      drawPageHeader(doc, logoPath, logoExists, colors);
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
       currentY = 60;
     }
     
     // SECCIÓN 3: ANÁLISIS DETALLADO POR SECCIÓN DEL CV
     // Título de la sección 3
-    currentY = createSection(doc, 'SECCIÓN 3: ANÁLISIS DETALLADO POR SECCIÓN DEL CV', currentY, colors);
+    currentY = createSection(doc, 'SECCIÓN 3: ANÁLISIS DETALLADO POR SECCIÓN DEL CV', currentY, colors, fontsAvailable);
 
     // Definir las subsecciones del CV para el análisis detallado
     const subsections = [
       {
         title: 'Experiencia laboral',
         content: processBulletList(analysis.experience, 'No se proporcionó información sobre experiencia laboral en el CV.'),
-        observations: generateSpecificObservations('experience', processBulletList(analysis.experience, ''), jobPosition)
+        observations: await generateSpecificObservations('experience', analysis.experience, jobPosition)
       },
       {
         title: 'Formación académica',
         content: processBulletList(analysis.education, 'No se encontró información sobre formación académica en el CV.'),
-        observations: generateSpecificObservations('education', processBulletList(analysis.education, ''), jobPosition)
+        observations: await generateSpecificObservations('education', analysis.education, jobPosition)
       },
       {
         title: 'Habilidades técnicas',
         content: processBulletList(analysis.skills, 'No se mencionaron habilidades técnicas específicas en el CV.'),
-        observations: generateSpecificObservations('skills', processBulletList(analysis.skills, ''), jobPosition)
+        observations: await generateSpecificObservations('skills', analysis.skills, jobPosition)
       },
       {
         title: 'Habilidades blandas',
         content: processBulletList(analysis.softSkills, 'No se mencionaron habilidades blandas en el CV.'),
-        observations: generateSpecificObservations('softSkills', processBulletList(analysis.softSkills, ''), jobPosition)
+        observations: await generateSpecificObservations('softSkills', analysis.softSkills, jobPosition)
       },
       {
         title: 'Certificaciones',
         content: processBulletList(analysis.certifications, 'No se incluyeron certificaciones en el CV.'),
-        observations: generateSpecificObservations('certifications', processBulletList(analysis.certifications, ''), jobPosition)
+        observations: await generateSpecificObservations('certifications', analysis.certifications, jobPosition)
       },
       {
         title: 'Proyectos relevantes',
         content: processBulletList(analysis.projects, 'No se mencionaron proyectos relevantes en el CV.'),
-        observations: generateSpecificObservations('projects', processBulletList(analysis.projects, ''), jobPosition)
+        observations: await generateSpecificObservations('projects', analysis.projects, jobPosition)
       }
     ];
 
@@ -344,7 +352,7 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     // Si no hay subsecciones válidas, mostrar mensaje y continuar
     if (validSubsections.length === 0) {
       doc.fontSize(12)
-         .font('Poppins')
+         .font(fontsAvailable ? 'Poppins' : 'Helvetica')
          .fillColor(colors.text)
          .text('No se pudo generar un análisis detallado por secciones del CV. Esto puede deberse a que el CV no contiene suficiente información estructurada para cada sección o el formato no permitió extraer los datos correctamente.', 50, currentY + 20, {
            width: doc.page.width - 100,
@@ -380,19 +388,19 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
         // Solo añadir nueva página si no es la primera subsección de esta sección
         if (currentY + totalHeight > doc.page.height - 50 && i > 0) {
           doc.addPage();
-          drawPageHeader(doc, logoPath, logoExists, colors);
+          drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
           currentY = 60;
         }
         
         // Añadir título de la subsección con espaciado reducido
         doc.fontSize(14)
            .fillColor(colors.secondary)
-           .font('Poppins-Bold')
+           .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
            .text(subsection.title, 50, currentY);
         
         // Contenido actual
         doc.fontSize(11)
-           .font('Poppins')
+           .font(fontsAvailable ? 'Poppins' : 'Helvetica')
            .fillColor(colors.text)
            .text(contentText, 50, currentY + 20, {
              width: doc.page.width - 100,
@@ -406,12 +414,12 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
         // Añadir subtítulo para las observaciones
         doc.fontSize(12)
            .fillColor(colors.tertiary)
-           .font('Poppins-Medium')
+           .font(fontsAvailable ? 'Poppins-Medium' : 'Helvetica')
            .text('💡 Sugerencias de mejora:', 50, currentY);
         
         // Añadir observaciones y recomendaciones
         doc.fontSize(11)
-           .font('Poppins')
+           .font(fontsAvailable ? 'Poppins' : 'Helvetica')
            .fillColor(colors.text)
            .text(observationsText, 50, currentY + 15, {
              width: doc.page.width - 100,
@@ -427,19 +435,27 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     // Verificar si queda espacio suficiente para la siguiente sección
     if (currentY > doc.page.height - 130) {
       doc.addPage();
-      drawPageHeader(doc, logoPath, logoExists, colors);
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
       currentY = 60;
     }
     
+    // Verificar si queda espacio suficiente para la siguiente sección
+    // Calcular el espacio necesario para el título de la sección 4 + espacio para subsecciones
+    const remainingHeight = doc.page.height - currentY;
+    const totalSection4Height = 50; // Altura estimada para el encabezado de la sección
+    
+    if (remainingHeight < totalSection4Height + 100) { // Solo agregar nueva página si realmente es necesario
+      doc.addPage();
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+      currentY = 60;
+    } else if (remainingHeight < 250) {
+      // Si queda poco espacio pero suficiente para el título, optimizamos la distribución
+      // para que no quede un título seguido de mucho espacio en blanco
+      currentY = doc.page.height - 240; // Posicionamos el título más abajo
+    }
+    
     // SECCIÓN 4: OBSERVACIONES Y OPORTUNIDADES DE MEJORA
-    doc.addPage();
-    drawPageHeader(doc, logoPath, logoExists, colors);
-    currentY = 60;
-    
-    // Título de la sección 4
-    currentY = createSection(doc, 'SECCIÓN 4: OBSERVACIONES Y OPORTUNIDADES DE MEJORA', currentY, colors);
-    
-    // Definir las subsecciones de la sección 4
+    // Analizamos primero el contenido de la sección 4 para tomar mejores decisiones
     const section4Subsections = [
       {
         title: 'Fortalezas',
@@ -455,48 +471,162 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
       }
     ];
     
-    // Añadir cada subsección de la sección 4
+    // Estimar altura total de todas las subsecciones
+    let totalSubsectionsHeight = 0;
     for (const subsection of section4Subsections) {
-      // Estimar la altura del contenido
+      const contentHeight = doc.heightOfString(subsection.content, {
+        width: doc.page.width - 100,
+        align: 'left',
+        lineGap: 3
+      });
+      // Altura de título + contenido + espaciado
+      totalSubsectionsHeight += 25 + contentHeight + 30;
+    }
+    
+    // Si el contenido total no cabe en la página actual y hay muy poco contenido en ésta,
+    // mejor comenzar una página nueva para toda la sección
+    if (totalSubsectionsHeight + totalSection4Height > remainingHeight && remainingHeight < doc.page.height * 0.3) {
+      doc.addPage();
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+      currentY = 60;
+    }
+    
+    // Título de la sección 4
+    currentY = createSection(doc, 'SECCIÓN 4: OBSERVACIONES Y OPORTUNIDADES DE MEJORA', currentY, colors, fontsAvailable);
+    
+    // Añadir cada subsección de la sección 4 con mejor gestión de espacio
+    let subsectionY = currentY;
+    for (let i = 0; i < section4Subsections.length; i++) {
+      const subsection = section4Subsections[i];
+      
+      // Estimar la altura del contenido incluyendo título
       const contentHeight = doc.heightOfString(subsection.content, {
         width: doc.page.width - 100,
         align: 'left',
         lineGap: 3
       });
       
-      // Verificar si hay espacio suficiente
-      if (currentY + contentHeight + 100 > doc.page.height) {
-        doc.addPage();
-        drawPageHeader(doc, logoPath, logoExists, colors);
-        currentY = 60;
+      const subsectionTotalHeight = 25 + contentHeight + 20; // título + contenido + espaciado
+      
+      // Inteligentemente decidir si necesitamos una nueva página
+      if (subsectionY + subsectionTotalHeight > doc.page.height - 40) {
+        // Verificar si vale la pena agregar a esta página o comenzar la siguiente
+        const remainingPageSpace = doc.page.height - subsectionY;
+        if (remainingPageSpace < 100 || remainingPageSpace < subsectionTotalHeight * 0.3) {
+          // Si queda muy poco espacio o menos del 30% del contenido cabe, mejor nueva página
+          doc.addPage();
+          drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+          subsectionY = 60;
+        }
       }
       
-      // Añadir la subsección
-      currentY = addSubsection(doc, subsection.title, subsection.content, currentY, colors);
+      // Añadir la subsección con mejor manejo de espaciado
+      const newY = addSubsection(doc, subsection.title, subsection.content, subsectionY, colors, fontsAvailable);
+      
+      // Calcular el espacio usado y ajustar para la siguiente subsección
+      const usedSpace = newY - subsectionY;
+      subsectionY = newY;
+      
+      // Reducir espaciado entre subsecciones si tenemos muchas
+      if (i < section4Subsections.length - 1) {
+        // Menos espacio entre subsecciones para aprovechar mejor la página
+        subsectionY -= 10; 
+      }
     }
     
+    // Actualizar la posición Y global después de todas las subsecciones
+    currentY = subsectionY;
+    
     // SECCIÓN 5: RECOMENDACIONES ADICIONALES
-    currentY = createSection(doc, 'SECCIÓN 5: RECOMENDACIONES ADICIONALES', currentY, colors);
+    // Aplicar la misma lógica de estimación para optimizar espacio
+    const section5TitleHeight = 50;
+    if (currentY + section5TitleHeight > doc.page.height - 100) {
+      doc.addPage();
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+      currentY = 60;
+    } else if (doc.page.height - currentY < 250 && doc.page.height - currentY > 120) {
+      // Optimizar el espacio restante cuando hay un espacio intermedio
+      currentY += 20; // Añadir un poco más de espacio para mejorar la distribución
+    }
+    
+    currentY = createSection(doc, 'SECCIÓN 5: RECOMENDACIONES ADICIONALES', currentY, colors, fontsAvailable);
+    
+    // Calcular y pre-estimar el espacio total necesario para todas las subsecciones
+    const keywordsContent = processKeywordText(analysis.keyCompetencies);
+    const cursosContent = processCursosText(analysis.learningRecommendations || analysis.skillsGap);
+    const proximosContent = processProximosText(analysis.finalRecommendation);
+    
+    // Estimación de alturas
+    const keywordsHeight = doc.heightOfString(keywordsContent, {
+      width: doc.page.width - 100,
+      align: 'left',
+      lineGap: 3
+    });
+    
+    const cursosHeight = doc.heightOfString(cursosContent, {
+      width: doc.page.width - 100,
+      align: 'left',
+      lineGap: 3
+    });
+    
+    const proximosHeight = doc.heightOfString(proximosContent, {
+      width: doc.page.width - 100,
+      align: 'left',
+      lineGap: 3
+    });
+    
+    // Estimar altura total con títulos y espaciado (ajustado)
+    const totalHeight = keywordsHeight + cursosHeight + proximosHeight + 150; // 150 = espacio para títulos y espaciado
+    
+    // Si todo el contenido de la sección 5 no cabe en la página actual, mejor comenzar una nueva
+    if (currentY + totalHeight > doc.page.height - 40) {
+      // Pero solo si tenemos suficiente contenido para justificar una nueva página
+      if (totalHeight > doc.page.height * 0.4) {
+        doc.addPage();
+        drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+        currentY = 60;
+      }
+    }
     
     // Subsección: Palabras clave para aplicar a otras ofertas
-    currentY = addSubsection(doc, 'Palabras clave para filtros ATS', processKeywordText(analysis.keyCompetencies), currentY, colors);
+    currentY = addSubsection(doc, 'Palabras clave para filtros ATS', keywordsContent, currentY, colors, fontsAvailable);
+    
+    // Verificar si hay espacio suficiente para las siguientes subsecciones
+    if (currentY + cursosHeight + 40 > doc.page.height - 40) {
+      // Si no hay suficiente espacio para la siguiente subsección, nueva página
+      doc.addPage();
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+      currentY = 60;
+    }
     
     // Subsección: Cursos recomendados
-    currentY = addSubsection(doc, 'Cursos y certificaciones recomendados', processCursosText(analysis.learningRecommendations || analysis.skillsGap), currentY, colors);
+    currentY = addSubsection(doc, 'Cursos y certificaciones recomendados', cursosContent, currentY, colors, fontsAvailable);
+    
+    // Verificar si hay espacio suficiente para la última subsección
+    if (currentY + proximosHeight + 40 > doc.page.height - 40) {
+      // Si no hay suficiente espacio para la siguiente subsección, nueva página
+      doc.addPage();
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
+      currentY = 60;
+    }
     
     // Subsección: Próximos pasos
-    currentY = addSubsection(doc, 'Próximos pasos', processProximosText(analysis.finalRecommendation), currentY, colors);
+    currentY = addSubsection(doc, 'Próximos pasos', proximosContent, currentY, colors, fontsAvailable);
     
     // Añadir pie de página con agradecimiento y datos de contacto
     if (currentY > doc.page.height - 120) {
       doc.addPage();
-      drawPageHeader(doc, logoPath, logoExists, colors);
+      drawPageHeader(doc, logoPath, logoExists, colors, fontsAvailable);
       currentY = 60;
+    } else if (doc.page.height - currentY > 180) {
+      // Si queda mucho espacio vacío al final, ajustar la posición del agradecimiento
+      // para reducir el espacio vacío
+      currentY = doc.page.height - 180;
     }
     
     // Añadir agradecimiento final
     doc.fontSize(12)
-       .font('Poppins-Medium')
+       .font(fontsAvailable ? 'Poppins-Medium' : 'Helvetica-Bold')
        .fillColor(colors.primary)
        .text('Gracias por utilizar los servicios de MyWorkIn', 50, currentY, {
          width: doc.page.width - 100,
@@ -505,52 +635,41 @@ async function generateCVAnalysisPDF(analysis, jobPosition, candidateName = 'Can
     
     // Datos de contacto
     doc.fontSize(10)
-       .font('Poppins-Light')
+       .font(fontsAvailable ? 'Poppins-Light' : 'Helvetica')
        .fillColor(colors.tertiary)
        .text('Para más información, visítanos en myworkin2.com o contáctanos en info@myworkin2.com', 50, currentY + 25, {
          width: doc.page.width - 100,
          align: 'center'
        });
     
-    // Verificar el número total de páginas y limitar a 8
-    const totalPages = doc.bufferedPageRange().count;
-    
-    // Si hay menos de 8 páginas, añadir páginas vacías hasta llegar a 8
-    if (totalPages < 8) {
-      const pagesToAdd = 8 - totalPages;
-      for (let i = 0; i < pagesToAdd; i++) {
-        doc.addPage();
-        drawPageHeader(doc, logoPath, logoExists, colors);
-      }
-    }
-    
-    // Si hay más de 8 páginas, eliminar las páginas adicionales
-    if (totalPages > 8) {
-      // PDFKit no permite eliminar páginas directamente, pero podemos limitar
-      // el número de páginas que se finalizan en el documento
-      const pageRange = doc.bufferedPageRange();
-      
-      // Finalizar el documento con solo 8 páginas exactas
-      doc.end();
-      
-      // Nota: La limitación a 8 páginas exactas dependerá de cómo procesemos
-      // el buffer de salida del PDF, lo que requeriría manipulación a bajo nivel
-      // del stream resultante. PDFKit no proporciona una forma sencilla de "truncar"
-      // el PDF a un número específico de páginas.
-      
-      // Como alternativa, forzamos la salida a 8 páginas exactas mediante
-      // la manipulación del objeto doc después de que se ha creado pero antes de finalizar
-      return outputPath;
-    }
-    
-    // Finalizar documento
+    // Finalizar documento sin restricciones de número de páginas
     doc.end();
     
     // Esperar a que se complete la escritura del archivo
     return new Promise((resolve, reject) => {
       stream.on('finish', () => {
         logger.info(`PDF generado correctamente: ${outputPath}`);
-        resolve(outputPath);
+        
+        // Subir el PDF al servidor
+        uploadPdfToServer(outputPath, filename)
+          .then(publicUrl => {
+            logger.info(`PDF subido a: ${publicUrl}`);
+            // Devolver información sobre el PDF generado
+            resolve({
+              filePath: outputPath,
+              publicUrl,
+              filename
+            });
+          })
+          .catch(ftpError => {
+            logger.error(`Error al subir PDF: ${ftpError.message}`);
+            // Continuar sin subir al servidor, solo se devuelve la ruta local
+            resolve({
+              filePath: outputPath,
+              publicUrl: `/pdfs/${filename}`,
+              filename
+            });
+          });
       });
       
       stream.on('error', (err) => {
@@ -608,44 +727,6 @@ const processListContent = (content, defaultText) => {
   return defaultText;
 };
 
-// Función para procesar listas con viñetas
-function processBulletList(items, defaultText) {
-  if (!items || !items.length) {
-    return defaultText;
-  }
-  
-  // Función para limpiar marcadores markdown ** y *
-  const cleanMarkdownFormatting = (text) => {
-    return text.replace(/\*\*/g, '').replace(/\*/g, '');
-  };
-  
-  let content = '';
-  for (const item of items) {
-    content += `• ${cleanMarkdownFormatting(item)}\n`;
-  }
-  
-  return content;
-}
-
-// Función para procesar listas numeradas
-function processNumberedList(items, defaultText) {
-  if (!items || !items.length) {
-    return defaultText;
-  }
-  
-  // Función para limpiar marcadores markdown ** y *
-  const cleanMarkdownFormatting = (text) => {
-    return text.replace(/\*\*/g, '').replace(/\*/g, '');
-  };
-  
-  let content = '';
-  for (let i = 0; i < items.length; i++) {
-    content += `${i+1}. ${cleanMarkdownFormatting(items[i])}\n`;
-  }
-  
-  return content;
-}
-
 // Función para procesar texto de keywords
 function processKeywordText(keyCompetencies) {
   let text = 'Palabras clave recomendadas para superar los filtros automáticos:';
@@ -686,7 +767,7 @@ function processProximosText(finalRecommendation) {
 }
 
 // Función para dibujar el encabezado en cada página
-const drawPageHeader = (doc, logoPath, logoExists, colors) => {
+const drawPageHeader = (doc, logoPath, logoExists, colors, fontsAvailable) => {
   // Se elimina la barra superior azul
   
   // Intentar cargar el logo
@@ -696,41 +777,51 @@ const drawPageHeader = (doc, logoPath, logoExists, colors) => {
     } catch (logoErr) {
       logger.error(`Error al cargar el logo: ${logoErr.message}`);
       // Si falla, mostrar texto como fallback
-      doc.fontSize(18).font('Poppins-Bold').fillColor(colors.primary).text('MyWorkIn', 40, 12);
+      doc.fontSize(18).font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold').fillColor(colors.primary).text('MyWorkIn', 40, 12);
     }
   } else {
     // Si no existe el logo, mostrar el texto
-    doc.fontSize(18).font('Poppins-Bold').fillColor(colors.primary).text('MyWorkIn', 40, 12);
+    doc.fontSize(18).font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold').fillColor(colors.primary).text('MyWorkIn', 40, 12);
   }
   
-  doc.fontSize(12).font('Poppins').fillColor(colors.primary).text('myworkin2.com', doc.page.width - 180, 14);
+  doc.fontSize(12).font(fontsAvailable ? 'Poppins' : 'Helvetica').fillColor(colors.primary).text('myworkin2.com', doc.page.width - 180, 14);
 };
 
 // Función para crear una nueva sección con título
-const createSection = (doc, title, y, colors) => {
+const createSection = (doc, title, y, colors, fontsAvailable) => {
   doc.rect(50, y, doc.page.width - 100, 30)
      .fillColor(colors.lightBg)
      .fill();
      
   doc.fontSize(16)
      .fillColor(colors.primary)
-     .font('Poppins-Bold')
+     .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
      .text(title, 60, y + 7);
   
-  return y + 50; // Retornar la posición Y después del título
+  return y + 45; // Reducir el espacio después del título de sección (era 50)
 };
 
 // Función para añadir una subsección
-const addSubsection = (doc, title, content, y, colors) => {
+const addSubsection = (doc, title, content, y, colors, fontsAvailable) => {
+  // Estimar la altura del contenido antes de añadirlo
+  const contentHeight = doc.heightOfString(content, {
+    width: doc.page.width - 100,
+    align: 'left',
+    lineGap: 3
+  });
+  
+  // Si el contenido es muy pequeño (menos de 50 unidades de altura), reducir el espaciado
+  const isSmallContent = contentHeight < 50;
+  
   // Título de la subsección
   doc.fontSize(14)
      .fillColor(colors.secondary)
-     .font('Poppins-Bold')
+     .font(fontsAvailable ? 'Poppins-Bold' : 'Helvetica-Bold')
      .text(title, 50, y);
   
   // Contenido
   doc.fontSize(11)
-     .font('Poppins')
+     .font(fontsAvailable ? 'Poppins' : 'Helvetica')
      .fillColor(colors.text)
      .text(content, 50, y + 25, {
        width: doc.page.width - 100,
@@ -738,135 +829,362 @@ const addSubsection = (doc, title, content, y, colors) => {
        lineGap: 3
      });
   
-  // Calcular altura del contenido
-  const contentHeight = doc.heightOfString(content, {
-    width: doc.page.width - 100,
-    align: 'left',
-    lineGap: 3
-  });
+  // Ajustar el espaciado dependiendo del tamaño del contenido
+  const spacing = isSmallContent ? 20 : 30;
   
-  // Retornar la posición Y después del contenido
-  return y + 25 + contentHeight + 30;
+  // Retornar la posición Y después del contenido con espaciado ajustado
+  return y + 25 + contentHeight + spacing;
 };
 
 // Función para generar observaciones específicas según el tipo de sección y el contenido real
-const generateSpecificObservations = (sectionType, sectionContent = '', jobTitle = '') => {
-  // Si no hay contenido, proporcionar sugerencias básicas
-  if (!sectionContent || typeof sectionContent !== 'string') {
-    sectionContent = '';
-  }
-
-  // Verificar estado del contenido
-  if (sectionContent.includes('No se proporcionó información') || 
-      sectionContent.includes('No se encontró información') || 
-      sectionContent.includes('No se mencionaron')) {
-    // Si el contenido es un mensaje por defecto, proporcionar sugerencias genéricas
-    return `No se encontró suficiente información en esta sección para proporcionar sugerencias específicas. Considera añadir detalles relevantes para el puesto de ${jobTitle}.`;
+const generateSpecificObservations = async (sectionType, selectedLines, jobTitle) => {
+  // Asegurarse de que selectedLines sea siempre un array
+  if (!selectedLines) {
+    selectedLines = [];
+  } else if (typeof selectedLines === 'string') {
+    // Si es un string, dividir por saltos de línea para crear un array
+    selectedLines = selectedLines.split('\n').filter(line => line.trim() !== '');
+  } else if (!Array.isArray(selectedLines)) {
+    // Si no es un array ni string, convertir a array vacío
+    selectedLines = [];
   }
   
-  // Extraer líneas del contenido para analizar
-  const contentLines = sectionContent.split('\n')
-    .map(line => line.replace(/^•\s*/, '').trim())
-    .filter(line => line.length > 0);
-  
-  if (contentLines.length === 0) {
-    return `No se encontraron datos específicos para proporcionar sugerencias detalladas. Añade información relevante para el puesto de ${jobTitle}.`;
+  // Validar el job title
+  if (!jobTitle || jobTitle === 'No especificado' || jobTitle === 'undefined') {
+    logger.warn(`Job title no especificado o inválido: "${jobTitle}". Usando valor por defecto.`);
+    jobTitle = 'Profesional';
   }
   
-  // Seleccionar 2-3 líneas para hacer sugerencias específicas
-  const selectedLines = contentLines.length > 3 ? 
-    [contentLines[0], contentLines[Math.floor(contentLines.length/2)], contentLines[contentLines.length-1]] : 
-    contentLines;
-    
+  // Log para depuración
+  logger.info(`Generando observaciones para sección ${sectionType}. Job title: "${jobTitle}". Líneas recibidas: ${selectedLines.length}`);
+  
+  // Si no hay líneas seleccionadas, retornar mensaje genérico
+  if (selectedLines.length === 0) {
+    logger.warn(`No hay líneas para ${sectionType}. Retornando mensaje genérico.`);
+    return "No hay suficiente información para generar sugerencias personalizadas.";
+  }
+  
+  // Importar utilidades de OpenAI
+  const openaiUtil = require('./openaiUtil');
+  
+  // Hasta 3 líneas para no exceder límites de procesamiento/tokens
+  const linesToProcess = selectedLines.slice(0, 3);
   let specificObservations = [];
   
-  // Generar sugerencias específicas basadas en el tipo de sección y las líneas seleccionadas
-  if (sectionType === 'experience') {
-    specificObservations = selectedLines.map(line => {
-      const hasNumbers = /\d+%|\d+ veces|\d+ personas|\d+ proyectos|\d+ clientes/.test(line);
-      const hasActionVerbs = /implementé|desarrollé|lideré|gestioné|aumenté|reduje|mejoré|optimicé|logré/.test(line.toLowerCase());
+  try {
+    // Definir prompts específicos según el tipo de sección
+    const systemPromptBase = `
+      Eres un especialista senior en Recursos Humanos con más de 15 años de experiencia en selección de personal.
+      Tu experiencia te permite identificar inmediatamente las fortalezas y debilidades en un CV.
       
-      if (!hasNumbers) {
-        return `Cuantifica los resultados en: "${line}". Por ejemplo: "Aumenté ventas en un 30%" o "Reduje tiempo de procesamiento en un 25%".`;
-      } else if (!hasActionVerbs) {
-        return `Utiliza verbos de acción más impactantes en: "${line}". Por ejemplo, comienza con "Implementé", "Lideré" o "Desarrollé".`;
-      } else {
-        return `Complementa: "${line}" con el impacto específico que tuvo en la organización o equipo.`;
-      }
-    });
-  } else if (sectionType === 'education') {
-    specificObservations = selectedLines.map(line => {
-      const hasRelevantCourses = /curso|materia|especialización|enfoque|orientado a/.test(line.toLowerCase());
-      const hasAchievements = /promedio|calificación|honor|distinción|mérito|premio|beca/.test(line.toLowerCase());
+      Tu tarea es generar sugerencias extremadamente específicas, profesionales y personalizadas para mejorar cada sección del CV.
       
-      if (!hasRelevantCourses) {
-        return `En tu formación: "${line}", añade cursos o materias relevantes para el puesto de ${jobTitle}.`;
-      } else if (!hasAchievements) {
-        return `Complementa: "${line}" con logros académicos destacables como promedio, reconocimientos o becas.`;
-      } else {
-        return `Relaciona más claramente: "${line}" con las habilidades requeridas para el puesto actual.`;
-      }
-    });
-  } else if (sectionType === 'skills') {
-    specificObservations = selectedLines.map(line => {
-      const hasLevel = /básico|intermedio|avanzado|experto|\d+ años/.test(line.toLowerCase());
-      const hasTechnicalDetails = /versión|framework|metodología|herramienta|plataforma/.test(line.toLowerCase());
+      Tus sugerencias deben:
+      - Estar basadas en el contenido real proporcionado, no en generalidades
+      - Ser altamente específicas y accionables (el candidato debe saber exactamente qué cambiar)
+      - Sonar como si vinieran de un consultor experto en RRHH que ha revisado cientos de CVs
+      - Incluir ejemplos concretos adaptados al sector específico
+      - Reflejar las mejores prácticas actuales en redacción de CVs
+      - Adaptarse al nivel de experiencia del candidato
+      - Tener un tono profesional, directo pero constructivo
       
-      if (!hasLevel) {
-        return `Especifica tu nivel de competencia en: "${line}". Por ejemplo: "(Avanzado, 3+ años de experiencia)".`;
-      } else if (!hasTechnicalDetails) {
-        return `Añade detalles técnicos específicos para: "${line}", como versiones, metodologías o plataformas utilizadas.`;
-      } else {
-        return `Complementa: "${line}" con un ejemplo concreto de aplicación en un proyecto o entorno laboral.`;
-      }
-    });
-  } else if (sectionType === 'softSkills') {
-    specificObservations = selectedLines.map(line => {
-      const hasExample = /ejemplo|situación|caso|apliqué|implementé|desarrollé/.test(line.toLowerCase());
-      const hasResults = /resultó en|permitió|aumentó|mejoró|facilitó|logré/.test(line.toLowerCase());
+      IMPORTANTE: Nunca uses plantillas genéricas. Cada respuesta debe ser única y personalizada.
+    `;
+    
+    // Crear prompts específicos para cada tipo de sección
+    const sectionPrompts = {
+      experience: `
+        ${systemPromptBase}
+        
+        CONTEXTO ESPECÍFICO - EXPERIENCIA LABORAL:
+        Actúas como Director/a de Talent Acquisition con más de 15 años evaluando currículums para puestos directivos.
+        
+        Para esta sección de experiencia laboral, céntrate EXCLUSIVAMENTE en:
+        1. Uso estratégico de verbos de alto impacto (ej: "lideré" en lugar de "fui responsable de")
+        2. Inclusión de métricas concretas (%, cifras, KPIs)
+        3. Demostración de resultados tangibles, no solo responsabilidades
+        4. Relevancia específica para el puesto objetivo
+        
+        Las sugerencias deben ser CONCISAS (1-2 líneas), DIRECTAS y ALTAMENTE ESPECÍFICAS.
+        Cada sugerencia debe abordar UN solo aspecto a mejorar.
+        
+        EVITA ESTRICTAMENTE:
+        - Proponer añadir proyectos (pertenecen a otra sección)
+        - Lenguaje genérico que podría aplicar a cualquier CV
+        - Verbosidad o explicaciones innecesarias
+        - Repetición de conceptos
+      `,
       
-      if (!hasExample) {
-        return `Añade un ejemplo concreto para: "${line}". Por ejemplo: "Demostrada al coordinar equipo multidisciplinario en proyecto X".`;
-      } else if (!hasResults) {
-        return `Complementa: "${line}" con los resultados tangibles que obtuviste gracias a esta habilidad.`;
-      } else {
-        return `Relaciona más directamente: "${line}" con las necesidades específicas del puesto de ${jobTitle}.`;
-      }
-    });
-  } else if (sectionType === 'certifications') {
-    specificObservations = selectedLines.map(line => {
-      const hasDate = /\b(19|20)\d{2}\b|vigente|válido hasta|fecha/.test(line);
-      const hasInstitution = /universidad|instituto|microsoft|google|oracle|cisco|pmimacromedia|amazon|scrum|certificado por/.test(line.toLowerCase());
+      education: `
+        ${systemPromptBase}
+        
+        CONTEXTO ESPECÍFICO - FORMACIÓN ACADÉMICA:
+        Actúas como Director/a de Selección Senior especializado en evaluar credenciales académicas.
+        
+        Para esta sección de formación académica, céntrate EXCLUSIVAMENTE en:
+        1. Destacar logros académicos (promedio destacado, honores, becas)
+        2. Relevancia directa de la formación para el puesto
+        3. Estructura y presentación adecuada (fechas, títulos, institución)
+        4. Orden cronológico inverso (lo más reciente primero)
+        
+        Las sugerencias deben ser CONCISAS (1-2 líneas), DIRECTAS y ALTAMENTE ESPECÍFICAS.
+        Cada sugerencia debe abordar UN solo aspecto a mejorar.
+        
+        EVITA ESTRICTAMENTE:
+        - Proponer añadir proyectos o actividades extracurriculares (pertenecen a otra sección)
+        - Lenguaje genérico que podría aplicar a cualquier CV
+        - Verbosidad o explicaciones innecesarias
+        - Sugerir elementos que no corresponden a formación académica formal
+      `,
       
-      if (!hasDate) {
-        return `Añade el año de obtención y vigencia a: "${line}". Por ejemplo: "(2023, vigente hasta 2026)".`;
-      } else if (!hasInstitution) {
-        return `Especifica la entidad certificadora reconocida para: "${line}".`;
-      } else {
-        return `Complementa: "${line}" explicando brevemente cómo aplicas estos conocimientos en tu trabajo.`;
-      }
-    });
-  } else if (sectionType === 'projects') {
-    specificObservations = selectedLines.map(line => {
-      const hasRole = /mi rol|fui responsable|estuve a cargo|como|lideré|desarrollé|diseñé|implementé/.test(line.toLowerCase());
-      const hasTechnologies = /usando|utilizando|con|tecnologías|herramientas|stack|framework|lenguaje/.test(line.toLowerCase());
-      const hasResults = /logré|aumenté|reduje|mejoré|resultó en|permitió/.test(line.toLowerCase());
+      skills: `
+        ${systemPromptBase}
+        
+        CONTEXTO ESPECÍFICO - HABILIDADES TÉCNICAS:
+        Actúas como Senior Technical Recruiter especializado en evaluar competencias técnicas.
+        
+        Para esta sección de habilidades técnicas, céntrate EXCLUSIVAMENTE en:
+        1. Nivel de dominio (básico, intermedio, avanzado, experto)
+        2. Especificidad (versiones, herramientas concretas)
+        3. Organización por relevancia para el puesto
+        4. Eliminación de habilidades obsoletas o irrelevantes
+        
+        Las sugerencias deben ser CONCISAS (1-2 líneas), DIRECTAS y ALTAMENTE ESPECÍFICAS.
+        Cada sugerencia debe abordar UN solo aspecto a mejorar.
+        
+        EVITA ESTRICTAMENTE:
+        - Lenguaje genérico que podría aplicar a cualquier CV
+        - Verbosidad o explicaciones innecesarias
+        - Repetición de conceptos
+        - Sugerir añadir ejemplos de uso (corresponden a experiencia laboral)
+      `,
       
-      if (!hasRole) {
-        return `Especifica tu rol y responsabilidades en: "${line}". Por ejemplo: "Como líder técnico, fui responsable de..."`;
-      } else if (!hasTechnologies) {
-        return `Detalla las tecnologías y metodologías utilizadas en: "${line}".`;
-      } else if (!hasResults) {
-        return `Añade los resultados medibles que obtuviste en: "${line}". Por ejemplo: "...que resultó en un aumento del 40% en la eficiencia".`;
-      } else {
-        return `Relaciona más directamente: "${line}" con las habilidades relevantes para ${jobTitle}.`;
+      softSkills: `
+        ${systemPromptBase}
+        
+        CONTEXTO ESPECÍFICO - HABILIDADES BLANDAS:
+        Actúas como Director/a de Desarrollo de Talento especializado en competencias interpersonales.
+        
+        Para esta sección de habilidades blandas, céntrate EXCLUSIVAMENTE en:
+        1. Relevancia para el puesto objetivo
+        2. Presentación estratégica (priorizar las más valoradas)
+        3. Alineación con la cultura organizacional del sector
+        4. Eliminación de habilidades genéricas poco diferenciadas
+        
+        Las sugerencias deben ser CONCISAS (1-2 líneas), DIRECTAS y ALTAMENTE ESPECÍFICAS.
+        Cada sugerencia debe abordar UN solo aspecto a mejorar.
+        
+        EVITA ESTRICTAMENTE:
+        - Proponer añadir ejemplos detallados (corresponden a experiencia laboral)
+        - Lenguaje genérico que podría aplicar a cualquier CV
+        - Verbosidad o explicaciones innecesarias
+        - Repetición de conceptos
+      `,
+      
+      certifications: `
+        ${systemPromptBase}
+        
+        CONTEXTO ESPECÍFICO - CERTIFICACIONES:
+        Actúas como Talent Acquisition Manager especializado en validación de credenciales profesionales.
+        
+        Para esta sección de certificaciones, céntrate EXCLUSIVAMENTE en:
+        1. Inclusión de fechas de obtención y validez
+        2. Institución emisora (autoridad certificadora)
+        3. Relevancia y vigencia para el puesto
+        4. Estructura y organización visual
+        
+        Las sugerencias deben ser CONCISAS (1-2 líneas), DIRECTAS y ALTAMENTE ESPECÍFICAS.
+        Cada sugerencia debe abordar UN solo aspecto a mejorar.
+        
+        EVITA ESTRICTAMENTE:
+        - Proponer añadir aplicaciones prácticas (corresponden a experiencia laboral)
+        - Lenguaje genérico que podría aplicar a cualquier CV
+        - Verbosidad o explicaciones innecesarias
+        - Repetición de conceptos
+      `,
+      
+      projects: `
+        ${systemPromptBase}
+        
+        CONTEXTO ESPECÍFICO - PROYECTOS RELEVANTES:
+        Actúas como Senior Project Management Recruiter especializado en evaluación de portfolios.
+        
+        Para esta sección de proyectos, céntrate EXCLUSIVAMENTE en:
+        1. Rol específico y responsabilidades concretas
+        2. Tecnologías/metodologías utilizadas
+        3. Resultados medibles y logros específicos
+        4. Relevancia directa para el puesto objetivo
+        
+        Las sugerencias deben ser CONCISAS (1-2 líneas), DIRECTAS y ALTAMENTE ESPECÍFICAS.
+        Cada sugerencia debe abordar UN solo aspecto a mejorar.
+        
+        EVITA ESTRICTAMENTE:
+        - Lenguaje genérico que podría aplicar a cualquier CV
+        - Verbosidad o explicaciones innecesarias
+        - Repetición de conceptos
+        - Sugerir elementos que no corresponden a la descripción de proyectos
+      `
+    };
+    
+    // Seleccionar el prompt adecuado según el tipo de sección
+    const systemPrompt = sectionPrompts[sectionType] || systemPromptBase;
+    
+    // Registrar información detallada para debug
+    logger.info(`Procesando ${linesToProcess.length} líneas para ${sectionType}. Puesto: ${jobTitle}`);
+    
+    // Procesar cada línea con OpenAI
+    specificObservations = await Promise.all(linesToProcess.map(async (line, index) => {
+      try {
+        logger.info(`Generando sugerencia personalizada #${index + 1} para ${sectionType}: "${line.substring(0, 50)}..."`);
+        
+        const userPrompt = `
+          Analiza este elemento de un CV para un puesto de ${jobTitle}:
+          
+          "${line}"
+          
+          Como Director/a de Recursos Humanos con amplia experiencia, brinda UNA sugerencia de mejora ultra específica y accionable.
+          
+          REQUISITOS:
+          - Máximo 2 líneas
+          - Extremadamente específica para este elemento particular
+          - Directo al punto sin explicaciones innecesarias
+          - Tono profesional y ejecutivo
+          - Enfocada en UN solo aspecto a mejorar
+          
+          IMPORTANTE: No incluyas ningún bullet point o viñeta en tu respuesta, solo texto plano.
+          NO uses frases introductorias como "te recomendaría" o "sería conveniente".
+        `;
+        
+        // Llamar a OpenAI para generar la sugerencia personalizada
+        const suggestion = await openaiUtil.generateImprovedText(userPrompt, {
+          model: "gpt-4o",
+          temperature: 0.7,
+          max_tokens: 250,
+          systemMessage: systemPrompt
+        });
+        
+        logger.info(`Sugerencia generada para ${sectionType} #${index + 1}: "${suggestion.substring(0, 50)}..."`);
+        
+        // Formatear la sugerencia como bullet point
+        return `• ${suggestion.trim()}`;
+      } catch (error) {
+        logger.error(`Error al generar sugerencia con OpenAI para ${sectionType}: ${error.message}`);
+        
+        // Sugerencias de respaldo según el tipo de sección
+        const fallbackSuggestions = {
+          experience: `• Para fortalecer esta experiencia, incorpore métricas específicas de impacto y utilice verbos de acción más contundentes al inicio de cada logro. Un profesional de ${jobTitle} debe demostrar resultados cuantificables.`,
+          education: `• Complemente esta formación académica con cursos específicos relevantes para ${jobTitle} y destaque logros como reconocimientos o proyectos destacados que demuestren competencias transferibles.`,
+          skills: `• Especifique su nivel de competencia, versiones utilizadas y contextos de aplicación práctica de esta habilidad. Para ${jobTitle}, es crucial demostrar profundidad de conocimiento técnico.`,
+          softSkills: `• Refuerce esta habilidad con un ejemplo concreto de aplicación en un entorno profesional, idealmente usando el formato STAR y conectándola directamente con los requisitos de ${jobTitle}.`,
+          certifications: `• Incluya año de obtención, período de validez y relevancia práctica de esta certificación para el puesto de ${jobTitle}. Detalle cómo aplica estos conocimientos.`,
+          projects: `• Detalle su rol específico, tecnologías utilizadas y resultados cuantificables obtenidos en este proyecto. Conecte explícitamente con las responsabilidades de ${jobTitle}.`
+        };
+        
+        return fallbackSuggestions[sectionType] || `• Para mejorar esta sección, proporcione información más específica y relevante para el puesto de ${jobTitle}.`;
       }
-    });
+    }));
+    
+    logger.info(`Generadas ${specificObservations.length} sugerencias personalizadas para ${sectionType}`);
+  } catch (error) {
+    logger.error(`Error general al generar sugerencias con OpenAI: ${error.message}`);
+    
+    // Generar sugerencias genéricas de respaldo
+    specificObservations = linesToProcess.map(line => 
+      `• Para optimizar este elemento del CV, añada información más específica, cuantificable y relevante para el puesto de ${jobTitle}. Los reclutadores buscan evidencia concreta de competencias aplicables.`
+    );
   }
   
   // Limitar a 3 observaciones máximo y unirlas con saltos de línea
   return specificObservations.slice(0, 3).join('\n\n');
 };
+
+// Funciones de utilidad para procesamiento de texto
+/**
+ * Procesa una lista con viñetas
+ * @param {Array|String} items - Array de elementos o string con líneas separadas por \n
+ * @param {String} defaultText - Texto por defecto si no hay elementos
+ * @returns {String} Lista formateada con viñetas
+ */
+function processBulletList(items, defaultText) {
+  if (!items) {
+    return defaultText;
+  }
+  
+  // Si es un string, dividirlo en líneas
+  if (typeof items === 'string') {
+    items = items.split('\n').filter(line => line.trim() !== '');
+  }
+  
+  // Si no es un array o está vacío, usar texto por defecto
+  if (!Array.isArray(items) || items.length === 0) {
+    return defaultText;
+  }
+  
+  // Función para limpiar marcadores markdown ** y *
+  const cleanMarkdownFormatting = (text) => {
+    return text.replace(/\*\*/g, '').replace(/\*/g, '');
+  };
+  
+  // Formatear lista con viñetas
+  let content = '';
+  for (const item of items) {
+    content += `• ${cleanMarkdownFormatting(item)}\n`;
+  }
+  
+  return content.trim();
+}
+
+/**
+ * Procesa una lista numerada
+ * @param {Array|String} items - Array de elementos o string con líneas separadas por \n
+ * @param {String} defaultText - Texto por defecto si no hay elementos
+ * @returns {String} Lista formateada con números
+ */
+function processNumberedList(items, defaultText) {
+  if (!items) {
+    return defaultText;
+  }
+  
+  // Si es un string, dividirlo en líneas
+  if (typeof items === 'string') {
+    items = items.split('\n').filter(line => line.trim() !== '');
+  }
+  
+  // Si no es un array o está vacío, usar texto por defecto
+  if (!Array.isArray(items) || items.length === 0) {
+    return defaultText;
+  }
+  
+  // Función para limpiar marcadores markdown ** y *
+  const cleanMarkdownFormatting = (text) => {
+    return text.replace(/\*\*/g, '').replace(/\*/g, '');
+  };
+  
+  // Formatear lista numerada
+  let content = '';
+  for (let i = 0; i < items.length; i++) {
+    content += `${i+1}. ${cleanMarkdownFormatting(items[i])}\n`;
+  }
+  
+  return content.trim();
+}
+
+// Función simple para simular subida FTP (solo guarda localmente)
+async function uploadPdfToServer(filePath, fileName) {
+  try {
+    // Asegurar que la URL pública tiene el formato correcto
+    const baseUrl = process.env.PDF_PUBLIC_URL || 'https://myworkinpe.lat/pdfs/';
+    // Asegurar que la URL base termina con /
+    const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
+    // Construir la URL completa
+    const publicUrl = `${normalizedBaseUrl}${fileName}`;
+    logger.info(`URL pública generada para el PDF: ${publicUrl}`);
+    return publicUrl;
+  } catch (error) {
+    logger.error(`Error al generar URL para PDF: ${error.message}`);
+    return null;
+  }
+}
 
 module.exports = {
   generateCVAnalysisPDF,

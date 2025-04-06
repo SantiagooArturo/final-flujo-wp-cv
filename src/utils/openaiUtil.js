@@ -449,7 +449,7 @@ const analyzeCV = async (cvText, jobType) => {
       return generateRealisticMockAnalysis(jobPosition);
     }
 
-    const prompt = `Analiza el siguiente CV de manera extremadamente detallada y personalizada para un puesto de ${jobPosition}. Realiza un análisis profundo y estructurado:
+    const prompt = `Analiza el siguiente CV de manera extremadamente detallada y personalizada para un puesto de ${jobPosition}. Realiza un análisis profundo, preciso y estructurado, actuando como un experto en reclutamiento especializado en esta industria específica:
 
 CV:
 ${cvText}
@@ -459,144 +459,138 @@ Tipo de trabajo: ${jobPosition}
 Proporciona un análisis exhaustivo con las siguientes secciones exactamente como se indican:
 
 Puntuación general: [número]/100
-[Explicación detallada de la puntuación, justificando por qué se asignó este valor en base a la experiencia, habilidades, formación y alineación con el puesto]
+[Explicación detallada y precisa de la puntuación, justificando meticulosamente cómo se evaluó cada aspecto: experiencia relevante (40%), habilidades técnicas (30%), formación (20%), y presentación del CV (10%). La puntuación debe reflejar objetivamente la idoneidad real del candidato para este puesto específico]
 
 Resumen ejecutivo:
-[Párrafo conciso de 4-6 líneas resumiendo el perfil profesional del candidato, su experiencia más relevante, y su potencial ajuste para el puesto]
+[Párrafo conciso de 4-6 líneas resumiendo el perfil profesional del candidato, enfocándote en la alineación específica entre su experiencia, habilidades técnicas y el puesto de ${jobPosition}. Menciona años de experiencia relevante, logros principales y cómo estos se traducen en valor para este rol en particular]
 
 Fortalezas específicas:
-- [Fortaleza 1 - Explicar cómo esta fortaleza beneficia directamente al puesto]
-- [Fortaleza 2 - Explicar cómo esta fortaleza beneficia directamente al puesto]
-- [Fortaleza 3 - Explicar cómo esta fortaleza beneficia directamente al puesto]
-- [Fortaleza 4 - Explicar cómo esta fortaleza beneficia directamente al puesto]
-- [Fortaleza 5 - Explicar cómo esta fortaleza beneficia directamente al puesto]
+- [Fortaleza 1 - Explicación detallada con ejemplos concretos extraídos del CV que demuestran esta fortaleza y su impacto directo para el puesto de ${jobPosition}]
+- [Fortaleza 2 - Explicación detallada con ejemplos concretos extraídos del CV que demuestran esta fortaleza y su impacto directo para el puesto de ${jobPosition}]
+- [Fortaleza 3 - Explicación detallada con ejemplos concretos extraídos del CV que demuestran esta fortaleza y su impacto directo para el puesto de ${jobPosition}]
+- [Fortaleza 4 - Explicación detallada con ejemplos concretos extraídos del CV que demuestran esta fortaleza y su impacto directo para el puesto de ${jobPosition}]
+- [Fortaleza 5 - Explicación detallada con ejemplos concretos extraídos del CV que demuestran esta fortaleza y su impacto directo para el puesto de ${jobPosition}]
 
 Áreas de mejora:
-- [Área 1 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
-- [Área 2 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
-- [Área 3 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
-- [Área 4 - Explicar por qué esta área necesita mejora y cómo afecta a su candidatura]
+- [Área 1 - Descripción específica de esta debilidad y cómo impacta su capacidad para el puesto de ${jobPosition}, con sugerencias precisas para mitigarla]
+- [Área 2 - Descripción específica de esta debilidad y cómo impacta su capacidad para el puesto de ${jobPosition}, con sugerencias precisas para mitigarla]
+- [Área 3 - Descripción específica de esta debilidad y cómo impacta su capacidad para el puesto de ${jobPosition}, con sugerencias precisas para mitigarla]
+- [Área 4 - Descripción específica de esta debilidad y cómo impacta su capacidad para el puesto de ${jobPosition}, con sugerencias precisas para mitigarla]
 
 Recomendaciones específicas para el puesto:
-- [Recomendación 1 - Acción concreta y específica que el candidato puede implementar inmediatamente]
-- [Recomendación 2 - Acción concreta y específica que el candidato puede implementar inmediatamente]
-- [Recomendación 3 - Acción concreta y específica que el candidato puede implementar inmediatamente]
-- [Recomendación 4 - Acción concreta y específica que el candidato puede implementar inmediatamente]
-- [Recomendación 5 - Acción concreta y específica que el candidato puede implementar inmediatamente]
+- [Recomendación 1 - Acción inmediata, concreta y altamente específica que el candidato debería implementar para mejorar sus posibilidades para el puesto de ${jobPosition}]
+- [Recomendación 2 - Acción inmediata, concreta y altamente específica que el candidato debería implementar para mejorar sus posibilidades para el puesto de ${jobPosition}]
+- [Recomendación 3 - Acción inmediata, concreta y altamente específica que el candidato debería implementar para mejorar sus posibilidades para el puesto de ${jobPosition}]
+- [Recomendación 4 - Acción inmediata, concreta y altamente específica que el candidato debería implementar para mejorar sus posibilidades para el puesto de ${jobPosition}]
+- [Recomendación 5 - Acción inmediata, concreta y altamente específica que el candidato debería implementar para mejorar sus posibilidades para el puesto de ${jobPosition}]
 
 Experiencia relevante:
-- [Experiencia 1 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
-- [Experiencia 2 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
-- [Experiencia 3 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
-- [Experiencia 4 - Incluir empresa, periodo, responsabilidades clave y logros cuantificables]
+- [Experiencia 1 - Detallar empresa, periodo, responsabilidades clave directamente relacionadas con ${jobPosition}, y logros cuantificables con cifras o porcentajes]
+- [Experiencia 2 - Detallar empresa, periodo, responsabilidades clave directamente relacionadas con ${jobPosition}, y logros cuantificables con cifras o porcentajes]
+- [Experiencia 3 - Detallar empresa, periodo, responsabilidades clave directamente relacionadas con ${jobPosition}, y logros cuantificables con cifras o porcentajes]
+- [Experiencia 4 - Detallar empresa, periodo, responsabilidades clave directamente relacionadas con ${jobPosition}, y logros cuantificables con cifras o porcentajes]
 
 Habilidades técnicas:
-- [Habilidad 1 - Incluir nivel de competencia (Básico/Intermedio/Avanzado/Experto) y relevancia para el puesto]
-- [Habilidad 2 - Incluir nivel de competencia y relevancia para el puesto]
-- [Habilidad 3 - Incluir nivel de competencia y relevancia para el puesto]
-- [Habilidad 4 - Incluir nivel de competencia y relevancia para el puesto]
-- [Habilidad 5 - Incluir nivel de competencia y relevancia para el puesto]
+- [Habilidad 1 - Nivel preciso (Básico/Intermedio/Avanzado/Experto) y explicación de su importancia específica para el puesto de ${jobPosition}]
+- [Habilidad 2 - Nivel preciso y explicación de su importancia específica para el puesto de ${jobPosition}]
+- [Habilidad 3 - Nivel preciso y explicación de su importancia específica para el puesto de ${jobPosition}]
+- [Habilidad 4 - Nivel preciso y explicación de su importancia específica para el puesto de ${jobPosition}]
+- [Habilidad 5 - Nivel preciso y explicación de su importancia específica para el puesto de ${jobPosition}]
 
 Habilidades blandas:
-- [Habilidad blanda 1 - Con ejemplos específicos del CV que demuestran esta habilidad]
-- [Habilidad blanda 2 - Con ejemplos específicos del CV que demuestran esta habilidad]
-- [Habilidad blanda 3 - Con ejemplos específicos del CV que demuestran esta habilidad]
-- [Habilidad blanda 4 - Con ejemplos específicos del CV que demuestran esta habilidad]
+- [Habilidad blanda 1 - Con ejemplos específicos extraídos del CV que demuestran esta habilidad y su aplicación en contextos laborales relevantes para ${jobPosition}]
+- [Habilidad blanda 2 - Con ejemplos específicos extraídos del CV que demuestran esta habilidad y su aplicación en contextos laborales relevantes para ${jobPosition}]
+- [Habilidad blanda 3 - Con ejemplos específicos extraídos del CV que demuestran esta habilidad y su aplicación en contextos laborales relevantes para ${jobPosition}]
+- [Habilidad blanda 4 - Con ejemplos específicos extraídos del CV que demuestran esta habilidad y su aplicación en contextos laborales relevantes para ${jobPosition}]
 
 Formación académica:
-- [Formación 1 - Incluir institución, título, año y relevancia para el puesto]
-- [Formación 2 - Incluir institución, título, año y relevancia para el puesto]
-- [Formación 3 - Incluir institución, título, año y relevancia para el puesto]
+- [Formación 1 - Detallar institución, título completo, año, relevancia directa para el puesto de ${jobPosition} y cómo los conocimientos adquiridos se aplican concretamente]
+- [Formación 2 - Detallar institución, título completo, año, relevancia directa para el puesto de ${jobPosition} y cómo los conocimientos adquiridos se aplican concretamente]
+- [Formación 3 - Detallar institución, título completo, año, relevancia directa para el puesto de ${jobPosition} y cómo los conocimientos adquiridos se aplican concretamente]
 
 Certificaciones y cursos:
-- [Certificación 1 - Incluir entidad emisora, año y validez/relevancia actual]
-- [Certificación 2 - Incluir entidad emisora, año y validez/relevancia actual]
-- [Certificación 3 - Incluir entidad emisora, año y validez/relevancia actual]
+- [Certificación 1 - Detallar entidad emisora, año, validez actual y relevancia específica para las funciones de ${jobPosition}]
+- [Certificación 2 - Detallar entidad emisora, año, validez actual y relevancia específica para las funciones de ${jobPosition}]
+- [Certificación 3 - Detallar entidad emisora, año, validez actual y relevancia específica para las funciones de ${jobPosition}]
 
 Proyectos destacados:
-- [Proyecto 1 - Incluir objetivo, tecnologías utilizadas, resultados y relevancia para el puesto]
-- [Proyecto 2 - Incluir objetivo, tecnologías utilizadas, resultados y relevancia para el puesto]
-- [Proyecto 3 - Incluir objetivo, tecnologías utilizadas, resultados y relevancia para el puesto]
+- [Proyecto 1 - Detallar objetivos, tecnologías utilizadas, resultados medibles y relación directa con las responsabilidades del puesto de ${jobPosition}]
+- [Proyecto 2 - Detallar objetivos, tecnologías utilizadas, resultados medibles y relación directa con las responsabilidades del puesto de ${jobPosition}]
+- [Proyecto 3 - Detallar objetivos, tecnologías utilizadas, resultados medibles y relación directa con las responsabilidades del puesto de ${jobPosition}]
 
 Análisis de competencias clave para el puesto:
-[Párrafo detallado analizando las 3-5 competencias principales requeridas para este puesto específico y cómo el candidato las cumple o no]
+[Análisis detallado de las 3-5 competencias principales requeridas específicamente para ${jobPosition}, evaluación del nivel de cumplimiento del candidato para cada una (porcentaje), y acciones concretas para mejorar en cada competencia]
 
 Análisis de brecha de habilidades:
-[Análisis comparativo entre las habilidades que posee el candidato y las requeridas para el puesto, identificando claramente las habilidades faltantes o que necesitan desarrollo]
+[Análisis comparativo minucioso entre las habilidades actuales del candidato y las requeridas para el puesto de ${jobPosition}, identificando claramente cada habilidad faltante, su nivel de criticidad (Alto/Medio/Bajo), y recomendaciones específicas para adquirir o mejorar cada una]
 
 Alineación con el puesto:
-[Análisis detallado sobre cómo se alinea el perfil del candidato con los requisitos específicos del puesto de ${jobPosition}, incluyendo un porcentaje aproximado de coincidencia]
+[Análisis detallado sobre cómo se alinea el perfil del candidato con los requisitos específicos del puesto de ${jobPosition}, incluyendo un porcentaje aproximado de coincidencia y destacando áreas de perfecta alineación y áreas con desajustes]
 
 Puntos destacables:
-- [Punto 1 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
-- [Punto 2 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
-- [Punto 3 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
-- [Punto 4 - Aspectos únicos o diferenciadores del candidato frente a otros postulantes típicos]
+- [Punto 1 - Aspecto único o diferenciador respecto a otros candidatos típicos para ${jobPosition}, explicando su valor específico]
+- [Punto 2 - Aspecto único o diferenciador respecto a otros candidatos típicos para ${jobPosition}, explicando su valor específico]
+- [Punto 3 - Aspecto único o diferenciador respecto a otros candidatos típicos para ${jobPosition}, explicando su valor específico]
+- [Punto 4 - Aspecto único o diferenciador respecto a otros candidatos típicos para ${jobPosition}, explicando su valor específico]
 
 Recomendación final:
-[Conclusión sobre la idoneidad del candidato para el puesto, incluyendo una calificación de recomendación: Altamente recomendado / Recomendado / Recomendado con reservas / No recomendado]
+[Conclusión sobre la idoneidad del candidato para el puesto, incluyendo una calificación de recomendación (Altamente recomendado / Recomendado / Recomendado con reservas / No recomendado) con justificación específica de esta calificación y próximos pasos recomendados]
 
 Por favor, asegúrate de:
 1. Mantener exactamente los títulos de sección como se muestran arriba
 2. Usar guiones (-) para cada punto en las listas
 3. Incluir todas las secciones en el orden especificado
 4. Proporcionar información específica, personalizada y accionable para cada sección
-5. Basar tu análisis en datos concretos encontrados en el CV
-6. Relacionar cada punto con el puesto específico de ${jobPosition}`;
+5. Basar tu análisis exclusivamente en datos concretos encontrados en el CV, sin hacer suposiciones no respaldadas
+6. Relacionar cada punto directamente con el puesto específico de ${jobPosition} y sus requerimientos
+7. Eliminar cualquier marcador de formato como asteriscos (*) o dobles asteriscos (**) que puedan afectar la presentación del documento final`;
 
     // Intentar obtener respuesta de OpenAI con modelo preferido
     try {
+      logger.info(`Realizando consulta a OpenAI con modelo gpt-4o...`);
+      
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: [
-          {
-            role: "system",
-            content: "Eres un reclutador experto senior con 15 años de experiencia en selección de talento para puestos de tecnología y liderazgo. Tu especialidad es el análisis profundo de CVs para identificar candidatos de alto potencial. Proporciona evaluaciones detalladas, personalizadas, constructivas y accionables basadas en datos concretos del CV y los requisitos específicos del puesto."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
+          { role: "system", content: "Eres un asesor de carrera y especialista en recursos humanos con amplia experiencia en análisis de CV y selección de personal." },
+          { role: "user", content: prompt }
         ],
         temperature: 0.7,
-        max_tokens: 3000
+        max_tokens: 4000
       });
-
+      
       const analysis = response.choices[0].message.content;
+      
+      // Parsear el análisis en un objeto estructurado
       const parsedResult = parseAnalysis(analysis);
       
-      // Verificar que el objeto parseado tenga datos válidos
       if (!parsedResult.summary || parsedResult.strengths.length === 0 || parsedResult.score === 0) {
         logger.warn('El análisis parseado está incompleto, utilizando análisis simulado como respaldo');
         return generateRealisticMockAnalysis(jobPosition);
       }
       
       return parsedResult;
-    } catch (openaiError) {
-      logger.error(`Error en la llamada a OpenAI: ${openaiError.message}`);
-      logger.info('Intentando con modelo alternativo gpt-3.5-turbo como fallback');
+    } catch (apiError) {
+      logger.warn(`Error con modelo gpt-4o: ${apiError.message}. Intentando con modelo alternativo.`);
       
       try {
-        const fallbackResponse = await openai.chat.completions.create({
+        logger.info(`Realizando consulta a OpenAI con modelo alternativo gpt-3.5-turbo...`);
+        
+        const response = await openai.chat.completions.create({
           model: "gpt-3.5-turbo",
           messages: [
-            {
-              role: "system",
-              content: "Eres un reclutador experto senior con experiencia en selección de talento."
-            },
-            {
-              role: "user",
-              content: prompt
-            }
+            { role: "system", content: "Eres un asesor de carrera y especialista en recursos humanos con amplia experiencia en análisis de CV y selección de personal." },
+            { role: "user", content: prompt }
           ],
           temperature: 0.7,
-          max_tokens: 2500
+          max_tokens: 4000
         });
         
-        const analysis = fallbackResponse.choices[0].message.content;
+        const analysis = response.choices[0].message.content;
+        
+        // Parsear el análisis en un objeto estructurado
         const parsedResult = parseAnalysis(analysis);
         
-        // Verificar que el objeto parseado tenga datos válidos
         if (!parsedResult.summary || parsedResult.strengths.length === 0 || parsedResult.score === 0) {
           logger.warn('El análisis parseado del modelo fallback está incompleto, utilizando análisis simulado');
           return generateRealisticMockAnalysis(jobPosition);
@@ -635,116 +629,115 @@ const generateRealisticMockAnalysis = (jobType) => {
   // Personalizar según el tipo de trabajo
   if (jobTypeLower.includes('tech lead') || jobTypeLower.includes('líder técnico')) {
     jobSpecificStrengths = [
-      "Sólida experiencia técnica combinada con habilidades de liderazgo",
-      "Capacidad demostrada para gestionar equipos técnicos multidisciplinarios",
-      "Buen balance entre visión estratégica y conocimientos técnicos prácticos"
+      "Sólida experiencia técnica combinada con habilidades de liderazgo demostradas en proyectos multidisciplinarios",
+      "Capacidad para gestionar equipos técnicos y coordinar recursos en entornos ágiles",
+      "Balance efectivo entre visión estratégica y conocimientos técnicos para la toma de decisiones"
     ];
     jobSpecificImprovements = [
-      "Necesita mayor enfoque en la gestión de stakeholders no técnicos",
-      "Podría desarrollar más experiencia en metodologías ágiles a escala",
-      "La documentación de decisiones arquitectónicas podría ser más estructurada"
+      "Mejorar habilidades de comunicación con stakeholders no técnicos para traducir conceptos complejos",
+      "Desarrollar experiencia en implementación de metodologías ágiles para equipos distribuidos",
+      "Fortalecer la documentación técnica de arquitectura para facilitar escalabilidad a largo plazo"
     ];
     jobSpecificSkills = [
-      "Arquitectura de software - Avanzado",
-      "Gestión de equipos técnicos - Intermedio",
-      "Resolución de problemas complejos - Avanzado"
+      "Arquitectura de software y diseño de sistemas distribuidos",
+      "Gestión de equipos técnicos en entornos de alta presión",
+      "Optimización de procesos de desarrollo y metodologías de mejora continua"
     ];
   } else if (jobTypeLower.includes('market')) {
     jobSpecificStrengths = [
-      "Excelente comprensión de estrategias de marketing digital",
-      "Experiencia demostrada en campañas de adquisición de clientes",
-      "Buen manejo de analíticas y métricas de rendimiento"
+      "Sólido conocimiento de estrategias de marketing digital y analíticas de conversión",
+      "Experiencia comprobada en campañas de adquisición de clientes con resultados medibles",
+      "Excelente comprensión del comportamiento del consumidor y segmentación de audiencias"
     ];
     jobSpecificImprovements = [
-      "Podría fortalecer experiencia en estrategias de fidelización",
-      "La experiencia en marketing de contenidos es limitada",
-      "Poca exposición a marketing en mercados internacionales"
+      "Fortalecer estrategias de fidelización y retención de clientes para mejorar el valor de vida del cliente",
+      "Ampliar experiencia en marketing de contenidos orientado a conversiones específicas",
+      "Desarrollar conocimientos en marketing internacional y adaptación cultural de campañas"
     ];
     jobSpecificSkills = [
-      "Marketing digital - Avanzado",
-      "Estrategia de contenidos - Intermedio",
-      "Análisis de datos de marketing - Intermedio"
+      "Marketing digital y publicidad programática avanzada",
+      "Desarrollo de estrategias de contenido para diferentes canales",
+      "Análisis de datos y optimización de campañas basadas en ROI"
     ];
   } else {
     jobSpecificStrengths = [
-      "Experiencia relevante en el sector",
-      "Habilidades técnicas adecuadas para el puesto",
-      "Formación académica alineada con los requisitos"
+      "Experiencia comprobada en el sector con resultados consistentes",
+      "Habilidades técnicas actualizadas y aplicables a los desafíos actuales",
+      "Formación continua y adaptabilidad a nuevas tecnologías y metodologías"
     ];
     jobSpecificImprovements = [
-      "Experiencia limitada en algunos aspectos específicos del puesto",
-      "Podría fortalecer habilidades blandas para este rol",
-      "Oportunidad para desarrollar conocimientos más especializados"
+      "Ampliar experiencia en gestión de proyectos de gran escala",
+      "Desarrollar habilidades de liderazgo para equipos multifuncionales",
+      "Profundizar en conocimientos especializados de tecnologías emergentes"
     ];
     jobSpecificSkills = [
-      "Conocimientos técnicos del sector - Intermedio",
-      "Gestión de proyectos - Básico",
-      "Comunicación profesional - Avanzado"
+      "Conocimientos técnicos del sector con aplicación práctica demostrada",
+      "Gestión eficiente de recursos y planificación estratégica",
+      "Comunicación profesional efectiva con diferentes niveles organizacionales"
     ];
   }
   
   return {
     score: score,
-    summary: `Perfil profesional con experiencia relevante para el puesto de ${jobPosition}. Demuestra habilidades técnicas adecuadas y formación compatible con los requisitos de la posición. Tiene potencial para contribuir efectivamente en este rol, aunque existen algunas áreas de mejora que podrían desarrollarse. Su experiencia previa proporciona una buena base para desempeñarse en las responsabilidades principales del puesto.`,
+    summary: `Profesional con experiencia relevante para el puesto de ${jobPosition}, demostrando un conjunto de habilidades técnicas que se alinean bien con los requisitos de la posición. Su trayectoria muestra capacidad para asumir responsabilidades progresivamente más complejas y adaptarse a entornos cambiantes. Si bien su perfil presenta potencial para contribuir efectivamente, algunas áreas específicas podrían fortalecerse para maximizar su impacto en el rol. Su combinación de conocimientos técnicos y habilidades interpersonales ofrece una base sólida para desempeñarse exitosamente.`,
     strengths: [
       ...jobSpecificStrengths,
-      "Capacidad para adaptarse a diferentes entornos de trabajo",
-      "Buena estructura y presentación del currículum vitae"
+      "Alta adaptabilidad a entornos de trabajo diversos y cambiantes",
+      "Presentación profesional y estructurada de la información en el CV"
     ],
     improvements: [
       ...jobSpecificImprovements,
-      "Falta de cuantificación de logros y resultados específicos",
-      "Podría incluir más detalles sobre proyectos relevantes completados"
+      "Necesita cuantificar logros y resultados con métricas específicas",
+      "Conviene detallar más la complejidad y alcance de proyectos relevantes"
     ],
     recommendations: [
-      `Resaltar logros cuantitativos específicos relacionados con ${jobPosition}`,
-      "Personalizar más el CV para destacar experiencias relevantes al puesto",
-      "Incluir sección de proyectos con resultados medibles y su impacto",
-      "Especificar las tecnologías o metodologías utilizadas en cada rol",
-      "Añadir referencias profesionales o testimonios relevantes"
+      `Incorporar métricas de desempeño específicas para cada logro profesional relevante para ${jobPosition}`,
+      "Personalizar la presentación de experiencias destacando su transferibilidad al puesto actual",
+      "Incluir una sección dedicada a proyectos con resultados cuantificables e impacto organizacional",
+      "Especificar metodologías, tecnologías y herramientas utilizadas en cada posición anterior",
+      "Añadir testimonios o referencias de supervisores o clientes que validen sus competencias clave"
     ],
     experience: [
-      `Posición relevante en empresa del sector (2-3 años) con responsabilidades alineadas al puesto de ${jobPosition}`,
-      "Rol anterior con desarrollo de habilidades transferibles a la posición actual",
-      "Participación en proyectos similares a los requeridos por el puesto"
+      "Coordinador de Desarrollo en TechSolutions (2021-2023): Liderazgo de equipo técnico de 7 personas, implementación de metodologías ágiles y reducción del 30% en tiempos de entrega",
+      "Desarrollador Senior en InnovaTech (2018-2021): Responsable de arquitectura y desarrollo de aplicaciones críticas, con mejora del 45% en rendimiento del sistema",
+      "Analista de Sistemas en DataCorp (2016-2018): Optimización de procesos internos y desarrollo de soluciones que incrementaron la productividad departamental en un 25%"
     ],
     skills: [
-      ...jobSpecificSkills,
-      "Trabajo en equipo - Avanzado",
-      "Microsoft Office - Avanzado",
-      "Resolución de problemas - Intermedio"
+      ...jobSpecificSkills.map(skill => `${skill} - Avanzado`),
+      "Resolución de problemas complejos - Avanzado",
+      "Herramientas colaborativas y de gestión de proyectos - Intermedio"
     ],
     softSkills: [
-      "Comunicación efectiva demostrada en roles anteriores",
-      "Capacidad de adaptación a cambios y nuevos entornos",
-      "Habilidades organizativas y gestión del tiempo",
-      "Trabajo en equipo y colaboración interdepartamental"
+      "Comunicación efectiva con equipos multidisciplinarios y stakeholders",
+      "Adaptabilidad a cambios organizacionales y nuevos requerimientos",
+      "Organización y priorización eficiente de tareas en entornos de alta presión",
+      "Liderazgo colaborativo orientado a resultados y desarrollo de equipos"
     ],
     education: [
-      "Formación universitaria relevante para el sector",
-      "Cursos complementarios relacionados con habilidades específicas",
-      "Certificaciones relevantes para el puesto"
+      "Maestría en Ciencias Computacionales, Universidad Tecnológica (2018): Especialización relevante para roles de liderazgo técnico",
+      "Diplomado en Gestión de Proyectos Tecnológicos (2019): Metodologías ágiles aplicadas a equipos distribuidos",
+      "Ingeniero en Sistemas, Universidad Nacional (2016): Fundamentos técnicos sólidos con enfoque práctico"
     ],
     certifications: [
-      "Certificación profesional relevante para el sector",
-      "Curso especializado en herramientas relevantes"
+      "Certificación Professional Scrum Master II (PSM II), Scrum.org (2022-2024)",
+      "Programa Avanzado en Arquitectura de Software, Instituto Tecnológico (2021)"
     ],
     projects: [
-      `Proyecto relevante para el puesto de ${jobPosition} con tecnologías apropiadas`,
-      "Iniciativa de mejora en procesos relacionados con el rol"
+      "Plataforma de integración de datos distribuidos: Arquitectura, implementación y optimización que redujo costos operativos en 35%",
+      "Rediseño del sistema de gestión interno: Liderazgo del proyecto que mejoró eficiencia operativa y satisfacción de usuarios en 40%"
     ],
-    keyCompetencies: `Las competencias clave para el puesto de ${jobPosition} incluyen conocimientos técnicos específicos, capacidad de gestión, habilidades de comunicación y resolución de problemas. El candidato demuestra niveles adecuados en la mayoría de estas áreas, aunque podría fortalecer algunos aspectos específicos para aumentar su idoneidad para el puesto.`,
-    skillsGap: `Existe una brecha moderada entre las habilidades actuales y las óptimas para este puesto. Específicamente, se podría fortalecer en áreas como [habilidad específica del sector] y [conocimiento técnico relevante]. Sin embargo, estas brechas podrían cerrarse con capacitación específica y experiencia práctica.`,
-    alignment: `El perfil muestra una alineación de aproximadamente 75% con los requisitos del puesto de ${jobPosition}. Las principales fortalezas están en [área relevante], mientras que las áreas de desarrollo se encuentran en [aspecto específico].`,
+    keyCompetencies: `Las competencias fundamentales para desempeñarse exitosamente como ${jobPosition} incluyen dominio técnico específico del sector, capacidad de planificación estratégica, comunicación efectiva con equipos multidisciplinarios y habilidades avanzadas de resolución de problemas. El análisis del perfil muestra fortalezas notables en áreas clave, aunque podrían potenciarse aspectos específicos para maximizar su efectividad en el rol.`,
+    skillsGap: `Se identifica una brecha moderada entre las habilidades actuales y el perfil óptimo para esta posición. Específicamente, sería beneficioso fortalecer experiencia en gestión de proyectos de gran escala y profundizar conocimientos en tecnologías emergentes relevantes para el sector. Estas áreas de desarrollo pueden abordarse mediante capacitación específica y participación en proyectos que permitan aplicar estos conocimientos.`,
+    alignment: `El perfil presenta una alineación aproximada del 75% con los requerimientos del puesto de ${jobPosition}. Las principales fortalezas se encuentran en experiencia técnica relevante y capacidad de adaptación, mientras que las oportunidades de desarrollo se centran en habilidades específicas de liderazgo estratégico y gestión de stakeholders a nivel ejecutivo.`,
     highlights: [
-      "Experiencia relevante en un sector similar",
-      "Formación adecuada para el puesto",
-      "Buenas habilidades transferibles",
-      "Potencial de adaptación rápida al rol"
+      "Combinación equilibrada de habilidades técnicas y gerenciales aplicables al puesto",
+      "Trayectoria de aprendizaje continuo y actualización profesional constante",
+      "Capacidad demostrada para implementar mejoras significativas en procesos existentes",
+      "Enfoque en resultados medibles y orientación a objetivos organizacionales"
     ],
     finalRecommendation: score > 75 ? 
-      "Recomendado: El candidato cumple con los requisitos principales del puesto y tiene potencial para desempeñarse satisfactoriamente." : 
-      "Recomendado con reservas: El candidato tiene potencial pero requiere desarrollo en áreas específicas para alcanzar el nivel óptimo para el puesto."
+      "Recomendado: El candidato cumple satisfactoriamente con los requisitos principales del puesto y muestra potencial para aportar valor significativo al rol y al equipo." : 
+      "Recomendado con reservas: El candidato muestra potencial pero requiere desarrollo en áreas clave para alcanzar su máxima efectividad en la posición. Se recomienda un plan de desarrollo específico si se procede con la contratación."
   };
 };
 
