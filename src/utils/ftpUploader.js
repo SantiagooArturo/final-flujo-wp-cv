@@ -1,7 +1,10 @@
-const { Client } = require('basic-ftp');
+const FTP = require('basic-ftp');
 const fs = require('fs-extra');
 const path = require('path');
 const logger = require('./logger');
+const config = require('../config');
+const { v4: uuidv4 } = require('uuid');
+const os = require('os');
 
 /**
  * Sube un archivo al servidor FTP y retorna la URL pública
@@ -10,7 +13,7 @@ const logger = require('./logger');
  * @returns {Promise<string>} - URL pública del archivo subido
  */
 async function uploadFileToFTP(localFilePath, customFileName = null) {
-  const client = new Client();
+  const client = new FTP.Client();
   let remotePath = null;
 
   try {
@@ -132,6 +135,71 @@ async function uploadFileToFTP(localFilePath, customFileName = null) {
   }
 }
 
+/**
+ * Upload a file to FTP server
+ * @param {Buffer} fileBuffer - File content as buffer
+ * @param {string} originalFilename - Original filename
+ * @returns {Promise<string>} Public URL of the uploaded file
+ */
+const uploadToFTP = async (fileBuffer, originalFilename) => {
+  // Generar un nombre de archivo único
+  const fileExtension = path.extname(originalFilename) || '.pdf';
+  const filename = `cv_${Date.now()}_${uuidv4().substring(0, 8)}${fileExtension}`;
+  
+  // Crear una ruta temporal para guardar el archivo temporalmente
+  const tempDir = os.tmpdir();
+  const tempFilePath = path.join(tempDir, filename);
+  
+  try {
+    // Guardar el buffer como archivo temporal
+    await fs.writeFile(tempFilePath, fileBuffer);
+    logger.info(`Temporary file created at: ${tempFilePath}`);
+    
+    // Conectar al servidor FTP
+    const client = new FTP.Client();
+    client.ftp.verbose = false;
+    
+    await client.access({
+      host: config.ftp.host,
+      user: config.ftp.user,
+      password: config.ftp.password,
+      port: config.ftp.port,
+      secure: false
+    });
+    
+    logger.info(`Connected to FTP server: ${config.ftp.host}`);
+    
+    // Navegar al directorio de destino
+    await client.ensureDir(config.ftp.uploadDir);
+    logger.info(`Navigated to directory: ${config.ftp.uploadDir}`);
+    
+    // Subir el archivo
+    await client.uploadFrom(tempFilePath, filename);
+    logger.info(`File uploaded to FTP: ${filename}`);
+    
+    // Cerrar la conexión
+    client.close();
+    
+    // Generar la URL pública
+    const publicUrl = `${config.ftp.publicUrl}${filename}`;
+    logger.info(`Public URL generated: ${publicUrl}`);
+    
+    return publicUrl;
+  } catch (error) {
+    logger.error(`Error uploading file to FTP: ${error.message}`);
+    throw new Error(`FTP upload failed: ${error.message}`);
+  } finally {
+    // Eliminar el archivo temporal
+    try {
+      await fs.remove(tempFilePath);
+      logger.info(`Temporary file removed: ${tempFilePath}`);
+    } catch (cleanupError) {
+      logger.warn(`Failed to remove temporary file: ${cleanupError.message}`);
+    }
+  }
+};
+
 module.exports = {
-  uploadFileToFTP
+  uploadFileToFTP,
+  uploadToFTP
 }; 

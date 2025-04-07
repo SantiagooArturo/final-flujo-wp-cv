@@ -200,70 +200,100 @@ const handleDocument = async (from, document) => {
       throw new Error('ID de documento no válido');
     }
 
-    // Marcar el CV como procesado antes de comenzar el análisis simulado
-    await sessionService.updateSession(from, { cvProcessed: true });
-
+    // Marcar que estamos procesando un CV y guardarlo en la sesión
+    await sessionService.updateSession(from, { 
+      cvProcessed: true,
+      processingCV: true,
+      processingStartTime: Date.now(),
+      lastDocumentId: document.id
+    });
+    
     // Enviar mensaje de procesamiento
-    await bot.sendMessage(from, '📄 *¡Gracias por compartir tu CV!* 🙏\n\nEstoy analizándolo detalladamente para ofrecerte retroalimentación valiosa. Este proceso puede tomar entre 1-2 minutos... ⏳');
-
-    // Simular espera del procesamiento (1.5 segundos)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
-    // Generar un timestamp único para la URL
-    const timestamp = Date.now();
+    await bot.sendMessage(from, '📄 *¡Gracias por compartir tu CV!* 🙏\n\nEstoy analizándolo detalladamente para ofrecerte retroalimentación valiosa. Este proceso puede tomar entre 2-3 minutos... ⏳\n\nEl análisis se está realizando en un servidor externo, por favor ten paciencia.');
     
     // Obtener el puesto de trabajo si existe
     const jobPosition = session.jobPosition || 'Puesto no especificado';
     
-    // Crear un análisis simulado
-    const analysis = {
-      summary: `Análisis realizado para: ${jobPosition}`,
-      strengths: [
-        "Experiencia relevante en el sector",
-        "Buenas habilidades de comunicación"
-      ],
-      weaknesses: [
-        "Estructura mejorable del CV",
-        "Podría destacar más logros cuantitativos"
-      ],
-      sections: {
-        "profile": { score: 3, suggestions: ["Agregar un perfil más específico para el puesto"] },
-        "experience": { score: 4, suggestions: ["Cuantificar logros con métricas"] },
-        "education": { score: 4, suggestions: ["Destacar cursos relevantes"] }
+    // Obtener la URL del documento usando el MediaProcessor de WhatsApp
+    const mediaUrl = await bot.getMediaUrl(document.id);
+    if (!mediaUrl) {
+      throw new Error('No se pudo obtener la URL del documento');
+    }
+    
+    logger.info(`Document media URL obtained: ${mediaUrl}`);
+    document.url = mediaUrl;
+    
+    try {
+      // Procesar el CV usando el endpoint real
+      const cvService = require('../core/cvService');
+      const analysis = await cvService.processCV(document, from, jobPosition);
+      
+      // Extraer solo la URL del análisis para guardar
+      let analysisUrl;
+      if (typeof analysis === 'string') {
+        analysisUrl = analysis;
+      } else if (analysis && analysis.pdfUrl) {
+        analysisUrl = analysis.pdfUrl;
+      } else if (analysis && analysis.url) {
+        analysisUrl = analysis.url;
+      } else {
+        // URL de respaldo si no se pudo extraer del análisis
+        analysisUrl = `https://myworkinpe.lat/pdfs/cv_${Date.now()}.pdf`;
+        logger.info(`No URL found in analysis response, using fallback URL: ${analysisUrl}`);
       }
-    };
-    
-    // Guardar análisis en la sesión
-    await sessionService.saveCVAnalysis(from, analysis);
-
-    // Guardar el análisis actual como "previo" para futuras referencias
-    await sessionService.updateSession(from, { 
-      previousAnalysis: session.previousAnalysis ? [...session.previousAnalysis, analysis] : [analysis] 
-    });
-
-    // Registrar el análisis en el historial permanente de usuario
-    await userService.recordCVAnalysis(from, analysis, jobPosition);
-
-    // Enviar mensaje de análisis completado, indicando que se está generando el PDF
-    await bot.sendMessage(from, '✅ *¡Análisis completado!* 🎉\n\nHe revisado cuidadosamente tu CV y he preparado un informe detallado con todas mis observaciones. Estoy generando tu PDF personalizado...');
-
-    // Simular espera de generación de PDF (1 segundo)
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Crear URL simulada del PDF
-    const publicUrl = `https://myworkinpe.lat/pdfs/analisis_cv_candidato_${timestamp}.pdf`;
-    
-    // Guardar la URL en la sesión
-    await sessionService.updateSession(from, { lastPdfUrl: publicUrl });
-
-    // Enviar mensaje con URL simulada
-    await bot.sendMessage(from, `📝 *Tu análisis está listo* 📝\n\nPuedes acceder a tu análisis en cualquier momento desde este enlace:\n${publicUrl}\n\nRecuerda guardarlo para referencia futura.`);
-
-    // Enviar opciones post-análisis
-    await sendPostCVOptions(from);
-
-    logger.info(`Simulated CV analysis completed for user ${from}. Fake PDF URL: ${publicUrl}`);
-    return publicUrl;
+      
+      logger.info(`Analysis URL extracted: ${analysisUrl}`);
+      
+      // Guardar solo la URL del análisis en la sesión, NO el análisis completo
+      await sessionService.saveCVAnalysis(from, analysisUrl);
+      
+      // Actualizar la sesión solo con la URL, no con el objeto de análisis completo
+      await sessionService.updateSession(from, { 
+        previousAnalysis: session.previousAnalysis ? [...session.previousAnalysis, analysisUrl] : [analysisUrl],
+        processingCV: false,  // Marcar como finalizado el procesamiento
+        lastPdfUrl: analysisUrl  // Guardar la URL para fácil acceso
+      });
+      
+      // Registrar el análisis en el historial permanente de usuario (solo URL)
+      await userService.recordCVAnalysis(from, { url: analysisUrl }, jobPosition);
+      
+      // Enviar mensaje de análisis completado
+      await bot.sendMessage(from, '✅ *¡Análisis completado!* 🎉\n\nHe revisado tu CV y he preparado un informe detallado con todas mis observaciones.');
+      
+      try {
+        // Esperar un momento antes de enviar el enlace para evitar problemas de límites de velocidad
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Enviar SOLO la URL sin formato adicional
+        logger.info(`Intentando enviar URL simple: ${analysisUrl}`);
+        await bot.sendMessage(from, analysisUrl);
+        
+        // Esperar antes de enviar las opciones
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Enviar mensaje adicional con instrucciones
+        await bot.sendMessage(from, 'Haz clic en el enlace anterior para ver tu análisis completo en PDF');
+        
+        // Enviar opciones post-análisis como texto simple
+        await sendPostCVOptions(from);
+      } catch (messageError) {
+        logger.error(`Error sending PDF link message: ${messageError.message}`);
+        // En caso de error al enviar el enlace, intentar con un formato aún más simple
+        try {
+          logger.info('Intentando enviar URL con formato alternativo');
+          await bot.sendMessage(from, analysisUrl);
+        } catch (simpleMessageError) {
+          logger.error(`Error sending alternate link: ${simpleMessageError.message}`);
+        }
+      }
+      
+      logger.info(`CV analysis process completed for user ${from}. PDF URL: ${analysisUrl}`);
+      return analysisUrl;
+    } catch (error) {
+      // En caso de error, asegurarse de marcar el procesamiento como finalizado
+      await sessionService.updateSession(from, { processingCV: false });
+      throw error;
+    }
   } catch (error) {
     logger.error(`Error handling document: ${error.message}`);
     await bot.sendMessage(from, `⚠️ Lo siento, ocurrió un error al procesar tu CV: ${error.message}. Por favor, intenta nuevamente más tarde.`);
@@ -972,7 +1002,7 @@ const startInterviewQuestions = async (from) => {
     const jobPosition = session.jobPosition || 'software';
     
     // Para la primera pregunta, enfocarse en la experiencia y presentación
-    const questionPrompt = `Pregunta inicial específica para un puesto de ${jobPosition} sobre experiencia profesional y trayectoria relevante para el puesto`;
+    const questionPrompt = `Pregunta inicial específica para alguien que aspira a un puesto de ${jobPosition} sobre experiencia profesional y trayectoria relevante para el puesto. Pregunta corta y directa como si fueras un entrevistador profesional.`;
     
     // Generar primera pregunta (con fallback a pregunta por defecto)
     let questionData;
@@ -1552,8 +1582,19 @@ Responde con un JSON que tenga los siguientes campos:
       if (isValidPayment) {
         logger.info(`Payment validated successfully for user ${from}`);
         
+        // Extraer el monto del precio (convertir 'S/4' a 4)
+        const priceValue = parseFloat(packagePrice.replace('S/', ''));
+        
         // Actualizar el contador de créditos del usuario
         await userService.addCVCredits(from, parseInt(packageReviews));
+        
+        // Registrar la transacción
+        await userService.recordTransaction(
+          from, 
+          priceValue, 
+          'cv_credits', 
+          `Compra de ${packageReviews} créditos para análisis de CV`
+        );
         
         // Enviar confirmación de que el pago ha sido verificado
         await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
@@ -1591,8 +1632,19 @@ Responde con un JSON que tenga los siguientes campos:
         // y aceptar el pago de todos modos
         logger.info(`Accepting payment anyway as fallback for user ${from}`);
         
+        // Extraer el monto del precio (convertir 'S/4' a 4)
+        const priceValue = parseFloat(packagePrice.replace('S/', ''));
+        
         // Actualizar el contador de créditos del usuario
         await userService.addCVCredits(from, parseInt(packageReviews));
+        
+        // Registrar la transacción
+        await userService.recordTransaction(
+          from, 
+          priceValue, 
+          'cv_credits', 
+          `Compra de ${packageReviews} créditos para análisis de CV (fallback)`
+        );
         
         // Enviar confirmación de que el pago ha sido verificado
         await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
@@ -1629,8 +1681,19 @@ Responde con un JSON que tenga los siguientes campos:
       // Si hay un error con OpenAI, asumimos que la imagen es válida como fallback
       logger.info(`Using fallback validation for user ${from}`);
       
+      // Extraer el monto del precio (convertir 'S/4' a 4)
+      const priceValue = parseFloat(packagePrice.replace('S/', ''));
+      
       // Actualizar el contador de créditos del usuario
       await userService.addCVCredits(from, parseInt(packageReviews));
+      
+      // Registrar la transacción
+      await userService.recordTransaction(
+        from, 
+        priceValue, 
+        'cv_credits', 
+        `Compra de ${packageReviews} créditos para análisis de CV (error openai)`
+      );
       
       // Enviar confirmación de que el pago ha sido verificado
       await bot.sendMessage(from, `✅ *¡Pago recibido!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
@@ -1682,6 +1745,13 @@ const handleButtonReply = async (from, buttonId) => {
     const session = await sessionService.getOrCreateSession(from);
     const currentState = session.state;
     logger.info(`Session retrieved for user: ${from}, state: ${currentState}`);
+
+    // Si el ID comienza con 'package_', redirigir a handlePackageSelection
+    if (buttonId.startsWith('package_')) {
+      logger.info(`Redirecting package selection from button handler: ${buttonId}`);
+      await handlePackageSelection(from, buttonId);
+      return;
+    }
 
     // Manejar los diferentes botones según su ID
     switch (buttonId) {
@@ -2063,15 +2133,23 @@ const verifyAdvisorPaymentScreenshot = async (from, image) => {
     // Aquí puedes implementar una verificación real con OpenAI Vision o similar, 
     // pero para este caso lo simplificaremos y aceptaremos el pago directamente
     
+    // Obtener el tipo de asesoría seleccionada
+    const session = await sessionService.getOrCreateSession(from);
+    const advisorType = session.advisorType || 'Personalizada';
+    
+    // Registrar la transacción (precio fijo de S/60 para asesorías)
+    await userService.recordTransaction(
+      from, 
+      60, 
+      advisorType === 'Revisión de CV' ? 'advisor_cv' : 'advisor_interview',
+      `Asesoría personalizada: ${advisorType}`
+    );
+    
     // Actualizar la sesión para indicar que el pago fue aprobado
     await sessionService.updateSession(from, { 
       advisorPaymentVerified: true,
       advisorPaymentDate: new Date().toISOString()
     });
-    
-    // Obtener el tipo de asesoría seleccionada
-    const session = await sessionService.getOrCreateSession(from);
-    const advisorType = session.advisorType || 'Personalizada';
     
     // Enviar mensaje de confirmación con el enlace de Calendly
     await bot.sendMessage(from, `

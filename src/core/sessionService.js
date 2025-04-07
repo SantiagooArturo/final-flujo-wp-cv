@@ -214,43 +214,41 @@ const startInterview = async (userId) => {
 };
 
 /**
- * Reiniciar el proceso completo
- * @param {string} userId - ID del usuario
- * @returns {Promise<Object>} Sesión reiniciada
+ * Reset user session to initial state
+ * @param {string} userId - User ID
+ * @returns {Promise<Object>} New session object
  */
 const resetSession = async (userId) => {
   try {
-    if (!firebaseConfig.isInitialized()) {
-      logger.warn('Firebase not initialized, session not reset');
-      return {
-        userId,
-        state: SessionState.INITIAL,
-        cvProcessed: false,
-        updatedAt: new Date()
-      };
-    }
-
-    const db = firebaseConfig.getFirestore();
-    const sessionRef = db.collection(SESSIONS_COLLECTION).doc(userId.toString());
+    logger.info(`Resetting session for user ${userId}`);
     
-    const resetData = {
+    // Delete existing session completely
+    if (firebaseConfig.isInitialized()) {
+      const db = firebaseConfig.getFirestore();
+      await db.collection(SESSIONS_COLLECTION).doc(userId).delete();
+      logger.info(`Session document deleted for user ${userId}`);
+    }
+    
+    // Create a completely fresh session
+    const newSession = {
+      id: userId,
       state: SessionState.INITIAL,
-      cvAnalysis: null,
-      jobPosition: null,
-      currentQuestion: 0,
-      questions: [],
-      answers: [],
-      feedback: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      // Do not keep any history from previous sessions
       cvProcessed: false,
-      updatedAt: new Date()
+      processingCV: false,
+      jobPosition: null,
+      lastPdfUrl: null
     };
     
-    await sessionRef.update(resetData);
-    logger.info(`Session reset for user ${userId}`);
+    if (firebaseConfig.isInitialized()) {
+      const db = firebaseConfig.getFirestore();
+      await db.collection(SESSIONS_COLLECTION).doc(userId).set(newSession);
+    }
     
-    // Obtener la sesión reiniciada
-    const resetSession = await sessionRef.get();
-    return resetSession.data();
+    logger.info(`Session reset complete for user ${userId}`);
+    return newSession;
   } catch (error) {
     logger.error(`Error resetting session: ${error.message}`);
     throw error;

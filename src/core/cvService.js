@@ -2,6 +2,9 @@ const firebaseConfig = require('../config/firebase');
 const fileProcessing = require('../utils/fileProcessing');
 const logger = require('../utils/logger');
 const openaiUtil = require('../utils/openaiUtil');
+const cvAnalyzer = require('../utils/cvAnalyzer');
+const ftpUploader = require('../utils/ftpUploader');
+const path = require('path');
 
 // Firestore collection names
 const USERS_COLLECTION = 'users';
@@ -50,63 +53,95 @@ const registerUser = async (user) => {
  * @returns {Promise<Object>} Analysis results
  */
 const processCV = async (documentOrUrl, userId, jobPosition = null) => {
+  let startTime = Date.now();
+  
   try {
-    logger.info(`Processing CV for user ${userId}${jobPosition ? ` for position: ${jobPosition}` : ''}`);
+    logger.info(`[${userId}] Starting CV processing for position: ${jobPosition || 'No especificado'}`);
     
     // Handle both document object and URL string
     let documentUrl;
+    let fileName = 'cv.pdf';
     let mimeType = 'application/pdf'; // Default mime type
     
     if (typeof documentOrUrl === 'string') {
       // If it's already a URL
       documentUrl = documentOrUrl;
-      logger.info(`Using provided document URL: ${documentUrl}`);
+      logger.info(`[${userId}] Using provided document URL: ${documentUrl}`);
     } else if (documentOrUrl && documentOrUrl.url) {
       // If it's a document object with url property
       documentUrl = documentOrUrl.url;
+      if (documentOrUrl.filename) {
+        fileName = documentOrUrl.filename;
+      }
       mimeType = documentOrUrl.mime_type || mimeType;
-      logger.info(`Extracted document URL from object: ${documentUrl}`);
+      logger.info(`[${userId}] Extracted document URL from object: ${documentUrl}`);
     } else {
       throw new Error('Invalid document: no URL provided');
     }
     
     // Download and process the document
-    logger.info(`Downloading document from URL: ${documentUrl}`);
+    logger.info(`[${userId}] Downloading document from URL: ${documentUrl}`);
+    const downloadStartTime = Date.now();
     const fileBuffer = await fileProcessing.downloadFile(documentUrl);
-    logger.info(`Document downloaded, buffer size: ${fileBuffer.length} bytes`);
+    logger.info(`[${userId}] Document downloaded, buffer size: ${fileBuffer.length} bytes, time: ${(Date.now() - downloadStartTime)/1000}s`);
     
-    // Extract text from document
-    logger.info(`Extracting text from document (${mimeType})`);
-    const text = await fileProcessing.extractTextFromFile(fileBuffer, mimeType);
-    logger.info(`Text extracted, length: ${text.length} characters`);
+    // Subir el archivo al servidor FTP
+    logger.info(`[${userId}] Uploading file to FTP server`);
+    const ftpStartTime = Date.now();
+    const publicUrl = await ftpUploader.uploadToFTP(fileBuffer, fileName);
+    logger.info(`[${userId}] File uploaded to FTP, public URL: ${publicUrl}, time: ${(Date.now() - ftpStartTime)/1000}s`);
     
-    // Analyze the CV using OpenAI
-    logger.info('Analyzing CV with OpenAI');
-    const analysis = jobPosition 
-      ? await openaiUtil.analyzeCV(text, jobPosition)
-      : await openaiUtil.analyzeCV(text);
-    logger.info('CV analysis completed');
+    // Send to analysis endpoint
+    logger.info(`[${userId}] Sending CV to analysis endpoint, processing may take 2-3 minutes`);
+    const analysisStartTime = Date.now();
     
-    // Store analysis in Firestore
-    if (firebaseConfig.isInitialized()) {
-      logger.info('Storing analysis in Firestore');
-      const db = firebaseConfig.getFirestore();
-      await db.collection(CVS_COLLECTION).add({
-        userId,
-        text,
-        analysis,
-        jobPosition,
-        createdAt: new Date(),
-        documentType: mimeType,
-      });
-      logger.info('Analysis stored in Firestore');
-    } else {
-      logger.warn('Firebase not initialized, skipping storage');
+    try {
+      // Send request with a long timeout
+      const analysis = await cvAnalyzer.sendToCVAnalysisEndpoint(publicUrl, jobPosition || 'No especificado');
+      const analysisTime = (Date.now() - analysisStartTime)/1000;
+      logger.info(`[${userId}] CV analysis completed successfully in ${analysisTime}s`);
+      
+      // Store analysis in Firestore if available
+      if (firebaseConfig.isInitialized()) {
+        try {
+          logger.info(`[${userId}] Storing analysis reference in Firestore`);
+          const db = firebaseConfig.getFirestore();
+          
+          // Verificar si es una string (enlace directo) o un objeto
+          const analysisUrl = typeof analysis === 'string' ? analysis : (analysis.pdfUrl || analysis.url || publicUrl);
+          
+          // Guardar solo la referencia al análisis, no el contenido completo
+          await db.collection(CVS_COLLECTION).add({
+            userId,
+            analysisUrl: analysisUrl,  // Guardar solo la URL, no el objeto completo
+            jobPosition,
+            createdAt: new Date(),
+            documentType: mimeType,
+            fileUrl: publicUrl,
+            processingTime: analysisTime
+          });
+          logger.info(`[${userId}] Analysis reference stored in Firestore`);
+        } catch (firestoreError) {
+          logger.error(`[${userId}] Error storing analysis in Firestore: ${firestoreError.message}`);
+          logger.info(`[${userId}] Continuing without storing analysis in Firestore`);
+        }
+      } else {
+        logger.warn(`[${userId}] Firebase not initialized, skipping storage`);
+      }
+      
+      const totalTime = (Date.now() - startTime)/1000;
+      logger.info(`[${userId}] CV processing completed in ${totalTime}s`);
+      return analysis;
+    } catch (analysisError) {
+      logger.error(`[${userId}] Error in CV analysis: ${analysisError.message}`);
+      
+      // Return the public URL even if analysis fails
+      logger.info(`[${userId}] Returning public URL as fallback: ${publicUrl}`);
+      return publicUrl;
     }
-    
-    return analysis;
   } catch (error) {
-    logger.error(`Error processing CV: ${error.message}`);
+    const totalTime = (Date.now() - startTime)/1000;
+    logger.error(`[${userId}] Error processing CV after ${totalTime}s: ${error.message}`);
     throw error;
   }
 };

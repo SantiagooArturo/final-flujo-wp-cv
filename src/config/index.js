@@ -42,8 +42,19 @@ const appConfig = {
   },
 };
 
+// FTP Configuration
+const ftpConfig = {
+  host: process.env.FTP_HOST || '',
+  user: process.env.FTP_USER || '',
+  password: process.env.FTP_PASSWORD || '',
+  port: parseInt(process.env.FTP_PORT || '21', 10),
+  uploadDir: process.env.FTP_UPLOAD_DIR || 'pdfs/',
+  publicUrl: process.env.PDF_PUBLIC_URL || '',
+};
+
 module.exports = {
   app: appConfig,
   firebase: firebaseConfig,
   telegram: telegramConfig,
+  ftp: ftpConfig
 };

@@ -90,39 +90,39 @@ const generateInterviewQuestion = async (jobType, originalJobType = '') => {
     if (jobType.toLowerCase().includes('tech') && jobType.toLowerCase().includes('lead')) {
       specificPrompt = `
 Para un puesto de Tech Lead, enfócate especialmente en preguntas que evalúen:
-1. Capacidad para tomar decisiones técnicas estratégicas
-2. Habilidades para liderar equipos de desarrollo y resolver conflictos técnicos
-3. Conocimiento de arquitectura de software y patrones de diseño
-4. Experiencia manejando deuda técnica y optimizando sistemas
-5. Equilibrio entre excelencia técnica y necesidades comerciales
-6. Gestión de proyectos técnicos complejos y equipos multidisciplinarios
+1. Capacidad para organizar y priorizar tareas técnicas 
+2. Habilidades para colaborar y comunicarse con diferentes equipos
+3. Conocimiento general sobre buenas prácticas de desarrollo
+4. Enfoque en la calidad y mejora continua
+5. Equilibrio entre aspectos técnicos y objetivos del proyecto
+6. Capacidad para aprender y adaptarse a nuevas tecnologías
+
+Recuerda que el candidato podría estar buscando su primera posición como Tech Lead o no tener experiencia previa en ese rol específico, así que enfócate en habilidades transferibles y potencial de liderazgo.
 `;
     }
     
-    const prompt = `Genera una pregunta de entrevista desafiante, específica y relevante para un candidato que aplica a un puesto de ${jobContext}.
+    const prompt = `Genera una pregunta de entrevista profesional pero apropiada para un practicante o recién graduado que aspira a un puesto de ${jobContext}.
 
 La pregunta debe:
-1. Evaluar habilidades técnicas, experiencia o competencias relevantes para este tipo de rol específico
-2. Requerir ejemplos concretos o situaciones específicas (preferiblemente tipo STAR)
-3. Ser específica y no genérica, adaptada para el contexto laboral del puesto
-4. Estar formulada en español y usar un lenguaje profesional
-5. Ser abierta y requerir más que una respuesta de sí/no
-6. Ser desafiante pero justa, evaluando habilidades reales del candidato
+1. Tener un nivel INTERMEDIO - ni demasiado básica ni extremadamente técnica
+2. Ser adecuada para practicantes o personas buscando su primer trabajo
+3. Mostrar un nivel profesional pero sin asumir años de experiencia previa
+4. Evaluar conocimientos, habilidades o competencias relevantes para el puesto
+5. Permitir que el candidato responda basándose en experiencias académicas, proyectos personales o conocimientos teóricos
+6. Ser específica para el tipo de puesto pero sin jerga técnica avanzada
 
-${specificPrompt}
+REQUISITOS IMPORTANTES:
+- NO asumir experiencia laboral específica en la industria mencionada
+- EQUILIBRAR formulaciones hipotéticas ("¿Cómo abordarías...?") con preguntas sobre conocimientos ("¿Qué sabes sobre...?")
+- Usar un lenguaje profesional pero accesible para recién graduados
+- Ser desafiante pero justa para alguien con conocimientos teóricos del área
 
-Contexto específico según el tipo de trabajo:
-${jobType.toLowerCase().includes('tech lead') ? '- Enfocada en liderazgo técnico, decisiones arquitectónicas, gestión de equipos de desarrollo, o manejo de situaciones técnicas complejas' : ''}
-${jobType === 'software' ? '- Enfocada en algún desafío técnico, arquitectura, metodologías de desarrollo, solución de problemas o trabajo colaborativo en código' : ''}
-${jobType === 'marketing' ? '- Enfocada en estrategias digitales, campañas, medición de resultados, segmentación de audiencia o gestión de contenidos' : ''}
-${jobType === 'sales' ? '- Enfocada en técnicas de venta, negociación, manejo de objeciones, prospección o retención de clientes' : ''}
-${jobType === 'design' ? '- Enfocada en procesos creativos, metodologías de diseño, experiencia de usuario o adaptación a requisitos de marca/cliente' : ''}
-${jobType === 'pm' ? '- Enfocada en gestión de proyectos, metodologías ágiles, priorización, gestión de equipos o manejo de stakeholders' : ''}
-${jobType === 'hr' ? '- Enfocada en procesos de selección, desarrollo de talento, cultura organizacional o gestión del desempeño' : ''}
-${jobType === 'data' ? '- Enfocada en análisis de datos, visualización, toma de decisiones basada en datos o implementación de modelos' : ''}
-${jobType === 'finance' ? '- Enfocada en análisis financiero, presupuestos, reportes, optimización de recursos o compliance' : ''}
+Ejemplos de preguntas de nivel adecuado:
+- "¿Qué estrategias de marketing digital consideras más efectivas para captar la atención de la Generación Z y por qué?"
+- "Si tuvieras que implementar un proceso para mejorar la colaboración entre equipos de desarrollo, ¿qué aspectos considerarías prioritarios?"
+- "¿Qué herramientas de análisis de datos conoces y cómo las aplicarías para evaluar el rendimiento de una campaña digital?"
 
-IMPORTANTE: Proporciona solo la pregunta, sin introducción ni texto adicional.`;
+Proporciona solo la pregunta, sin introducción ni texto adicional.`;
 
     // Intentar usar GPT-4o para mejor calidad, con fallback a GPT-3.5 Turbo
     let model = "gpt-4o";
@@ -132,7 +132,7 @@ IMPORTANTE: Proporciona solo la pregunta, sin introducción ni texto adicional.`
         messages: [
           { 
             role: "system", 
-            content: "Eres un entrevistador técnico experto con amplia experiencia en entrevistas para roles de liderazgo en tecnología. Tu objetivo es crear preguntas desafiantes pero justas que evalúen las capacidades reales de los candidatos para roles de Tech Lead y posiciones técnicas avanzadas." 
+            content: "Eres un entrevistador profesional especializado en entrevistas para practicantes y recién graduados. Tu objetivo es crear preguntas de NIVEL INTERMEDIO que evalúen conocimientos y potencial sin asumir experiencia laboral extensa. Equilibras el tono profesional con accesibilidad para personas que buscan su primer trabajo o tienen experiencia limitada." 
           },
           { role: "user", content: prompt }
         ],
@@ -156,7 +156,7 @@ IMPORTANTE: Proporciona solo la pregunta, sin introducción ni texto adicional.`
         messages: [
           { 
             role: "system", 
-            content: "Eres un entrevistador técnico experto con amplia experiencia en entrevistas para roles de liderazgo en tecnología." 
+            content: "Eres un entrevistador profesional especializado en entrevistas para practicantes y recién graduados. Tu objetivo es crear preguntas de NIVEL INTERMEDIO que evalúen conocimientos y potencial sin asumir experiencia laboral extensa. Equilibras el tono profesional con accesibilidad para personas que buscan su primer trabajo o tienen experiencia limitada." 
           },
           { role: "user", content: prompt }
         ],

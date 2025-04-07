@@ -307,6 +307,132 @@ const getRemainingCVCredits = async (userId) => {
   }
 };
 
+/**
+ * Registra una nueva transacción en el historial del usuario y actualiza el total gastado
+ * @param {string} userId - ID del usuario
+ * @param {number} amount - Monto de la transacción
+ * @param {string} serviceType - Tipo de servicio (ej: 'cv_credits', 'advisor_cv', 'advisor_interview')
+ * @param {string} description - Descripción de la transacción
+ * @returns {Promise<Object>} Datos de la transacción registrada
+ */
+const recordTransaction = async (userId, amount, serviceType, description) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, skipping transaction record');
+      return { userId, amount, serviceType, description, timestamp: new Date() };
+    }
+
+    const db = firebaseConfig.getFirestore();
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    
+    // Obtener los datos actuales del usuario
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      // Si el usuario no existe, lo creamos primero
+      await registerOrUpdateUser(userId);
+    }
+    
+    // Crear objeto de transacción
+    const transaction = {
+      amount: amount,
+      serviceType: serviceType,
+      description: description,
+      timestamp: new Date()
+    };
+    
+    // Actualizar usuario en una transacción de Firebase para evitar condiciones de carrera
+    await db.runTransaction(async (t) => {
+      // Volver a obtener el documento más reciente dentro de la transacción
+      const doc = await t.get(userRef);
+      const userData = doc.exists ? doc.data() : {};
+      
+      // Obtener el array de transacciones y el total gastado actuales o iniciar con valores por defecto
+      const transactions = userData.transactions || [];
+      const currentTotalSpent = userData.totalSpent || 0;
+      
+      // Añadir la nueva transacción al array
+      transactions.push(transaction);
+      
+      // Actualizar el total gastado
+      const newTotalSpent = currentTotalSpent + amount;
+      
+      // Actualizar el documento
+      t.update(userRef, { 
+        transactions: transactions,
+        totalSpent: newTotalSpent,
+        updatedAt: new Date() 
+      });
+    });
+    
+    logger.info(`Transaction recorded for user ${userId}: ${amount} for ${serviceType}`);
+    return transaction;
+  } catch (error) {
+    logger.error(`Error recording transaction: ${error.message}`);
+    throw error;
+  }
+};
+
+/**
+ * Obtiene el total gastado por un usuario
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<number>} Total gastado
+ */
+const getTotalSpent = async (userId) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, unable to get total spent');
+      return 0;
+    }
+
+    const db = firebaseConfig.getFirestore();
+    
+    // Obtener usuario
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      return 0;
+    }
+    
+    const userData = userDoc.data();
+    return userData.totalSpent || 0;
+  } catch (error) {
+    logger.error(`Error getting total spent: ${error.message}`);
+    return 0;
+  }
+};
+
+/**
+ * Obtiene el historial de transacciones de un usuario
+ * @param {string} userId - ID del usuario
+ * @returns {Promise<Array>} Lista de transacciones
+ */
+const getTransactionHistory = async (userId) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, unable to get transaction history');
+      return [];
+    }
+
+    const db = firebaseConfig.getFirestore();
+    
+    // Obtener usuario
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    const userDoc = await userRef.get();
+    
+    if (!userDoc.exists) {
+      return [];
+    }
+    
+    const userData = userDoc.data();
+    return userData.transactions || [];
+  } catch (error) {
+    logger.error(`Error getting transaction history: ${error.message}`);
+    return [];
+  }
+};
+
 module.exports = {
   registerOrUpdateUser,
   recordCVAnalysis,
@@ -316,5 +442,8 @@ module.exports = {
   getCVCredits,
   addCVCredits,
   useCVCredit,
-  getRemainingCVCredits
+  getRemainingCVCredits,
+  recordTransaction,
+  getTotalSpent,
+  getTransactionHistory
 }; 
