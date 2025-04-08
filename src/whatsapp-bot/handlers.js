@@ -1643,101 +1643,36 @@ Responde con un JSON que tenga los siguientes campos:
         // El pago no es válido
         logger.warn(`Invalid payment image from user ${from}: ${analysisResult.reason}`);
         
-        // Considerando que pueden haber falsos negativos, vamos a ser más permisivos
-        // y aceptar el pago de todos modos
-        logger.info(`Accepting payment anyway as fallback for user ${from}`);
+        // Informar al usuario por qué el pago fue rechazado
+        let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
         
-        // Extraer el monto del precio (convertir 'S/4' a 4)
-        const priceValue = parseFloat(packagePrice.replace('S/', ''));
-        
-        // Actualizar el contador de créditos del usuario
-        await userService.addCVCredits(from, parseInt(packageReviews));
-        
-        // Registrar la transacción
-        await userService.recordTransaction(
-          from, 
-          priceValue, 
-          'cv_credits', 
-          `Compra de ${packageReviews} créditos para análisis de CV (fallback)`
-        );
-        
-        // Enviar confirmación de que el pago ha sido verificado
-        await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
-        
-        // Restablecer el estado de CV procesado para permitir un nuevo análisis
-        await sessionService.updateSession(from, { cvProcessed: false });
-        
-        // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
-        const postPaymentButtons = [
-          { id: 'review_cv', text: '📋 Revisar mi CV' },
-          { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
-        ];
-        
-        try {
-          await bot.sendButtonMessage(
-            from, 
-            '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
-            postPaymentButtons,
-            'Opciones después del pago'
-          );
-          
-          // Actualizar el estado de la sesión a "payment_completed"
-          await sessionService.updateSessionState(from, 'payment_completed');
-        } catch (buttonError) {
-          logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
-          // Si no se pueden enviar los botones, enviar mensaje normal
-          await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
-          await sessionService.updateSessionState(from, 'waiting_for_cv');
+        if (analysisResult.reason) {
+          rejectionReason = analysisResult.reason;
+        } else {
+          // Intentar determinar la razón específica
+          if (analysisResult.amount && analysisResult.amount !== packagePrice.replace('S/', '')) {
+            rejectionReason = `el monto no coincide con el precio del paquete (${packagePrice})`;
+          } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
+            rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
+          } else if (analysisResult.date && !analysisResult.date.includes(new Date().toISOString().split('T')[0].substring(5))) {
+            rejectionReason = "la fecha del pago no es reciente";
+          }
         }
+        
+        // Mensaje para el usuario
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n• La fecha sea reciente\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+        
+        // Mantener al usuario en el mismo estado para que pueda volver a intentar
+        await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
       
-      // Si hay un error con OpenAI, asumimos que la imagen es válida como fallback
-      logger.info(`Using fallback validation for user ${from}`);
+      // Informar al usuario del error técnico
+      await bot.sendMessage(from, "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste.");
       
-      // Extraer el monto del precio (convertir 'S/4' a 4)
-      const priceValue = parseFloat(packagePrice.replace('S/', ''));
-      
-      // Actualizar el contador de créditos del usuario
-      await userService.addCVCredits(from, parseInt(packageReviews));
-      
-      // Registrar la transacción
-      await userService.recordTransaction(
-        from, 
-        priceValue, 
-        'cv_credits', 
-        `Compra de ${packageReviews} créditos para análisis de CV (error openai)`
-      );
-      
-      // Enviar confirmación de que el pago ha sido verificado
-      await bot.sendMessage(from, `✅ *¡Pago recibido!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
-      
-      // Restablecer el estado de CV procesado para permitir un nuevo análisis
-      await sessionService.updateSession(from, { cvProcessed: false });
-      
-      // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
-      const postPaymentButtons = [
-        { id: 'review_cv', text: '📋 Revisar mi CV' },
-        { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
-      ];
-      
-      try {
-        await bot.sendButtonMessage(
-          from, 
-          '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
-          postPaymentButtons,
-          'Opciones después del pago'
-        );
-        
-        // Actualizar el estado de la sesión a "payment_completed"
-        await sessionService.updateSessionState(from, 'payment_completed');
-      } catch (buttonError) {
-        logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
-        // Si no se pueden enviar los botones, enviar mensaje normal
-        await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
-        await sessionService.updateSessionState(from, 'waiting_for_cv');
-      }
+      // Mantener al usuario en el mismo estado para que pueda volver a intentar
+      await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
     }
     
   } catch (error) {
@@ -2143,31 +2078,122 @@ const verifyAdvisorPaymentScreenshot = async (from, image) => {
     }
     
     // Notificar al usuario que estamos procesando su pago
-    await bot.sendMessage(from, 'Estamos verificando tu pago, esto puede tomar unos momentos...');
-    
-    // Aquí puedes implementar una verificación real con OpenAI Vision o similar, 
-    // pero para este caso lo simplificaremos y aceptaremos el pago directamente
+    await bot.sendMessage(from, '⏳ Estamos verificando tu comprobante de pago...');
     
     // Obtener el tipo de asesoría seleccionada
     const session = await sessionService.getOrCreateSession(from);
     const advisorType = session.advisorType || 'Personalizada';
     
-    // Registrar la transacción (precio fijo de S/60 para asesorías)
-    await userService.recordTransaction(
-      from, 
-      60, 
-      advisorType === 'Revisión de CV' ? 'advisor_cv' : 'advisor_interview',
-      `Asesoría personalizada: ${advisorType}`
-    );
+    // Implementar verificación con OpenAI Vision
+    let isValidPayment = false;
     
-    // Actualizar la sesión para indicar que el pago fue aprobado
-    await sessionService.updateSession(from, { 
-      advisorPaymentVerified: true,
-      advisorPaymentDate: new Date().toISOString()
-    });
-    
-    // Enviar mensaje de confirmación con el enlace de Calendly
-    await bot.sendMessage(from, `
+    try {
+      // Convertir imagen a base64
+      const imageBase64 = imageBuffer.toString('base64');
+      
+      // Consultar a OpenAI para verificar la imagen
+      const systemPrompt = `Eres un asistente especializado en verificar comprobantes de pago. Necesitas verificar si la imagen es un comprobante de pago válido y contiene los siguientes elementos:
+1. Debe ser un comprobante de pago de Yape, Plin o alguna otra billetera digital peruana
+2. El pago debe ser a nombre de "Francesco Lucchesi" o similar
+3. El monto debe ser S/60 soles
+4. La fecha debe ser de hoy (cualquier hora es válida)
+
+Responde con un JSON que tenga los siguientes campos:
+- isValid: true/false según si la imagen cumple con todos los requisitos
+- recipientName: nombre del destinatario que aparece en el comprobante (si está visible)
+- amount: monto del pago (si está visible)
+- date: fecha del pago (si está visible)
+- reason: razón por la que es válido o inválido`;
+      
+      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi. Se considera válido si el pago se realizó hoy (cualquier hora).`;
+      
+      // Llamar a la API de OpenAI para analizar la imagen
+      const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
+      
+      // Parsear la respuesta
+      logger.info(`Advisor payment image analysis: ${imageAnalysis}`);
+      
+      let analysisResult;
+      try {
+        // Buscar un JSON en la respuesta
+        const jsonMatch = imageAnalysis.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysisResult = JSON.parse(jsonMatch[0]);
+          logger.info(`Parsed analysis result: ${JSON.stringify(analysisResult)}`);
+        } else {
+          // Si no encuentra JSON, intentar extraer la validez de la respuesta
+          logger.warn("No JSON found in OpenAI response, using text analysis fallback");
+          isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
+                          imageAnalysis.toLowerCase().includes('valido') ||
+                          imageAnalysis.toLowerCase().includes('correcto') ||
+                          (imageAnalysis.toLowerCase().includes('francesco lucchesi') && 
+                           imageAnalysis.toLowerCase().includes('60'));
+                          
+          // Crear un objeto con la información disponible
+          analysisResult = {
+            isValid: isValidPayment,
+            reason: imageAnalysis
+          };
+        }
+      } catch (parseError) {
+        logger.error(`Error parsing analysis result: ${parseError.message}`);
+        // Intentar determinar si es válido basado en el texto
+        isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
+                        imageAnalysis.toLowerCase().includes('valido') ||
+                        imageAnalysis.toLowerCase().includes('correcto');
+                        
+        analysisResult = {
+          isValid: isValidPayment,
+          reason: 'No se pudo analizar la respuesta en formato JSON'
+        };
+      }
+      
+      // Como fallback adicional, verificar si la imagen muestra los elementos críticos
+      // incluso si OpenAI dijo que no era válido
+      if (!analysisResult.isValid) {
+        logger.info("Advisor payment marked as invalid by OpenAI, checking for critical elements");
+        
+        // Verificar si la respuesta menciona los elementos críticos de forma positiva
+        const hasCorrectName = analysisResult.recipientName && 
+                               analysisResult.recipientName.toLowerCase().includes('francesco');
+        
+        const hasCorrectAmount = analysisResult.amount && 
+                                analysisResult.amount.includes('60');
+        
+        const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
+                            imageAnalysis.toLowerCase().includes('plin');
+        
+        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, considerarlo válido
+        if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
+            (hasCorrectAmount || imageAnalysis.toLowerCase().includes('60')) && 
+            isYapeOrPlin) {
+          logger.info("Critical elements found, overriding OpenAI result to VALID");
+          analysisResult.isValid = true;
+          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos";
+        }
+      }
+      
+      isValidPayment = analysisResult.isValid;
+      
+      if (isValidPayment) {
+        logger.info(`Advisor payment validated successfully for user ${from}`);
+        
+        // Registrar la transacción (precio fijo de S/60 para asesorías)
+        await userService.recordTransaction(
+          from, 
+          60, 
+          advisorType === 'Revisión de CV' ? 'advisor_cv' : 'advisor_interview',
+          `Asesoría personalizada: ${advisorType}`
+        );
+        
+        // Actualizar la sesión para indicar que el pago fue aprobado
+        await sessionService.updateSession(from, { 
+          advisorPaymentVerified: true,
+          advisorPaymentDate: new Date().toISOString()
+        });
+        
+        // Enviar mensaje de confirmación con el enlace de Calendly
+        await bot.sendMessage(from, `
 ✅ *¡Pago verificado correctamente!*
 
 Gracias por adquirir nuestra asesoría ${advisorType}.
@@ -2178,26 +2204,60 @@ https://calendly.com/psicologa-workin2/30min
 👆 Haz clic en el enlace para elegir la fecha y hora que mejor se adapte a tu disponibilidad.
 
 Si tienes alguna duda, no dudes en escribirnos.
-    `);
-    
-    // Actualizar el estado para indicar que el servicio fue completado
-    await sessionService.updateSessionState(from, 'advisor_service_completed');
-    
-    // Ofrecer volver al menú principal
-    try {
-      await bot.sendButtonMessage(
-        from, 
-        'Cuando hayas agendado tu cita, puedes volver al menú principal.',
-        [{ id: 'back_to_main_menu', text: '🔙 Volver al Menú' }],
-        'Opciones disponibles'
-      );
-    } catch (buttonError) {
-      logger.warn(`Failed to send advisor completion buttons: ${buttonError.message}`);
-      await bot.sendMessage(from, 'Escribe !start para volver al menú principal cuando hayas terminado.');
+        `);
+        
+        // Actualizar el estado para indicar que el servicio fue completado
+        await sessionService.updateSessionState(from, 'advisor_service_completed');
+        
+        // Ofrecer volver al menú principal
+        try {
+          await bot.sendButtonMessage(
+            from, 
+            'Cuando hayas agendado tu cita, puedes volver al menú principal.',
+            [{ id: 'back_to_main_menu', text: '🔙 Volver al Menú' }],
+            'Opciones disponibles'
+          );
+        } catch (buttonError) {
+          logger.warn(`Failed to send advisor completion buttons: ${buttonError.message}`);
+          await bot.sendMessage(from, 'Escribe !start para volver al menú principal cuando hayas terminado.');
+        }
+      } else {
+        // El pago no es válido
+        logger.warn(`Invalid advisor payment image from user ${from}: ${analysisResult.reason}`);
+        
+        // Informar al usuario por qué el pago fue rechazado
+        let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
+        
+        if (analysisResult.reason) {
+          rejectionReason = analysisResult.reason;
+        } else {
+          // Intentar determinar la razón específica
+          if (analysisResult.amount && analysisResult.amount !== '60') {
+            rejectionReason = "el monto no coincide con el precio de la asesoría (S/60)";
+          } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
+            rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
+          } else if (analysisResult.date && !analysisResult.date.includes(new Date().toISOString().split('T')[0].substring(5))) {
+            rejectionReason = "la fecha del pago no es reciente";
+          }
+        }
+        
+        // Mensaje para el usuario
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de S/60\n• La fecha sea reciente\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+        
+        // Mantener al usuario en el mismo estado para que pueda volver a intentar
+        await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
+      }
+    } catch (aiError) {
+      logger.error(`Error verifying advisor payment with OpenAI: ${aiError.message}`);
+      
+      // Informar al usuario del error técnico
+      await bot.sendMessage(from, "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste.");
+      
+      // Mantener al usuario en el mismo estado para que pueda volver a intentar
+      await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
     }
-    
   } catch (error) {
-    logger.error(`Error verifying advisor payment: ${error.message}`);
+    logger.error(`Error verifying advisor payment screenshot: ${error.message}`);
     await bot.sendMessage(from, 'Ocurrió un error al verificar tu pago. Por favor, contacta con nuestro soporte.');
   }
 };
