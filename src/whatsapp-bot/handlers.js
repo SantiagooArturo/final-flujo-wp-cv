@@ -41,10 +41,16 @@ const handleStart = async (from) => {
     
     // Comprobar si el usuario ya ha aceptado los términos y condiciones
     const userSession = await sessionService.getOrCreateSession(from);
-    if (!userSession.termsAccepted) {
-      // Si no ha aceptado los términos, mostrar la pantalla de términos
-      await handleTermsAndConditions(from);
-      return;
+    
+    try {
+      if (!userSession.termsAccepted) {
+        // Si no ha aceptado los términos, mostrar la pantalla de términos
+        await handleTermsAndConditions(from);
+        return;
+      }
+    } catch (termsError) {
+      logger.error(`Error checking terms acceptance: ${termsError.message}`);
+      // Continuar con el flujo normal si hay algún error
     }
     
     // Si ya aceptó los términos, continuar con el flujo normal
@@ -1795,41 +1801,8 @@ const handleButtonReply = async (from, buttonId) => {
         // Actualizar la sesión para marcar que el usuario aceptó los términos
         await sessionService.updateSession(from, { termsAccepted: true });
         
-        // Continuar con el mensaje de bienvenida
-        const welcomeMessage = `
-¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
-
-Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
-
-🔍 *Análisis de CV personalizado*
-💼 *Simulación de entrevistas*
-👨‍💼 *Asesoría laboral con psicólogos por videollamada*
-
-¿Cómo te gustaría que te ayude hoy?
-        `;
-        
-        try {
-          const menuButtons = [
-            { id: 'review_cv', text: '📋 Revisar mi CV' },
-            { id: 'interview_simulation', text: '🎯 Simular entrevista' },
-            { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
-          ];
-          
-          await bot.sendButtonMessage(
-            from,
-            welcomeMessage,
-            menuButtons,
-            '¡Bienvenido a Worky!'
-          );
-          
-          await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-        } catch (buttonError) {
-          logger.warn(`Failed to send button message, using text fallback: ${buttonError.message}`);
-          
-          // Mensaje de texto alternativo si fallan los botones
-          await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
-          await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-        }
+        // Proceder con el mensaje de bienvenida
+        await handleStart(from);
         break;
       case 'reject_terms':
         // Usuario rechaza los términos y condiciones
@@ -2455,27 +2428,66 @@ Privacidad: https://www.workin2.com/privacidad
 Al continuar, aceptas nuestros términos, nuestra política de privacidad y autorizas el uso y compartición de tus datos con terceros para fines relacionados con empleabilidad y mejora del servicio.
     `;
     
-    // Botones para aceptar o rechazar
-    const termsButtons = [
-      { id: 'accept_terms', text: 'Sí' },
-      { id: 'reject_terms', text: 'No' }
-    ];
-    
-    // Enviar mensaje con botones
-    await bot.sendButtonMessage(
-      from,
-      termsMessage,
-      termsButtons,
-      '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
-    );
-    
-    // Actualizar estado de la sesión
-    await sessionService.updateSessionState(from, sessionService.SessionState.TERMS_ACCEPTANCE);
-    logger.info(`Terms and conditions sent to user ${from}`);
-    
+    try {
+      // Botones para aceptar o rechazar
+      const termsButtons = [
+        { id: 'accept_terms', text: 'Sí' },
+        { id: 'reject_terms', text: 'No' }
+      ];
+      
+      // Enviar mensaje con botones
+      await bot.sendButtonMessage(
+        from,
+        termsMessage,
+        termsButtons,
+        '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
+      );
+      
+      // Actualizar estado de la sesión
+      await sessionService.updateSessionState(from, 'terms_acceptance');
+      logger.info(`Terms and conditions sent to user ${from}`);
+    } catch (buttonError) {
+      logger.error(`Failed to send terms buttons: ${buttonError.message}`);
+      // Enviar mensaje sin botones como fallback
+      await bot.sendMessage(from, `${termsMessage}\n\nPor favor, responde "Sí" para aceptar o "No" para rechazar los términos y condiciones.`);
+      await sessionService.updateSessionState(from, 'terms_acceptance');
+    }
   } catch (error) {
     logger.error(`Error showing terms and conditions: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al mostrar los términos y condiciones. Por favor, intenta nuevamente.');
+    await bot.sendMessage(from, 'Lo siento, hubo un error al mostrar los términos y condiciones. Por favor, intenta nuevamente enviando !start.');
+    
+    // En caso de error, mostrar el mensaje de bienvenida normal como fallback
+    const welcomeMessage = `
+¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
+
+Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
+
+🔍 *Análisis de CV personalizado*
+💼 *Simulación de entrevistas*
+👨‍💼 *Asesoría laboral con psicólogos por videollamada*
+
+¿Cómo te gustaría que te ayude hoy?
+    `;
+    
+    try {
+      const menuButtons = [
+        { id: 'review_cv', text: '📋 Revisar mi CV' },
+        { id: 'interview_simulation', text: '🎯 Simular entrevista' },
+        { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
+      ];
+      
+      await bot.sendButtonMessage(
+        from,
+        welcomeMessage,
+        menuButtons,
+        '¡Bienvenido a Worky!'
+      );
+      
+      await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+    } catch (buttonError) {
+      await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
+      await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+    }
   }
 };
 
