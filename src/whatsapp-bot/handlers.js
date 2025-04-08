@@ -2086,8 +2086,8 @@ const handleAdvisorService = async (from) => {
     // Preguntar primero qué tipo de asesoría desea
     try {
       const advisorTypeButtons = [
-        { id: 'advisor_cv_review', text: '📋 Revisar CV' },
-        { id: 'advisor_interview', text: '🎯 Simular Entrevista' }
+        { id: 'advisor_cv_review', text: '📋 Asesoría CV' },
+        { id: 'advisor_interview', text: '🎯 Asesoría Entrevista' }
       ];
       
       await bot.sendButtonMessage(
