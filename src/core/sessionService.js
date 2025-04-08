@@ -9,6 +9,7 @@ const USERS_COLLECTION = 'users';
 // Estados posibles de la conversación
 const SessionState = {
   INITIAL: 'initial',              // Estado inicial
+  TERMS_ACCEPTANCE: 'terms_acceptance', // Esperando aceptación de términos y condiciones
   MENU_SELECTION: 'menu_selection', // Selección de opción en el menú
   WAITING_FOR_POSITION_BEFORE_CV: 'waiting_for_position_before_cv', // Esperando posición antes de solicitar CV
   CV_RECEIVED: 'cv_received',      // CV recibido y analizado
@@ -41,6 +42,7 @@ const getOrCreateSession = async (userId) => {
         answers: [],
         feedback: [],
         cvProcessed: false,
+        termsAccepted: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -64,6 +66,7 @@ const getOrCreateSession = async (userId) => {
         answers: [],
         feedback: [],
         cvProcessed: false,
+        termsAccepted: false,
         createdAt: new Date(),
         updatedAt: new Date()
       };
@@ -214,22 +217,30 @@ const startInterview = async (userId) => {
 };
 
 /**
- * Reset user session to initial state
- * @param {string} userId - User ID
+ * Resetear la sesión de un usuario, preservando si ya aceptó términos y condiciones
+ * @param {string} userId - ID del usuario
  * @returns {Promise<Object>} New session object
  */
 const resetSession = async (userId) => {
   try {
     logger.info(`Resetting session for user ${userId}`);
     
-    // Delete existing session completely
+    // Si Firebase está inicializado, recuperar el valor actual de termsAccepted
+    let termsAccepted = false;
     if (firebaseConfig.isInitialized()) {
       const db = firebaseConfig.getFirestore();
+      const currentSession = await db.collection(SESSIONS_COLLECTION).doc(userId).get();
+      if (currentSession.exists) {
+        termsAccepted = currentSession.data().termsAccepted || false;
+        logger.info(`Retrieved termsAccepted value for user ${userId}: ${termsAccepted}`);
+      }
+      
+      // Delete existing session completely
       await db.collection(SESSIONS_COLLECTION).doc(userId).delete();
       logger.info(`Session document deleted for user ${userId}`);
     }
     
-    // Create a completely fresh session
+    // Create a completely fresh session while preserving terms acceptance status
     const newSession = {
       id: userId,
       state: SessionState.INITIAL,
@@ -240,7 +251,8 @@ const resetSession = async (userId) => {
       processingCV: false,
       jobPosition: null,
       lastPdfUrl: null,
-      hasReceivedWelcomeMessage: false // Inicializar esta bandera
+      hasReceivedWelcomeMessage: false, // Inicializar esta bandera
+      termsAccepted: termsAccepted // Preservar el estado de aceptación de términos
     };
     
     if (firebaseConfig.isInitialized()) {

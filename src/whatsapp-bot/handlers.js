@@ -39,6 +39,15 @@ const handleStart = async (from) => {
     await sessionService.resetSession(from);
     logger.info(`Session reset for user ${from}`);
     
+    // Comprobar si el usuario ya ha aceptado los términos y condiciones
+    const userSession = await sessionService.getOrCreateSession(from);
+    if (!userSession.termsAccepted) {
+      // Si no ha aceptado los términos, mostrar la pantalla de términos
+      await handleTermsAndConditions(from);
+      return;
+    }
+    
+    // Si ya aceptó los términos, continuar con el flujo normal
     // Mensaje de bienvenida mejorado con emojis y estilo más personal
     const welcomeMessage = `
 ¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
@@ -382,6 +391,23 @@ const handleText = async (from, text) => {
           '¿En qué puedo ayudarte hoy?'
         );
         await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
+        break;
+      case sessionService.SessionState.TERMS_ACCEPTANCE:
+        // Si el usuario está en el estado de aceptación de términos
+        if (text.toLowerCase().includes('si') || 
+            text.toLowerCase().includes('sí') ||
+            text.toLowerCase().includes('acepto')) {
+          // Usuario acepta los términos por texto
+          await handleButtonReply(from, 'accept_terms');
+        } else if (text.toLowerCase().includes('no') || 
+                  text.toLowerCase().includes('rechazo')) {
+          // Usuario rechaza los términos por texto
+          await handleButtonReply(from, 'reject_terms');
+        } else {
+          // Mensaje no reconocido, volver a mostrar los términos
+          await bot.sendMessage(from, 'Por favor, responde "Sí" si aceptas los términos y condiciones o "No" si los rechazas.');
+          await handleTermsAndConditions(from);
+        }
         break;
       case sessionService.SessionState.MENU_SELECTION:
         // Intentar interpretar el texto como una opción del menú
@@ -1762,6 +1788,59 @@ const handleButtonReply = async (from, buttonId) => {
         await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
         await handleInterview(from);
         break;
+      case 'accept_terms':
+        // Usuario acepta los términos y condiciones
+        logger.info(`User ${from} accepted terms and conditions`);
+        
+        // Actualizar la sesión para marcar que el usuario aceptó los términos
+        await sessionService.updateSession(from, { termsAccepted: true });
+        
+        // Continuar con el mensaje de bienvenida
+        const welcomeMessage = `
+¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
+
+Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
+
+🔍 *Análisis de CV personalizado*
+💼 *Simulación de entrevistas*
+👨‍💼 *Asesoría laboral con psicólogos por videollamada*
+
+¿Cómo te gustaría que te ayude hoy?
+        `;
+        
+        try {
+          const menuButtons = [
+            { id: 'review_cv', text: '📋 Revisar mi CV' },
+            { id: 'interview_simulation', text: '🎯 Simular entrevista' },
+            { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
+          ];
+          
+          await bot.sendButtonMessage(
+            from,
+            welcomeMessage,
+            menuButtons,
+            '¡Bienvenido a Worky!'
+          );
+          
+          await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+        } catch (buttonError) {
+          logger.warn(`Failed to send button message, using text fallback: ${buttonError.message}`);
+          
+          // Mensaje de texto alternativo si fallan los botones
+          await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
+          await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
+        }
+        break;
+      case 'reject_terms':
+        // Usuario rechaza los términos y condiciones
+        logger.info(`User ${from} rejected terms and conditions`);
+        
+        // Informar al usuario que debe aceptar los términos para usar el servicio
+        await bot.sendMessage(from, 'Para utilizar nuestros servicios es necesario aceptar los términos y condiciones. Sin esta aceptación, no podemos continuar.');
+        
+        // Volver a mostrar los términos y condiciones
+        await handleTermsAndConditions(from);
+        break;
       case 'continue_interview':
         await handleNextQuestion(from);
         break;
@@ -2354,6 +2433,52 @@ Si tienes alguna duda, no dudes en escribirnos.
   }
 };
 
+/**
+ * Muestra pantalla de términos y condiciones con botones para aceptar o rechazar
+ * @param {string} from - ID del usuario
+ * @returns {Promise<void>}
+ */
+const handleTermsAndConditions = async (from) => {
+  try {
+    logger.info(`Showing terms and conditions for user ${from}`);
+    
+    // Mensaje de términos y condiciones
+    const termsMessage = `
+Bienvenido a Worky
+
+Antes de continuar, por favor revisa y acepta los términos y condiciones aquí:
+
+Términos y condiciones: https://www.workin2.com/terminos
+
+Privacidad: https://www.workin2.com/privacidad
+
+Al continuar, aceptas nuestros términos, nuestra política de privacidad y autorizas el uso y compartición de tus datos con terceros para fines relacionados con empleabilidad y mejora del servicio.
+    `;
+    
+    // Botones para aceptar o rechazar
+    const termsButtons = [
+      { id: 'accept_terms', text: 'Sí' },
+      { id: 'reject_terms', text: 'No' }
+    ];
+    
+    // Enviar mensaje con botones
+    await bot.sendButtonMessage(
+      from,
+      termsMessage,
+      termsButtons,
+      '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
+    );
+    
+    // Actualizar estado de la sesión
+    await sessionService.updateSessionState(from, sessionService.SessionState.TERMS_ACCEPTANCE);
+    logger.info(`Terms and conditions sent to user ${from}`);
+    
+  } catch (error) {
+    logger.error(`Error showing terms and conditions: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al mostrar los términos y condiciones. Por favor, intenta nuevamente.');
+  }
+};
+
 // Exportar todas las funciones necesarias
 module.exports = {
   handleStart,
@@ -2378,5 +2503,6 @@ module.exports = {
   showPostInterviewMenu,
   handleAdvisorService,
   handleAdvisorPaymentConfirmation,
-  verifyAdvisorPaymentScreenshot
+  verifyAdvisorPaymentScreenshot,
+  handleTermsAndConditions
 };
