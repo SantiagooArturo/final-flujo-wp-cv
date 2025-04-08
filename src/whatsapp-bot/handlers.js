@@ -1590,66 +1590,17 @@ Responde con un JSON que tenga los siguientes campos:
         const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
                             imageAnalysis.toLowerCase().includes('plin');
         
-        // Verificar si la fecha es reciente
-        let hasRecentDate = false;
+        // MODIFICACIÓN: Ya no verificamos la fecha, solo el nombre y el monto
+        // Nombre: Francesco o Francesco Lucchesi
+        // Monto: debe coincidir con el precio del paquete
         
-        // Obtener fecha actual
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth() + 1; // Los meses en JS son 0-indexed
-        const currentYear = currentDate.getFullYear();
-        
-        try {
-          // Verificar si tenemos la información de fecha extraída
-          if (analysisResult.month && analysisResult.year) {
-            // Convertir mes a número si viene como texto
-            let monthNumber = analysisResult.month;
-            if (isNaN(monthNumber)) {
-              // Mapeo básico de nombres de meses a números
-              const monthMap = {
-                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-                'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
-                'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
-                'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
-              };
-              monthNumber = monthMap[analysisResult.month.toLowerCase()] || 0;
-            }
-            
-            // Convertir año a número si no lo es
-            const yearNumber = parseInt(analysisResult.year);
-            
-            // Verificar si coincide con mes y año actuales
-            if (yearNumber === currentYear && monthNumber === currentMonth) {
-              hasRecentDate = true;
-              logger.info('Payment has current month and year, considering it valid');
-            }
-          } else if (analysisResult.date) {
-            // Intentar extraer mes y año de la fecha completa
-            const dateStr = analysisResult.date.toLowerCase();
-            const hasCurrentMonth = dateStr.includes(currentMonth.toString()) || 
-                                  ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-                                  [currentMonth - 1].includes(dateStr);
-            const hasCurrentYear = dateStr.includes(currentYear.toString());
-            
-            if (hasCurrentMonth && hasCurrentYear) {
-              hasRecentDate = true;
-              logger.info('Payment date contains current month and year, considering it valid');
-            }
-          }
-        } catch (dateError) {
-          logger.error(`Error validating date: ${dateError.message}`);
-          // Si hay un error al validar la fecha, ignoramos esta validación
-          hasRecentDate = true;
-        }
-        
-        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, y la fecha es reciente, considerarlo válido
+        // Si tiene el nombre y monto correctos, considerarlo válido
+        // Ya no verificamos la fecha ni la plataforma
         if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
-            (hasCorrectAmount || imageAnalysis.toLowerCase().includes(packagePrice)) && 
-            isYapeOrPlin &&
-            hasRecentDate) {
-          logger.info("Critical elements found, overriding OpenAI result to VALID");
+            (hasCorrectAmount || imageAnalysis.toLowerCase().includes(packagePrice))) {
+          logger.info("Critical elements found (name and amount), overriding OpenAI result to VALID");
           analysisResult.isValid = true;
-          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos, y fecha reciente";
+          analysisResult.reason = "Pago verificado: contiene el nombre y monto correctos";
         }
       }
       
@@ -1704,52 +1655,27 @@ Responde con un JSON que tenga los siguientes campos:
         // El pago no es válido
         logger.warn(`Invalid payment image from user ${from}: ${analysisResult.reason}`);
         
-        // Considerando que pueden haber falsos negativos, vamos a ser más permisivos
-        // y aceptar el pago de todos modos
-        logger.info(`Accepting payment anyway as fallback for user ${from}`);
+        // Informar al usuario por qué el pago fue rechazado
+        let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
         
-        // Extraer el monto del precio (convertir 'S/4' a 4)
-        const priceValue = parseFloat(packagePrice.replace('S/', ''));
-        
-        // Actualizar el contador de créditos del usuario
-        await userService.addCVCredits(from, parseInt(packageReviews));
-        
-        // Registrar la transacción
-        await userService.recordTransaction(
-          from, 
-          priceValue, 
-          'cv_credits', 
-          `Compra de ${packageReviews} créditos para análisis de CV (fallback)`
-        );
-        
-        // Enviar confirmación de que el pago ha sido verificado
-        await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
-        
-        // Restablecer el estado de CV procesado para permitir un nuevo análisis
-        await sessionService.updateSession(from, { cvProcessed: false });
-        
-        // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
-        const postPaymentButtons = [
-          { id: 'review_cv', text: '📋 Revisar mi CV' },
-          { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
-        ];
-        
-        try {
-          await bot.sendButtonMessage(
-            from, 
-            '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
-            postPaymentButtons,
-            'Opciones después del pago'
-          );
-          
-          // Actualizar el estado de la sesión a "payment_completed"
-          await sessionService.updateSessionState(from, 'payment_completed');
-        } catch (buttonError) {
-          logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
-          // Si no se pueden enviar los botones, enviar mensaje normal
-          await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
-          await sessionService.updateSessionState(from, 'waiting_for_cv');
+        if (analysisResult.reason) {
+          rejectionReason = analysisResult.reason;
+        } else {
+          // Intentar determinar la razón específica
+          if (analysisResult.amount && analysisResult.amount !== packagePrice.replace('S/', '')) {
+            rejectionReason = `el monto no coincide con el precio del paquete (${packagePrice})`;
+          } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
+            rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
+          } else {
+            rejectionReason = "no pudimos verificar claramente el pago";
+          }
         }
+        
+        // Mensaje para el usuario
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+        
+        // Mantener al usuario en el mismo estado para que pueda volver a intentar
+        await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
@@ -2254,75 +2180,95 @@ Responde con un JSON que tenga los siguientes campos:
         const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
                             imageAnalysis.toLowerCase().includes('plin');
         
-        // Verificar si la fecha es reciente
-        let hasRecentDate = false;
+        // MODIFICACIÓN: Ya no verificamos la fecha, solo el nombre y el monto
+        // Nombre: Francesco o Francesco Lucchesi
+        // Monto: 60 soles para asesorías
         
-        // Obtener fecha actual
-        const currentDate = new Date();
-        const currentMonth = currentDate.getMonth() + 1; // Los meses en JS son 0-indexed
-        const currentYear = currentDate.getFullYear();
-        
-        try {
-          // Verificar si tenemos la información de fecha extraída
-          if (analysisResult.month && analysisResult.year) {
-            // Convertir mes a número si viene como texto
-            let monthNumber = analysisResult.month;
-            if (isNaN(monthNumber)) {
-              // Mapeo básico de nombres de meses a números
-              const monthMap = {
-                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
-                'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
-                'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
-                'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
-              };
-              monthNumber = monthMap[analysisResult.month.toLowerCase()] || 0;
-            }
-            
-            // Convertir año a número si no lo es
-            const yearNumber = parseInt(analysisResult.year);
-            
-            // Verificar si coincide con mes y año actuales
-            if (yearNumber === currentYear && monthNumber === currentMonth) {
-              hasRecentDate = true;
-              logger.info('Advisor payment has current month and year, considering it valid');
-            }
-          } else if (analysisResult.date) {
-            // Intentar extraer mes y año de la fecha completa
-            const dateStr = analysisResult.date.toLowerCase();
-            const hasCurrentMonth = dateStr.includes(currentMonth.toString()) || 
-                                  ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
-                                  [currentMonth - 1].includes(dateStr);
-            const hasCurrentYear = dateStr.includes(currentYear.toString());
-            
-            if (hasCurrentMonth && hasCurrentYear) {
-              hasRecentDate = true;
-              logger.info('Advisor payment date contains current month and year, considering it valid');
-            }
-          }
-        } catch (dateError) {
-          logger.error(`Error validating advisor payment date: ${dateError.message}`);
-          // Si hay un error al validar la fecha, ignoramos esta validación
-          hasRecentDate = true;
-        }
-        
-        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, y la fecha es reciente, considerarlo válido
+        // Si tiene el nombre y monto correctos, considerarlo válido
+        // Ya no verificamos la fecha ni la plataforma
         if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
-            (hasCorrectAmount || imageAnalysis.toLowerCase().includes('60')) && 
-            isYapeOrPlin &&
-            hasRecentDate) {
-          logger.info("Critical elements found, overriding OpenAI result to VALID for advisor payment");
+            (hasCorrectAmount || imageAnalysis.toLowerCase().includes('60'))) {
+          logger.info("Critical elements found (name and amount), overriding OpenAI result to VALID for advisor payment");
           analysisResult.isValid = true;
-          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos, y fecha reciente";
+          analysisResult.reason = "Pago verificado: contiene el nombre y monto correctos";
         }
       }
       
       isValidPayment = analysisResult.isValid;
       
-      // RESTAURAR FALLBACK: Aceptar el pago incluso si no es válido
-      if (!isValidPayment) {
+      if (isValidPayment) {
+        logger.info(`Advisor payment validated successfully for user ${from}`);
+        
+        // Registrar la transacción (precio fijo de S/60 para asesorías)
+        await userService.recordTransaction(
+          from, 
+          60, 
+          advisorType === 'Revisión de CV' ? 'advisor_cv' : 'advisor_interview',
+          `Asesoría personalizada: ${advisorType}`
+        );
+        
+        // Actualizar la sesión para indicar que el pago fue aprobado
+        await sessionService.updateSession(from, { 
+          advisorPaymentVerified: true,
+          advisorPaymentDate: new Date().toISOString()
+        });
+        
+        // Enviar mensaje de confirmación con el enlace de Calendly
+        await bot.sendMessage(from, `
+✅ *¡Pago verificado correctamente!*
+
+Gracias por adquirir nuestra asesoría ${advisorType}.
+
+📅 *Agenda tu cita ahora mismo en este enlace:*
+https://calendly.com/psicologa-workin2/30min
+
+👆 Haz clic en el enlace para elegir la fecha y hora que mejor se adapte a tu disponibilidad.
+
+Si tienes alguna duda, no dudes en escribirnos.
+        `);
+        
+        // Actualizar el estado para indicar que el servicio fue completado
+        await sessionService.updateSessionState(from, 'advisor_service_completed');
+        
+        // Ofrecer volver al menú principal
+        try {
+          await bot.sendButtonMessage(
+            from, 
+            'Cuando hayas agendado tu cita, puedes volver al menú principal.',
+            [{ id: 'back_to_main_menu', text: '🔙 Volver al Menú' }],
+            'Opciones disponibles'
+          );
+        } catch (buttonError) {
+          logger.warn(`Failed to send advisor completion buttons: ${buttonError.message}`);
+          await bot.sendMessage(from, 'Escribe !start para volver al menú principal cuando hayas terminado.');
+        }
+      } else {
+        // El pago no es válido
         logger.warn(`Invalid advisor payment image from user ${from}: ${analysisResult.reason}`);
         
+        // Informar al usuario por qué el pago fue rechazado
+        let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
+        
+        if (analysisResult.reason) {
+          rejectionReason = analysisResult.reason;
+        } else {
+          // Intentar determinar la razón específica
+          if (analysisResult.amount && analysisResult.amount !== '60') {
+            rejectionReason = `el monto no coincide con el precio de la asesoría (S/60)`;
+          } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
+            rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
+          } else {
+            rejectionReason = "no pudimos verificar claramente el pago";
+          }
+        }
+        
+        // Mensaje para el usuario
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de S/60\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+        
+        // Mantener al usuario en el mismo estado para que pueda volver a intentar
+        await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
+        
+        /* CÓDIGO DE FALLBACK COMENTADO POR SI NECESITAMOS VOLVER A ÉL
         // Considerando que pueden haber falsos negativos, vamos a ser más permisivos
         // y aceptar el pago de todos modos
         logger.info(`Accepting advisor payment anyway as fallback for user ${from}`);
@@ -2372,6 +2318,7 @@ Si tienes alguna duda, no dudes en escribirnos.
         }
         
         return;
+        */
       }
     } catch (aiError) {
       // Error al analizar con OpenAI
