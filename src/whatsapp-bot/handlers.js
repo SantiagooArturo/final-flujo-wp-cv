@@ -636,17 +636,38 @@ const handleImage = async (from, image) => {
     
     // Obtener la sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
+    logger.info(`User session state when receiving image: ${session.state}`);
     
     // Verificar estado para determinar qué hacer con la imagen
     if (session.state === 'waiting_payment_screenshot') {
       // Procesar captura de pantalla para pago de premium
+      logger.info(`Processing payment screenshot for user ${from}`);
       await verifyPaymentScreenshot(from, image);
     } else if (session.state === 'waiting_advisor_payment_screenshot') {
       // Procesar captura de pantalla para pago de asesoría
+      logger.info(`Processing advisor payment screenshot for user ${from}`);
       await verifyAdvisorPaymentScreenshot(from, image);
     } else {
-      // No estamos esperando una imagen específica, informar al usuario
-      await bot.sendMessage(from, 'Gracias por la imagen. Por favor, envía !start si deseas comenzar a usar el bot o !help para obtener ayuda.');
+      // Para debugging: mostrar el estado actual
+      logger.info(`Image received but user ${from} is not in payment verification flow. Current state: ${session.state}`);
+      
+      // Si estamos en estado de confirmación de pago, asumimos que la imagen es un comprobante
+      if (session.state === 'confirming_payment') {
+        logger.info(`User ${from} is in confirming_payment state, treating image as payment screenshot`);
+        // Actualizar el estado a waiting_payment_screenshot
+        await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
+        // Procesar la imagen como comprobante de pago
+        await verifyPaymentScreenshot(from, image);
+      } else if (session.state === 'confirming_advisor_payment') {
+        logger.info(`User ${from} is in confirming_advisor_payment state, treating image as advisor payment screenshot`);
+        // Actualizar el estado a waiting_advisor_payment_screenshot
+        await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
+        // Procesar la imagen como comprobante de pago de asesoría
+        await verifyAdvisorPaymentScreenshot(from, image);
+      } else {
+        // No estamos esperando una imagen específica, informar al usuario
+        await bot.sendMessage(from, 'Gracias por la imagen. Por favor, envía !start si deseas comenzar a usar el bot o !help para obtener ayuda.');
+      }
     }
   } catch (error) {
     logger.error(`Error handling image: ${error.message}`);
