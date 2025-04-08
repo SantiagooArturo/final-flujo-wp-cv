@@ -39,57 +39,8 @@ const handleStart = async (from) => {
     await sessionService.resetSession(from);
     logger.info(`Session reset for user ${from}`);
     
-    // Comprobar si el usuario ya ha aceptado los términos y condiciones
-    const userSession = await sessionService.getOrCreateSession(from);
-    
-    try {
-      if (!userSession.termsAccepted) {
-        // Si no ha aceptado los términos, mostrar la pantalla de términos
-        await handleTermsAndConditions(from);
-        return;
-      }
-    } catch (termsError) {
-      logger.error(`Error checking terms acceptance: ${termsError.message}`);
-      // Continuar con el flujo normal si hay algún error
-    }
-    
-    // Si ya aceptó los términos, continuar con el flujo normal
-    // Mensaje de bienvenida mejorado con emojis y estilo más personal
-    const welcomeMessage = `
-¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
-
-Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
-
-🔍 *Análisis de CV personalizado*
-💼 *Simulación de entrevistas*
-👨‍💼 *Asesoría laboral con psicólogos por videollamada*
-
-¿Cómo te gustaría que te ayude hoy?
-    `;
-    
-    // Intentar enviar botones para una mejor experiencia
-    try {
-      const menuButtons = [
-        { id: 'review_cv', text: '📋 Revisar mi CV' },
-        { id: 'interview_simulation', text: '🎯 Simular entrevista' },
-        { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
-      ];
-      
-      await bot.sendButtonMessage(
-        from,
-        welcomeMessage,
-        menuButtons,
-        '¡Bienvenido a Worky!'
-      );
-      
-      await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-    } catch (buttonError) {
-      logger.warn(`Failed to send button message, using text fallback: ${buttonError.message}`);
-      
-      // Mensaje de texto alternativo si fallan los botones
-      await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
-      await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
-    }
+    // Primero mostrar los términos y condiciones
+    await handleTermsAndConditions(from);
   } catch (error) {
     logger.error(`Error in handleStart: ${error.message}`);
     await bot.sendMessage(from, '😓 Lo siento, ha ocurrido un error al iniciar. Por favor, intenta nuevamente enviando *!start*.');
@@ -398,17 +349,20 @@ const handleText = async (from, text) => {
         );
         await sessionService.updateSessionState(from, sessionService.SessionState.MENU_SELECTION);
         break;
-      case sessionService.SessionState.TERMS_ACCEPTANCE:
+      case 'terms_acceptance':
         // Si el usuario está en el estado de aceptación de términos
         if (text.toLowerCase().includes('si') || 
             text.toLowerCase().includes('sí') ||
             text.toLowerCase().includes('acepto')) {
           // Usuario acepta los términos por texto
-          await handleButtonReply(from, 'accept_terms');
+          logger.info(`User ${from} accepted terms and conditions via text`);
+          await showWelcomeMessage(from);
         } else if (text.toLowerCase().includes('no') || 
                   text.toLowerCase().includes('rechazo')) {
           // Usuario rechaza los términos por texto
-          await handleButtonReply(from, 'reject_terms');
+          logger.info(`User ${from} rejected terms and conditions via text`);
+          await bot.sendMessage(from, 'Para utilizar nuestros servicios es necesario aceptar los términos y condiciones. Sin esta aceptación, no podemos continuar.');
+          await handleTermsAndConditions(from);
         } else {
           // Mensaje no reconocido, volver a mostrar los términos
           await bot.sendMessage(from, 'Por favor, responde "Sí" si aceptas los términos y condiciones o "No" si los rechazas.');
@@ -1798,11 +1752,8 @@ const handleButtonReply = async (from, buttonId) => {
         // Usuario acepta los términos y condiciones
         logger.info(`User ${from} accepted terms and conditions`);
         
-        // Actualizar la sesión para marcar que el usuario aceptó los términos
-        await sessionService.updateSession(from, { termsAccepted: true });
-        
-        // Proceder con el mensaje de bienvenida
-        await handleStart(from);
+        // En lugar de guardarlo en la sesión, simplemente mostramos el mensaje de bienvenida
+        await showWelcomeMessage(from);
         break;
       case 'reject_terms':
         // Usuario rechaza los términos y condiciones
@@ -2443,20 +2394,28 @@ Al continuar, aceptas nuestros términos, nuestra política de privacidad y auto
         '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
       );
       
-      // Actualizar estado de la sesión
-      await sessionService.updateSessionState(from, 'terms_acceptance');
+      // Ya no actualizamos el estado en la sesión
       logger.info(`Terms and conditions sent to user ${from}`);
     } catch (buttonError) {
       logger.error(`Failed to send terms buttons: ${buttonError.message}`);
       // Enviar mensaje sin botones como fallback
       await bot.sendMessage(from, `${termsMessage}\n\nPor favor, responde "Sí" para aceptar o "No" para rechazar los términos y condiciones.`);
-      await sessionService.updateSessionState(from, 'terms_acceptance');
     }
   } catch (error) {
     logger.error(`Error showing terms and conditions: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al mostrar los términos y condiciones. Por favor, intenta nuevamente enviando !start.');
-    
-    // En caso de error, mostrar el mensaje de bienvenida normal como fallback
+    // En caso de error, mostrar directamente el mensaje de bienvenida
+    await showWelcomeMessage(from);
+  }
+};
+
+/**
+ * Muestra el mensaje de bienvenida con las opciones principales
+ * @param {string} from - ID del usuario
+ * @returns {Promise<void>}
+ */
+const showWelcomeMessage = async (from) => {
+  try {
+    // Mensaje de bienvenida mejorado con emojis y estilo más personal
     const welcomeMessage = `
 ¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
 
@@ -2469,6 +2428,7 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
 ¿Cómo te gustaría que te ayude hoy?
     `;
     
+    // Intentar enviar botones para una mejor experiencia
     try {
       const menuButtons = [
         { id: 'review_cv', text: '📋 Revisar mi CV' },
@@ -2485,9 +2445,15 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
       
       await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
     } catch (buttonError) {
+      logger.warn(`Failed to send button message, using text fallback: ${buttonError.message}`);
+      
+      // Mensaje de texto alternativo si fallan los botones
       await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
       await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
     }
+  } catch (error) {
+    logger.error(`Error showing welcome message: ${error.message}`);
+    await bot.sendMessage(from, '😓 Lo siento, ha ocurrido un error. Por favor, intenta nuevamente enviando *!start*.');
   }
 };
 
