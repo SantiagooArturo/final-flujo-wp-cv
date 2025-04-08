@@ -1516,16 +1516,24 @@ const verifyPaymentScreenshot = async (from, image) => {
 1. Debe ser un comprobante de pago de Yape, Plin o alguna otra billetera digital peruana
 2. El pago debe ser a nombre de "Francesco Lucchesi" o similar
 3. El monto debe ser ${packagePrice} soles
-4. La fecha debe ser de hoy (cualquier hora es válida)
+4. La fecha debe ser reciente (del mes actual o últimos 5 días)
+
+Analiza cuidadosamente la fecha en el comprobante y extrae:
+- Día (número)
+- Mes (nombre o número)
+- Año (número completo)
 
 Responde con un JSON que tenga los siguientes campos:
 - isValid: true/false según si la imagen cumple con todos los requisitos
 - recipientName: nombre del destinatario que aparece en el comprobante (si está visible)
 - amount: monto del pago (si está visible)
-- date: fecha del pago (si está visible)
+- date: fecha del pago en formato completo (si está visible)
+- day: día del mes extraído (número)
+- month: mes extraído (nombre o número)
+- year: año extraído (número)
 - reason: razón por la que es válido o inválido`;
       
-      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de ${packagePrice} a Francesco Lucchesi. Se considera válido si el pago se realizó hoy (cualquier hora).`;
+      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de ${packagePrice} a Francesco Lucchesi o Francesco Lucchesi V. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
       
       // Llamar a la API de OpenAI para analizar la imagen
       const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
@@ -1582,13 +1590,66 @@ Responde con un JSON que tenga los siguientes campos:
         const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
                             imageAnalysis.toLowerCase().includes('plin');
         
-        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, considerarlo válido
+        // Verificar si la fecha es reciente
+        let hasRecentDate = false;
+        
+        // Obtener fecha actual
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1; // Los meses en JS son 0-indexed
+        const currentYear = currentDate.getFullYear();
+        
+        try {
+          // Verificar si tenemos la información de fecha extraída
+          if (analysisResult.month && analysisResult.year) {
+            // Convertir mes a número si viene como texto
+            let monthNumber = analysisResult.month;
+            if (isNaN(monthNumber)) {
+              // Mapeo básico de nombres de meses a números
+              const monthMap = {
+                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+                'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+                'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+                'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+              };
+              monthNumber = monthMap[analysisResult.month.toLowerCase()] || 0;
+            }
+            
+            // Convertir año a número si no lo es
+            const yearNumber = parseInt(analysisResult.year);
+            
+            // Verificar si coincide con mes y año actuales
+            if (yearNumber === currentYear && monthNumber === currentMonth) {
+              hasRecentDate = true;
+              logger.info('Payment has current month and year, considering it valid');
+            }
+          } else if (analysisResult.date) {
+            // Intentar extraer mes y año de la fecha completa
+            const dateStr = analysisResult.date.toLowerCase();
+            const hasCurrentMonth = dateStr.includes(currentMonth.toString()) || 
+                                  ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+                                  [currentMonth - 1].includes(dateStr);
+            const hasCurrentYear = dateStr.includes(currentYear.toString());
+            
+            if (hasCurrentMonth && hasCurrentYear) {
+              hasRecentDate = true;
+              logger.info('Payment date contains current month and year, considering it valid');
+            }
+          }
+        } catch (dateError) {
+          logger.error(`Error validating date: ${dateError.message}`);
+          // Si hay un error al validar la fecha, ignoramos esta validación
+          hasRecentDate = true;
+        }
+        
+        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, y la fecha es reciente, considerarlo válido
         if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
             (hasCorrectAmount || imageAnalysis.toLowerCase().includes(packagePrice)) && 
-            isYapeOrPlin) {
+            isYapeOrPlin &&
+            hasRecentDate) {
           logger.info("Critical elements found, overriding OpenAI result to VALID");
           analysisResult.isValid = true;
-          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos";
+          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos, y fecha reciente";
         }
       }
       
@@ -1654,13 +1715,44 @@ Responde con un JSON que tenga los siguientes campos:
             rejectionReason = `el monto no coincide con el precio del paquete (${packagePrice})`;
           } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
             rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
-          } else if (analysisResult.date && !analysisResult.date.includes(new Date().toISOString().split('T')[0].substring(5))) {
-            rejectionReason = "la fecha del pago no es reciente";
+          } else if (analysisResult.date) {
+            // Verificar si podemos determinar el problema con la fecha
+            const currentDate = new Date();
+            const currentMonth = currentDate.getMonth() + 1;
+            const currentYear = currentDate.getFullYear();
+            
+            // Intentar extraer información de la fecha
+            if (analysisResult.month && analysisResult.year) {
+              let monthNumber = analysisResult.month;
+              if (isNaN(monthNumber)) {
+                const monthMap = {
+                  'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+                  'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+                  'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+                  'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+                };
+                monthNumber = monthMap[analysisResult.month.toLowerCase()] || 0;
+              }
+              
+              const yearNumber = parseInt(analysisResult.year);
+              
+              if (yearNumber !== currentYear) {
+                rejectionReason = `la fecha del pago (${analysisResult.date}) no corresponde al año actual (${currentYear})`;
+              } else if (monthNumber !== currentMonth) {
+                rejectionReason = `la fecha del pago (${analysisResult.date}) no corresponde al mes actual`;
+              } else {
+                rejectionReason = "la fecha del pago no parece ser reciente";
+              }
+            } else {
+              rejectionReason = "la fecha del pago no parece ser reciente";
+            }
+          } else {
+            rejectionReason = "no pudimos verificar claramente la fecha del pago";
           }
         }
         
         // Mensaje para el usuario
-        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n• La fecha sea reciente\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n• La fecha sea reciente (del mes actual)\n\nEnvía una nueva captura cuando lo hayas corregido.`);
         
         // Mantener al usuario en el mismo estado para que pueda volver a intentar
         await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
@@ -2096,7 +2188,12 @@ const verifyAdvisorPaymentScreenshot = async (from, image) => {
 1. Debe ser un comprobante de pago de Yape, Plin o alguna otra billetera digital peruana
 2. El pago debe ser a nombre de "Francesco Lucchesi" o similar
 3. El monto debe ser S/60 soles
-4. La fecha debe ser de hoy (cualquier hora es válida)
+4. La fecha debe ser reciente (del mes actual o últimos 5 días)
+
+Analiza cuidadosamente la fecha en el comprobante y extrae:
+- Día (número)
+- Mes (nombre o número)
+- Año (número completo)
 
 Responde con un JSON que tenga los siguientes campos:
 - isValid: true/false según si la imagen cumple con todos los requisitos
@@ -2105,7 +2202,7 @@ Responde con un JSON que tenga los siguientes campos:
 - date: fecha del pago (si está visible)
 - reason: razón por la que es válido o inválido`;
       
-      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi. Se considera válido si el pago se realizó hoy (cualquier hora).`;
+      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
       
       // Llamar a la API de OpenAI para analizar la imagen
       const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
@@ -2163,13 +2260,66 @@ Responde con un JSON que tenga los siguientes campos:
         const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
                             imageAnalysis.toLowerCase().includes('plin');
         
-        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, considerarlo válido
+        // Verificar si la fecha es reciente
+        let hasRecentDate = false;
+        
+        // Obtener fecha actual
+        const currentDate = new Date();
+        const currentMonth = currentDate.getMonth() + 1; // Los meses en JS son 0-indexed
+        const currentYear = currentDate.getFullYear();
+        
+        try {
+          // Verificar si tenemos la información de fecha extraída
+          if (analysisResult.month && analysisResult.year) {
+            // Convertir mes a número si viene como texto
+            let monthNumber = analysisResult.month;
+            if (isNaN(monthNumber)) {
+              // Mapeo básico de nombres de meses a números
+              const monthMap = {
+                'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+                'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+                'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+                'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+              };
+              monthNumber = monthMap[analysisResult.month.toLowerCase()] || 0;
+            }
+            
+            // Convertir año a número si no lo es
+            const yearNumber = parseInt(analysisResult.year);
+            
+            // Verificar si coincide con mes y año actuales
+            if (yearNumber === currentYear && monthNumber === currentMonth) {
+              hasRecentDate = true;
+              logger.info('Advisor payment has current month and year, considering it valid');
+            }
+          } else if (analysisResult.date) {
+            // Intentar extraer mes y año de la fecha completa
+            const dateStr = analysisResult.date.toLowerCase();
+            const hasCurrentMonth = dateStr.includes(currentMonth.toString()) || 
+                                  ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                                   'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre']
+                                  [currentMonth - 1].includes(dateStr);
+            const hasCurrentYear = dateStr.includes(currentYear.toString());
+            
+            if (hasCurrentMonth && hasCurrentYear) {
+              hasRecentDate = true;
+              logger.info('Advisor payment date contains current month and year, considering it valid');
+            }
+          }
+        } catch (dateError) {
+          logger.error(`Error validating advisor payment date: ${dateError.message}`);
+          // Si hay un error al validar la fecha, ignoramos esta validación
+          hasRecentDate = true;
+        }
+        
+        // Si tiene el nombre y monto correctos, y parece ser de Yape o Plin, y la fecha es reciente, considerarlo válido
         if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
             (hasCorrectAmount || imageAnalysis.toLowerCase().includes('60')) && 
-            isYapeOrPlin) {
-          logger.info("Critical elements found, overriding OpenAI result to VALID");
+            isYapeOrPlin &&
+            hasRecentDate) {
+          logger.info("Critical elements found, overriding OpenAI result to VALID for advisor payment");
           analysisResult.isValid = true;
-          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos";
+          analysisResult.reason = "Pago verificado manualmente: contiene el nombre, monto y plataforma correctos, y fecha reciente";
         }
       }
       
@@ -2236,13 +2386,44 @@ Si tienes alguna duda, no dudes en escribirnos.
             rejectionReason = "el monto no coincide con el precio de la asesoría (S/60)";
           } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
             rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
-          } else if (analysisResult.date && !analysisResult.date.includes(new Date().toISOString().split('T')[0].substring(5))) {
-            rejectionReason = "la fecha del pago no es reciente";
+          } else if (analysisResult.date) {
+            // Verificar si podemos determinar el problema con la fecha
+            const currentDate = new Date();
+            const currentMonth = currentDate.getMonth() + 1;
+            const currentYear = currentDate.getFullYear();
+            
+            // Intentar extraer información de la fecha
+            if (analysisResult.month && analysisResult.year) {
+              let monthNumber = analysisResult.month;
+              if (isNaN(monthNumber)) {
+                const monthMap = {
+                  'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4, 'mayo': 5, 'junio': 6,
+                  'julio': 7, 'agosto': 8, 'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+                  'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+                  'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+                };
+                monthNumber = monthMap[analysisResult.month.toLowerCase()] || 0;
+              }
+              
+              const yearNumber = parseInt(analysisResult.year);
+              
+              if (yearNumber !== currentYear) {
+                rejectionReason = `la fecha del pago (${analysisResult.date}) no corresponde al año actual (${currentYear})`;
+              } else if (monthNumber !== currentMonth) {
+                rejectionReason = `la fecha del pago (${analysisResult.date}) no corresponde al mes actual`;
+              } else {
+                rejectionReason = "la fecha del pago no parece ser reciente";
+              }
+            } else {
+              rejectionReason = "la fecha del pago no parece ser reciente";
+            }
+          } else {
+            rejectionReason = "no pudimos verificar claramente la fecha del pago";
           }
         }
         
         // Mensaje para el usuario
-        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de S/60\n• La fecha sea reciente\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de S/60\n• La fecha sea reciente (del mes actual)\n\nEnvía una nueva captura cuando lo hayas corregido.`);
         
         // Mantener al usuario en el mismo estado para que pueda volver a intentar
         await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
