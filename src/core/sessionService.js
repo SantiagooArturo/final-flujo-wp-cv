@@ -239,7 +239,8 @@ const resetSession = async (userId) => {
       cvProcessed: false,
       processingCV: false,
       jobPosition: null,
-      lastPdfUrl: null
+      lastPdfUrl: null,
+      hasReceivedWelcomeMessage: false // Inicializar esta bandera
     };
     
     if (firebaseConfig.isInitialized()) {

@@ -308,6 +308,16 @@ const handleText = async (from, text) => {
     
     logger.info(`Handling text message from user ${from} in state: ${session.state}`);
     
+    // Si es un usuario nuevo o está en estado inicial y es su primer mensaje
+    if (session.state === sessionService.SessionState.INITIAL && !session.hasReceivedWelcomeMessage) {
+      // Marcar que ya recibió el mensaje de bienvenida
+      await sessionService.updateSession(from, { hasReceivedWelcomeMessage: true });
+      
+      // Mostrar mensaje de bienvenida como si hubiera enviado !start
+      await handleStart(from);
+      return;
+    }
+    
     // Manejar comandos especiales primero
     if (text.toLowerCase().startsWith('!')) {
       const command = text.toLowerCase().substring(1);
@@ -321,6 +331,11 @@ const handleText = async (from, text) => {
         case 'reset':
           await sessionService.resetSession(from);
           await handleStart(from);
+          return;
+        case 'clearsession':
+          // Comando especial para limpiar la sesión cuando está muy grande
+          await sessionService.resetSession(from);
+          await bot.sendMessage(from, '✅ Tu sesión ha sido reiniciada correctamente. Ahora puedes continuar usando el bot normalmente. Usa !start para comenzar de nuevo.');
           return;
         case 'pdf':
         case 'url':
