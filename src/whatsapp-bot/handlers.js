@@ -2199,7 +2199,7 @@ Responde con un JSON que tenga los siguientes campos:
         
         // Enviar opciones post-pago
         const postPaymentButtons = [
-          { id: 'back_to_menu', text: '🏠 Volver al menú' }
+          { id: 'back_to_main_menu', text: '🏠 Volver al menú' }
         ];
         
         try {
