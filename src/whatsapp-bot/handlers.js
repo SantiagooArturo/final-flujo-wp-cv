@@ -2377,20 +2377,34 @@ Términos y condiciones: https://www.workin2.com/terminos
 Privacidad: https://www.workin2.com/privacidad
 
 Al continuar, aceptas nuestros términos, nuestra política de privacidad y autorizas el uso y compartición de tus datos con terceros para fines relacionados con empleabilidad y mejora del servicio.
-
-Para continuar, escribe *SI* para aceptar o *NO* para rechazar los términos.
     `;
     
-    // Enviar mensaje sin botones, usando palabras clave SI/NO
-    await bot.sendMessage(from, termsMessage);
+    // Intentar enviar los botones interactivos
+    const termsButtons = [
+      { id: 'accept_terms', text: 'Sí' },
+      { id: 'reject_terms', text: 'No' }
+    ];
     
-    // Actualizar el estado para esperar la respuesta SI/NO
-    // Sin usar una bandera específica en Firebase
+    try {
+      // Usar el formato correcto de botones interactivos
+      await bot.sendButtonMessage(
+        from,
+        termsMessage,
+        termsButtons,
+        '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
+      );
+    } catch (buttonError) {
+      logger.error(`Error sending terms buttons: ${buttonError.message}`);
+      // Fallback a mensaje de texto si fallan los botones
+      await bot.sendMessage(from, `${termsMessage}\n\nPor favor, responde "Sí" para aceptar o "No" para rechazar los términos y condiciones.`);
+    }
+    
+    // Actualizar el estado para manejar la respuesta
     await sessionService.updateSessionState(from, 'terms_acceptance');
     logger.info(`Terms and conditions sent to user ${from}`);
   } catch (error) {
     logger.error(`Error showing terms and conditions: ${error.message}`);
-    // En caso de error, mostrar directamente el mensaje de bienvenida
+    // En caso de error, mostrar directamente el mensaje de bienvenida como fallback
     await showWelcomeMessage(from);
   }
 };
