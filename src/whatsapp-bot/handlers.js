@@ -2328,7 +2328,7 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
         from,
         welcomeMessage,
         menuButtons,
-        '¡Bienvenido a Worky!'
+        ''
       );
 
       await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
