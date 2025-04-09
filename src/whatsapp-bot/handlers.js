@@ -86,7 +86,7 @@ const handleMenuSelection = async (from, selection) => {
           }
         } else {
           // Primero preguntar por el puesto al que aspira
-          await bot.sendMessage(from, '¿A qué puesto aspiras? Por favor, describe brevemente el puesto y la industria.');
+          await bot.sendMessage(from, '¿A qué puesto aspiras? Describe brevemente el puesto y la industria. \n\n 📝(Ejemplo: “Practicante de ventas en Coca Cola o Analista de marketing en banca”).');
           // Crear un estado intermedio para indicar que estamos esperando el puesto antes del CV
           await sessionService.updateSessionState(from, 'waiting_for_position_before_cv');
           logger.info(`Asked for position before CV for user ${from}`);
@@ -96,7 +96,7 @@ const handleMenuSelection = async (from, selection) => {
       case 'interview_simulation':
         // Para simulación de entrevista, siempre preguntar por el puesto de trabajo
         // antes de comenzar, sin importar si ha analizado CV previamente o no
-        await bot.sendMessage(from, '¿A qué puesto aspiras? Por favor, describe brevemente el puesto y la industria.');
+        await bot.sendMessage(from, '¿A qué puesto aspiras? Describe brevemente el puesto y la industria. \n\n 📝(Ejemplo: “Practicante de ventas en Coca Cola o Analista de marketing en banca”).');
         await sessionService.updateSessionState(from, 'waiting_for_position_before_interview');
         logger.info(`Asked for position before interview for user ${from}`);
         break;
