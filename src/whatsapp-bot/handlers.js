@@ -16,10 +16,10 @@ const userService = require('../core/userService');
 const handleStart = async (from) => {
   try {
     logger.info('Firebase already initialized');
-    
+
     // Obtener la sesión actual antes de resetearla
     const currentSession = await sessionService.getOrCreateSession(from);
-    
+
     // Estados que indican que está en medio de una entrevista
     const interviewStates = [
       sessionService.SessionState.POSITION_RECEIVED,
@@ -27,18 +27,18 @@ const handleStart = async (from) => {
       sessionService.SessionState.QUESTION_ASKED,
       sessionService.SessionState.ANSWER_RECEIVED
     ];
-    
+
     // Si está en medio de una entrevista, notificar y no resetear
     if (interviewStates.includes(currentSession.state)) {
       await bot.sendMessage(from, '⚠️ *¡Espera un momento!* Ya tienes una entrevista en curso. Para reiniciar, envía *!reset* primero. ¡Ánimo con tu entrevista actual! 🚀');
       logger.info(`Start command ignored for user ${from} due to active interview session`);
       return;
     }
-    
+
     // Si no está en entrevista, proceder con el reseteo normal
     await sessionService.resetSession(from);
     logger.info(`Session reset for user ${from}`);
-    
+
     // Primero mostrar los términos y condiciones
     await handleTermsAndConditions(from);
   } catch (error) {
@@ -56,24 +56,24 @@ const handleStart = async (from) => {
 const handleMenuSelection = async (from, selection) => {
   try {
     logger.info(`Menu selection received from user ${from}: ${selection}`);
-    
-    switch(selection) {
+
+    switch (selection) {
       case 'review_cv':
         // Verificar si ya realizó un análisis de CV anteriormente (usando userService)
         const shouldPay = await userService.shouldUserPayForCVAnalysis(from);
-        
+
         if (shouldPay) {
           // Si ya analizó un CV anteriormente y no tiene créditos, mostrar mensaje claro
           // con opciones de comprar o volver al menú
           const remainingCredits = await userService.getRemainingCVCredits(from);
-          
+
           if (remainingCredits <= 0) {
             // No tiene créditos, mostrar mensaje claro
             const noCreditsButtons = [
               { id: 'buy_credits', text: '💰 Comprar revisiones' },
               { id: 'back_to_main_menu', text: '🔙 Volver al Menú' }
             ];
-            
+
             await bot.sendButtonMessage(
               from,
               '⚠️ *Se te acabaron las revisiones de CV*\n\nActualmente no tienes créditos disponibles para analizar más CVs. ¿Quieres comprar más revisiones o volver al menú principal?',
@@ -92,7 +92,7 @@ const handleMenuSelection = async (from, selection) => {
           logger.info(`Asked for position before CV for user ${from}`);
         }
         break;
-        
+
       case 'interview_simulation':
         // Para simulación de entrevista, siempre preguntar por el puesto de trabajo
         // antes de comenzar, sin importar si ha analizado CV previamente o no
@@ -100,7 +100,7 @@ const handleMenuSelection = async (from, selection) => {
         await sessionService.updateSessionState(from, 'waiting_for_position_before_interview');
         logger.info(`Asked for position before interview for user ${from}`);
         break;
-        
+
       default:
         // Opción no reconocida, mostrar menú de nuevo
         const menuButtons = [
@@ -108,7 +108,7 @@ const handleMenuSelection = async (from, selection) => {
           { id: 'interview_simulation', text: '🎯 Simular entrevista' },
           { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
         ];
-        
+
         await bot.sendButtonMessage(
           from,
           'No reconozco esa opción. Si quieres simular una entrevista dale a Simular entrevista, si quieres analizar otro CV dale a Premium',
@@ -128,7 +128,7 @@ const handleDocument = async (from, document) => {
   try {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
-    
+
     // Verificar si ya se procesó este CV
     if (session.cvProcessed) {
       logger.info(`CV already processed for user ${from}`);
@@ -137,7 +137,7 @@ const handleDocument = async (from, document) => {
 
     // Verificar si ya tiene análisis previos (usando userService)
     const shouldPay = await userService.shouldUserPayForCVAnalysis(from);
-    
+
     if (shouldPay) {
       logger.info(`User ${from} has already analyzed a CV and needs to pay for more`);
       await handlePremiumInfo(from);
@@ -167,33 +167,33 @@ const handleDocument = async (from, document) => {
     }
 
     // Marcar que estamos procesando un CV y guardarlo en la sesión
-    await sessionService.updateSession(from, { 
+    await sessionService.updateSession(from, {
       cvProcessed: true,
       processingCV: true,
       processingStartTime: Date.now(),
       lastDocumentId: document.id
     });
-    
+
     // Enviar mensaje de procesamiento
     await bot.sendMessage(from, '📄 *¡Gracias por compartir tu CV!* 🙏\n\nEstoy analizándolo detalladamente para ofrecerte retroalimentación valiosa. Este proceso puede tomar entre 2-3 minutos... ⏳\n\nEl análisis se está realizando en un servidor externo, por favor ten paciencia.');
-    
+
     // Obtener el puesto de trabajo si existe
     const jobPosition = session.jobPosition || 'Puesto no especificado';
-    
+
     // Obtener la URL del documento usando el MediaProcessor de WhatsApp
     const mediaUrl = await bot.getMediaUrl(document.id);
     if (!mediaUrl) {
       throw new Error('No se pudo obtener la URL del documento');
     }
-    
+
     logger.info(`Document media URL obtained: ${mediaUrl}`);
     document.url = mediaUrl;
-    
+
     try {
       // Procesar el CV usando el endpoint real
       const cvService = require('../core/cvService');
       const analysis = await cvService.processCV(document, from, jobPosition);
-      
+
       // Extraer solo la URL del análisis para guardar
       let analysisUrl;
       if (typeof analysis === 'string') {
@@ -207,39 +207,39 @@ const handleDocument = async (from, document) => {
         analysisUrl = `https://myworkinpe.lat/pdfs/cv_${Date.now()}.pdf`;
         logger.info(`No URL found in analysis response, using fallback URL: ${analysisUrl}`);
       }
-      
+
       logger.info(`Analysis URL extracted: ${analysisUrl}`);
-      
+
       // Guardar solo la URL del análisis en la sesión, NO el análisis completo
       await sessionService.saveCVAnalysis(from, analysisUrl);
-      
+
       // Actualizar la sesión solo con la URL, no con el objeto de análisis completo
-      await sessionService.updateSession(from, { 
+      await sessionService.updateSession(from, {
         previousAnalysis: session.previousAnalysis ? [...session.previousAnalysis, analysisUrl] : [analysisUrl],
         processingCV: false,  // Marcar como finalizado el procesamiento
         lastPdfUrl: analysisUrl  // Guardar la URL para fácil acceso
       });
-      
+
       // Registrar el análisis en el historial permanente de usuario (solo URL)
       await userService.recordCVAnalysis(from, { url: analysisUrl }, jobPosition);
-      
+
       // Enviar mensaje de análisis completado
       await bot.sendMessage(from, '✅ *¡Análisis completado!* 🎉\n\nHe revisado tu CV y he preparado un informe detallado con todas mis observaciones.');
-      
+
       try {
         // Esperar un momento antes de enviar el enlace para evitar problemas de límites de velocidad
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
         // Enviar SOLO la URL sin formato adicional
         logger.info(`Intentando enviar URL simple: ${analysisUrl}`);
         await bot.sendMessage(from, analysisUrl);
-        
+
         // Esperar antes de enviar las opciones
         await new Promise(resolve => setTimeout(resolve, 2000));
-        
+
         // Enviar mensaje adicional con instrucciones
         await bot.sendMessage(from, 'Haz clic en el enlace anterior para ver tu análisis completo en PDF');
-        
+
         // Enviar opciones post-análisis como texto simple
         await sendPostCVOptions(from);
       } catch (messageError) {
@@ -252,7 +252,7 @@ const handleDocument = async (from, document) => {
           logger.error(`Error sending alternate link: ${simpleMessageError.message}`);
         }
       }
-      
+
       logger.info(`CV analysis process completed for user ${from}. PDF URL: ${analysisUrl}`);
       return analysisUrl;
     } catch (error) {
@@ -271,19 +271,19 @@ const handleText = async (from, text) => {
     logger.info('Firebase already initialized');
     const session = await sessionService.getOrCreateSession(from);
     logger.info(`Session retrieved for user: ${from}, state: ${session.state}`);
-    
+
     logger.info(`Handling text message from user ${from} in state: ${session.state}`);
-    
+
     // Si es un usuario nuevo o está en estado inicial y es su primer mensaje
     if (session.state === sessionService.SessionState.INITIAL && !session.hasReceivedWelcomeMessage) {
       // Marcar que ya recibió el mensaje de bienvenida
       await sessionService.updateSession(from, { hasReceivedWelcomeMessage: true });
-      
+
       // Mostrar mensaje de bienvenida como si hubiera enviado !start
       await handleStart(from);
       return;
     }
-    
+
     // Manejar comandos especiales primero
     if (text.toLowerCase().startsWith('!')) {
       const command = text.toLowerCase().substring(1);
@@ -318,10 +318,10 @@ const handleText = async (from, text) => {
           return;
       }
     }
-    
+
     // Comprobar si el texto pide la URL del PDF
-    if (text.toLowerCase().includes('url') && 
-        (text.toLowerCase().includes('pdf') || text.toLowerCase().includes('análisis') || text.toLowerCase().includes('analisis'))) {
+    if (text.toLowerCase().includes('url') &&
+      (text.toLowerCase().includes('pdf') || text.toLowerCase().includes('análisis') || text.toLowerCase().includes('analisis'))) {
       // Enviar la URL del último PDF generado
       if (session.lastPdfUrl) {
         await bot.sendMessage(from, `📊 *Aquí está el enlace a tu PDF de análisis:*\n\n${session.lastPdfUrl}`);
@@ -330,7 +330,7 @@ const handleText = async (from, text) => {
       }
       return;
     }
-    
+
     // Manejar mensajes normales según el estado
     switch (session.state) {
       case 'initial':
@@ -340,7 +340,7 @@ const handleText = async (from, text) => {
           { id: 'interview_simulation', text: 'Simular entrevista' },
           { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
         ];
-        
+
         await bot.sendButtonMessage(
           from,
           'Selecciona una opción para continuar:',
@@ -351,14 +351,14 @@ const handleText = async (from, text) => {
         break;
       case 'terms_acceptance':
         // Si el usuario está en el estado de aceptación de términos
-        if (text.toLowerCase().includes('si') || 
-            text.toLowerCase().includes('sí') ||
-            text.toLowerCase().includes('acepto')) {
+        if (text.toLowerCase().includes('si') ||
+          text.toLowerCase().includes('sí') ||
+          text.toLowerCase().includes('acepto')) {
           // Usuario acepta los términos por texto
           logger.info(`User ${from} accepted terms and conditions via text`);
           await showWelcomeMessage(from);
-        } else if (text.toLowerCase().includes('no') || 
-                  text.toLowerCase().includes('rechazo')) {
+        } else if (text.toLowerCase().includes('no') ||
+          text.toLowerCase().includes('rechazo')) {
           // Usuario rechaza los términos por texto
           logger.info(`User ${from} rejected terms and conditions via text`);
           await bot.sendMessage(from, 'Para utilizar nuestros servicios es necesario aceptar los términos y condiciones. Sin esta aceptación, no podemos continuar.');
@@ -384,7 +384,7 @@ const handleText = async (from, text) => {
             { id: 'interview_simulation', text: 'Simular entrevista' },
             { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
           ];
-          
+
           await bot.sendButtonMessage(
             from,
             'No reconozco esa opción. Por favor, selecciona una de las siguientes:',
@@ -395,8 +395,8 @@ const handleText = async (from, text) => {
         break;
       case sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION:
         // Usuario confirmando si quiere comenzar la entrevista
-        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si' || 
-            text.toLowerCase().includes('listo') || text.toLowerCase().includes('comenzar')) {
+        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si' ||
+          text.toLowerCase().includes('listo') || text.toLowerCase().includes('comenzar')) {
           await startInterviewQuestions(from);
         } else if (text.toLowerCase() === 'no' || text.toLowerCase().includes('cancel')) {
           await bot.sendMessage(from, 'Entrevista cancelada. Si deseas volver a intentarlo, envía !start para comenzar de nuevo.');
@@ -407,17 +407,17 @@ const handleText = async (from, text) => {
         break;
       case sessionService.SessionState.POST_CV_OPTIONS:
         // Manejar opciones después del análisis del CV
-        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si' || 
-            text.toLowerCase().includes('simular') || text.toLowerCase().includes('entrevista')) {
+        if (text.toLowerCase() === 'sí' || text.toLowerCase() === 'si' ||
+          text.toLowerCase().includes('simular') || text.toLowerCase().includes('entrevista')) {
           // Iniciar simulación de entrevista
           await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
           await handleInterview(from);
-        } else if (text.toLowerCase().includes('revisar') || text.toLowerCase().includes('otro cv') || 
-                  text.toLowerCase().includes('nuevo cv')) {
-                  
+        } else if (text.toLowerCase().includes('revisar') || text.toLowerCase().includes('otro cv') ||
+          text.toLowerCase().includes('nuevo cv')) {
+
           // Verificar historial de análisis (usando userService)
           const shouldPay = await userService.shouldUserPayForCVAnalysis(from);
-          
+
           if (shouldPay) {
             // Mostrar mensaje de versión premium
             await handlePremiumInfo(from);
@@ -434,18 +434,18 @@ const handleText = async (from, text) => {
           // No se reconoce el comando, mostrar opciones disponibles
           const totalAnalysisCount = await userService.getCVAnalysisCount(from);
           const hasAnalyzedCVBefore = totalAnalysisCount > 1;
-          
+
           let menuButtons = [
             { id: 'start_interview', text: '🎯 Simular entrevista' }
           ];
-          
+
           if (hasAnalyzedCVBefore) {
             //Cambiar el Premium por Otro CV pero igual
             menuButtons.push({ id: 'premium_required', text: '✨ Premium' });
           } else {
             menuButtons.push({ id: 'review_cv_again', text: '📋 Otro CV' });
           }
-          
+
           await bot.sendButtonMessage(
             from,
             'No reconozco esa opción. ¿Qué te gustaría hacer ahora?',
@@ -459,21 +459,21 @@ const handleText = async (from, text) => {
         // Guardar la posición en la sesión
         await sessionService.saveJobPosition(from, text);
         logger.info(`Job position saved before CV for user ${from}: ${text}`);
-        
+
         // Solicitar el CV
         await bot.sendMessage(from, `Gracias por indicar el puesto de ${text}. Ahora, por favor envía tu CV como documento para analizarlo en relación con este puesto.`);
         await sessionService.updateSessionState(from, 'waiting_for_cv');
         break;
-      
+
       case 'waiting_for_position_before_interview':
         // El usuario está enviando la posición antes de la simulación de entrevista
         // Guardar la posición en la sesión
         await sessionService.saveJobPosition(from, text);
         logger.info(`Job position saved before interview for user ${from}: ${text}`);
-        
+
         // Actualizar estado y continuar con la entrevista
         await sessionService.updateSessionState(from, sessionService.SessionState.POSITION_RECEIVED);
-        
+
         // Iniciar la entrevista con el puesto proporcionado
         await handleInterview(from);
         break;
@@ -513,12 +513,12 @@ const handleText = async (from, text) => {
         if (session.interactive && session.interactive.list_reply) {
           const selectedId = session.interactive.list_reply.id;
           await handlePackageSelection(from, selectedId);
-        } else if (text.toLowerCase().includes('menu') || 
-                  text.toLowerCase().includes('regresar') || 
-                  text.toLowerCase().includes('volver') ||
-                  text.toLowerCase().includes('atras') ||
-                  text.toLowerCase().includes('atrás') ||
-                  text.toLowerCase().includes('inicio')) {
+        } else if (text.toLowerCase().includes('menu') ||
+          text.toLowerCase().includes('regresar') ||
+          text.toLowerCase().includes('volver') ||
+          text.toLowerCase().includes('atras') ||
+          text.toLowerCase().includes('atrás') ||
+          text.toLowerCase().includes('inicio')) {
           // El usuario quiere volver al menú principal
           await sessionService.resetSession(from);
           await handleStart(from);
@@ -541,8 +541,8 @@ const handleText = async (from, text) => {
         if (text.toLowerCase().includes('acept') || text.toLowerCase() === 'si' || text.toLowerCase() === 'sí') {
           // Usuario acepta la asesoría por texto
           await handleButtonReply(from, 'accept_advisor');
-        } else if (text.toLowerCase().includes('regres') || text.toLowerCase().includes('volver') || 
-                   text.toLowerCase().includes('menu') || text.toLowerCase().includes('cancel')) {
+        } else if (text.toLowerCase().includes('regres') || text.toLowerCase().includes('volver') ||
+          text.toLowerCase().includes('menu') || text.toLowerCase().includes('cancel')) {
           // Usuario quiere volver al menú principal
           await sessionService.resetSession(from);
           await handleStart(from);
@@ -557,8 +557,8 @@ const handleText = async (from, text) => {
         } else if (text.toLowerCase().includes('entrevista') || text.toLowerCase().includes('simular')) {
           // Usuario quiere asesoría para simulación de entrevista
           await handleButtonReply(from, 'advisor_interview');
-        } else if (text.toLowerCase().includes('regres') || text.toLowerCase().includes('volver') || 
-                   text.toLowerCase().includes('menu') || text.toLowerCase().includes('cancel')) {
+        } else if (text.toLowerCase().includes('regres') || text.toLowerCase().includes('volver') ||
+          text.toLowerCase().includes('menu') || text.toLowerCase().includes('cancel')) {
           // Usuario quiere volver al menú principal
           await sessionService.resetSession(from);
           await handleStart(from);
@@ -569,8 +569,8 @@ const handleText = async (from, text) => {
       case 'confirming_advisor_payment':
         if (text.toLowerCase().includes('pag') || text.toLowerCase().includes('ya pag')) {
           await handleAdvisorPaymentConfirmation(from);
-        } else if (text.toLowerCase().includes('volver') || text.toLowerCase().includes('atrás') || 
-                   text.toLowerCase().includes('atras') || text.toLowerCase().includes('cancel')) {
+        } else if (text.toLowerCase().includes('volver') || text.toLowerCase().includes('atrás') ||
+          text.toLowerCase().includes('atras') || text.toLowerCase().includes('cancel')) {
           await handleAdvisorService(from);
         } else {
           await bot.sendMessage(from, 'Por favor, confirma si has realizado el pago o si deseas volver a la información de asesoría.');
@@ -579,7 +579,7 @@ const handleText = async (from, text) => {
       default:
         await bot.sendMessage(from, 'Por favor, envía tu CV como documento para que pueda analizarlo.');
     }
-    
+
     logger.info(`Text message handled for user ${from}`);
   } catch (error) {
     logger.error(`Error handling text message: ${error.message}`);
@@ -619,11 +619,11 @@ Para cada pregunta:
 const handleImage = async (from, image) => {
   try {
     logger.info(`Received image from user ${from}: ${JSON.stringify(image, null, 2)}`);
-    
+
     // Obtener la sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
     logger.info(`User session state when receiving image: ${session.state}`);
-    
+
     // Verificar estado para determinar qué hacer con la imagen
     if (session.state === 'waiting_payment_screenshot') {
       // Procesar captura de pantalla para pago de premium
@@ -636,7 +636,7 @@ const handleImage = async (from, image) => {
     } else {
       // Para debugging: mostrar el estado actual
       logger.info(`Image received but user ${from} is not in payment verification flow. Current state: ${session.state}`);
-      
+
       // Si estamos en estado de confirmación de pago, asumimos que la imagen es un comprobante
       if (session.state === 'confirming_payment') {
         logger.info(`User ${from} is in confirming_payment state, treating image as payment screenshot`);
@@ -665,7 +665,7 @@ const handleAudio = async (from, audio) => {
   try {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
-    
+
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
       await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta de audio.');
       return;
@@ -676,7 +676,7 @@ const handleAudio = async (from, audio) => {
 
     // Obtener URL del audio
     const audioUrl = await bot.getMediaUrl(audio.id);
-    
+
     if (!audioUrl) {
       throw new Error('No se pudo obtener la URL del audio');
     }
@@ -702,10 +702,10 @@ const handleAudio = async (from, audio) => {
           language: "es",
           prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
         });
-        
+
         if (transcription) {
           logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
-          
+
           // Analizar la transcripción
           logger.info('Analizando respuesta de entrevista...');
           analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
@@ -723,7 +723,7 @@ const handleAudio = async (from, audio) => {
       if (errorOccurred || !analysis) {
         logger.info('Usando análisis simulado debido a error o falta de configuración');
         analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-        
+
         if (!transcription) {
           transcription = "Transcripción no disponible. Usando análisis simulado.";
         }
@@ -735,17 +735,17 @@ const handleAudio = async (from, audio) => {
         analysis: analysis,
         timestamp: new Date()
       };
-      
+
       await sessionService.saveInterviewAnswer(from, answer);
       logger.info('Respuesta y análisis guardados en la sesión');
-      
+
       // Enviar feedback
       const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
       await bot.sendMessage(from, feedbackMessage);
-      
+
       // Verificar si debemos seguir con más preguntas
       const updatedSession = await sessionService.getOrCreateSession(from);
-      
+
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
@@ -777,7 +777,7 @@ const handleVideo = async (from, video) => {
   try {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
-    
+
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
       //await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta en video.');
       return;
@@ -788,7 +788,7 @@ const handleVideo = async (from, video) => {
 
     // Obtener URL del video
     const videoUrl = await bot.getMediaUrl(video.id);
-    
+
     if (!videoUrl) {
       throw new Error('No se pudo obtener la URL del video');
     }
@@ -814,10 +814,10 @@ const handleVideo = async (from, video) => {
           language: "es",
           prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
         });
-        
+
         if (transcription) {
           logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
-          
+
           // Analizar la transcripción
           logger.info('Analizando respuesta de entrevista...');
           analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
@@ -835,7 +835,7 @@ const handleVideo = async (from, video) => {
       if (errorOccurred || !analysis) {
         logger.info('Usando análisis simulado debido a error o falta de configuración');
         analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-        
+
         if (!transcription) {
           transcription = "Transcripción no disponible. Usando análisis simulado.";
         }
@@ -847,17 +847,17 @@ const handleVideo = async (from, video) => {
         analysis: analysis,
         timestamp: new Date()
       };
-      
+
       await sessionService.saveInterviewAnswer(from, answer);
       logger.info('Respuesta y análisis guardados en la sesión');
-      
+
       // Enviar feedback
       const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
       await bot.sendMessage(from, feedbackMessage);
-      
+
       // Verificar si debemos seguir con más preguntas
       const updatedSession = await sessionService.getOrCreateSession(from);
-      
+
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
@@ -890,23 +890,23 @@ const handleSimulatedAnswer = async (from, session) => {
     // Simular un análisis de respuesta
     const currentQuestion = session.questions[session.currentQuestion];
     const mockAnalysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-    
+
     // Guardar respuesta y análisis
     const answer = {
       transcription: "Respuesta simulada para demostración",
       analysis: mockAnalysis,
       timestamp: new Date()
     };
-    
+
     await sessionService.saveInterviewAnswer(from, answer);
-    
+
     // Enviar feedback
     const feedbackMessage = formatInterviewFeedback(mockAnalysis, currentQuestion);
     await bot.sendMessage(from, feedbackMessage);
-    
+
     // Verificar si debemos seguir con más preguntas
     const updatedSession = await sessionService.getOrCreateSession(from);
-    
+
     if (updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
       // Entrevista completada
       await showPostInterviewMenu(from);
@@ -922,7 +922,7 @@ const handleSimulatedAnswer = async (from, session) => {
         '🎯 Progreso de entrevista'
       );
     }
-    
+
   } catch (error) {
     logger.error(`Error in simulated answer: ${error.message}`);
     throw error;
@@ -962,7 +962,7 @@ const handleHelp = async (from) => {
 3. Responde las preguntas de la entrevista
 
 Si necesitas ayuda adicional, escribe !help o contacta a nuestro equipo de soporte.`;
-    
+
     await bot.sendMessage(from, helpText);
   } catch (error) {
     logger.error(`Error handling help command: ${error.message}`);
@@ -974,24 +974,24 @@ const handleInterview = async (from) => {
   try {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
-    
+
     // Obtener puesto de trabajo
     const jobPosition = session.jobPosition || 'software';
-    
+
     // Preguntar al usuario si está listo para comenzar la entrevista
     try {
       const readyButtons = [
         { id: 'start_interview_now', text: 'Estoy listo' },
         { id: 'cancel_interview', text: 'Cancelar' }
       ];
-      
+
       await bot.sendButtonMessage(
         from,
         `Vamos a comenzar una simulación de entrevista para el puesto de ${jobPosition}. Te haré 4 preguntas y deberás responder con mensajes de audio o video.`,
         readyButtons,
         '¿Estás listo para comenzar?'
       );
-      
+
       // Actualizar estado para esperar confirmación
       await sessionService.updateSessionState(from, sessionService.SessionState.WAITING_INTERVIEW_CONFIRMATION);
       logger.info(`Asked user ${from} if ready to start interview`);
@@ -1016,16 +1016,16 @@ const startInterviewQuestions = async (from) => {
   try {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
-    
+
     // Iniciar entrevista
     await sessionService.startInterview(from);
-    
+
     // Obtener puesto de trabajo
     const jobPosition = session.jobPosition || 'software';
-    
+
     // Para la primera pregunta, enfocarse en la experiencia y presentación
     const questionPrompt = `Pregunta inicial específica para alguien que aspira a un puesto de ${jobPosition} sobre experiencia profesional y trayectoria relevante para el puesto. Pregunta corta y directa como si fueras un entrevistador profesional.`;
-    
+
     // Generar primera pregunta (con fallback a pregunta por defecto)
     let questionData;
     try {
@@ -1042,10 +1042,10 @@ const startInterviewQuestions = async (from) => {
       questionData = interviewService.getDefaultQuestion(jobPosition);
       logger.info(`Using default question: ${questionData.question}`);
     }
-    
+
     // Guardar pregunta en la sesión
     await sessionService.saveInterviewQuestion(from, questionData);
-    
+
     // Formatear mensaje
     const questionMessage = `
 *Pregunta 1 de 4:*
@@ -1054,11 +1054,11 @@ ${questionData.question}
 
 Por favor, responde con un mensaje de audio o video.
 `;
-    
+
     // Enviar pregunta
     await bot.sendMessage(from, questionMessage);
     logger.info(`Sent first interview question to user ${from}`);
-    
+
     // Actualizar estado
     await sessionService.updateSessionState(from, sessionService.SessionState.QUESTION_ASKED);
   } catch (error) {
@@ -1127,9 +1127,9 @@ const formatInterviewFeedback = (feedback, question) => {
     if (score >= 5) return '⚠️';
     return '❗';
   };
-  
+
   const scoreEmoji = getScoreEmoji(feedback.score);
-  
+
   return `
 ✨ *ANÁLISIS DE TU RESPUESTA* ✨
 
@@ -1163,27 +1163,27 @@ const handleNextQuestion = async (from) => {
   try {
     // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
-    
+
     // Verificar si ya se completaron todas las preguntas
     if (session.currentQuestion >= 3) {
       // Actualizar estado antes de mostrar el menú post-entrevista
       await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
-      
+
       // Mostrar menú post-entrevista en lugar de solo un mensaje de felicitación
       await showPostInterviewMenu(from);
       return;
     }
-    
+
     // Incrementar contador de preguntas
     const nextQuestionNumber = session.currentQuestion + 1;
-    
+
     // Obtener puesto de trabajo
     const jobPosition = session.jobPosition || 'software';
-    
+
     // Definir diferentes tipos de preguntas según el número de pregunta
     let questionType = jobPosition;
     let questionPrompt = '';
-    
+
     switch (nextQuestionNumber) {
       case 1: // Segunda pregunta - enfoque en habilidades técnicas/profesionales
         questionPrompt = `Pregunta específica y desafiante para un puesto de ${jobPosition} sobre habilidades profesionales o conocimientos técnicos relevantes para este rol`;
@@ -1197,19 +1197,19 @@ const handleNextQuestion = async (from) => {
       default:
         questionPrompt = `Pregunta específica para un profesional en ${jobPosition} sobre habilidades, experiencia o conocimientos relevantes para este puesto`;
     }
-    
+
     // Generar siguiente pregunta con el tipo específico
     let questionData;
     try {
       // Intentar usar OpenAI si la función está disponible
       if (openaiUtil.generateInterviewQuestion) {
         questionData = await openaiUtil.generateInterviewQuestion(questionType, questionPrompt);
-        
+
         // Verificar que la pregunta no sea igual a las anteriores
         if (session.questions && session.questions.length > 0) {
           const previousQuestions = session.questions.map(q => q.question);
           let attempts = 0;
-          
+
           // Si la pregunta es igual a alguna anterior, generar una nueva (máx 3 intentos)
           while (previousQuestions.includes(questionData.question) && attempts < 3) {
             logger.info(`Pregunta repetida detectada, generando nueva pregunta (intento ${attempts + 1})`);
@@ -1223,16 +1223,16 @@ const handleNextQuestion = async (from) => {
       }
     } catch (error) {
       logger.error(`Error generating next question: ${error.message}`);
-      
+
       // Usar preguntas predefinidas específicas para Tech Lead en caso de error
       questionData = interviewService.getDefaultQuestion(jobPosition);
       logger.info(`Using default question: ${questionData.question}`);
-      
+
       // Asegurarse de que no se repita la pregunta
       if (session.questions && session.questions.length > 0) {
         const previousQuestions = session.questions.map(q => q.question);
         let attempts = 0;
-        
+
         // Intentar hasta 5 veces encontrar una pregunta no repetida
         while (previousQuestions.includes(questionData.question) && attempts < 5) {
           questionData = interviewService.getDefaultQuestion(jobPosition);
@@ -1240,10 +1240,10 @@ const handleNextQuestion = async (from) => {
         }
       }
     }
-    
+
     // Guardar pregunta en la sesión
     await sessionService.saveInterviewQuestion(from, questionData);
-    
+
     // Formatear mensaje
     const questionMessage = `
 *Pregunta ${nextQuestionNumber + 1} de 4:*
@@ -1252,11 +1252,11 @@ ${questionData.question}
 
 Por favor, responde con un mensaje de audio o video.
 `;
-    
+
     // Enviar pregunta
     await bot.sendMessage(from, questionMessage);
     logger.info(`Sent question ${nextQuestionNumber + 1} to user ${from}: "${questionData.question}"`);
-    
+
     // Actualizar estado
     await sessionService.updateSessionState(from, sessionService.SessionState.QUESTION_ASKED);
   } catch (error) {
@@ -1275,7 +1275,7 @@ const handlePremiumInfo = async (from) => {
     await bot.sendMessage(from, '*Mas reivisiones* 😊\n\n¡Excelente!');
     await bot.sendMessage(from, `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`);
     await bot.sendMessage(from, `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`);
-    
+
     // Crear la estructura para el mensaje de lista de paquetes
     try {
       // Definir secciones con los paquetes disponibles
@@ -1306,7 +1306,7 @@ const handlePremiumInfo = async (from) => {
           ]
         }
       ];
-      
+
       // Enviar mensaje con lista de paquetes
       await bot.sendListMessage(
         from,
@@ -1315,7 +1315,7 @@ const handlePremiumInfo = async (from) => {
         "Paquetes",
         packageSections
       );
-      
+
       // Añadir botón para regresar al menú principal
       await bot.sendButtonMessage(
         from,
@@ -1323,13 +1323,13 @@ const handlePremiumInfo = async (from) => {
         [{ id: "back_to_main_menu", text: "🔙 Regresar al menú principal" }],
         "Otras opciones"
       );
-      
+
       // Actualizar estado para manejar selección de paquete
       await sessionService.updateSessionState(from, 'selecting_premium_package');
-      
+
     } catch (listError) {
       logger.warn(`Failed to send list message: ${listError.message}`);
-      
+
       // En lugar de enviar una versión de texto plano del mensaje y un botón separado,
       // enviar directamente los botones con opciones de paquetes
       const packageButtons = [
@@ -1338,18 +1338,18 @@ const handlePremiumInfo = async (from) => {
         { id: 'package_6', text: 'S/ 10 – 6 revisiones' },
         { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
       ];
-      
+
       await bot.sendButtonMessage(
         from,
         "Selecciona un paquete de revisiones:",
         packageButtons,
         "Paquetes disponibles"
       );
-      
+
       // Actualizar estado de la sesión para manejar la selección
       await sessionService.updateSessionState(from, 'selecting_premium_package');
     }
-    
+
   } catch (error) {
     logger.error(`Error handling premium info: ${error.message}`, { error });
     throw error;
@@ -1366,7 +1366,7 @@ const handlePackageSelection = async (from, text) => {
     let packageName = '';
     let packagePrice = '';
     let packageReviews = '';
-    
+
     // Determinar qué paquete seleccionó el usuario
     if (text.toLowerCase().includes('4') || text.toLowerCase().includes('1 revisión') || text.toLowerCase().includes('1 revision')) {
       packageName = '1 Revisión';
@@ -1405,42 +1405,42 @@ const handlePackageSelection = async (from, text) => {
       await handlePremiumInfo(from);
       return;
     }
-    
+
     // Guardar la selección del paquete en la sesión
-    await sessionService.updateSession(from, { 
+    await sessionService.updateSession(from, {
       selectedPackage: packageName,
       packagePrice: packagePrice,
       packageReviews: packageReviews
     });
-    
+
     // Enviar mensaje confirmando la selección y dando instrucciones de pago
     await bot.sendMessage(from, `*${packageReviews} Revisiones*\n${packageReviews} revisiones por ${packagePrice}`);
-    
+
     await bot.sendMessage(from, `Yapea o Plinea ${packagePrice} a este número:\n954600805\n\nEstá a nombre de "Francesco Lucchesi"`);
-    
+
     // Enviar opciones para confirmar el pago o volver atrás
     const paymentButtons = [
       { id: 'payment_confirmed', text: '¡Ya pagué!' },
       { id: 'payment_back', text: 'Volver atrás' }
     ];
-    
+
     try {
       await bot.sendButtonMessage(
-        from, 
+        from,
         `✅ Después de realizar el pago presiona el botón ¡Ya pagué!\n\n🔄 Si quieres cambiar tu paquete de créditos, presiona el botón Volver atrás`,
         paymentButtons,
         'Confirmación de pago'
       );
-      
+
       // Actualizar estado para manejar la confirmación de pago
       await sessionService.updateSessionState(from, 'confirming_payment');
-      
+
     } catch (buttonError) {
       logger.warn(`Failed to send payment confirmation buttons: ${buttonError.message}`);
       await bot.sendMessage(from, 'Después de realizar el pago, responde con "pagado". Si quieres cambiar tu paquete, responde con "volver".');
       await sessionService.updateSessionState(from, 'confirming_payment');
     }
-    
+
   } catch (error) {
     logger.error(`Error handling package selection: ${error.message}`);
     // En lugar de mostrar un mensaje de error, volver a las opciones de paquetes
@@ -1457,13 +1457,13 @@ const handlePaymentConfirmation = async (from) => {
     const session = await sessionService.getOrCreateSession(from);
     const packageReviews = session.packageReviews || '1';
     const packagePrice = session.packagePrice || 'S/4';
-    
+
     // Solicitar captura de pantalla del pago en lugar de confirmar automáticamente
     await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de ${packagePrice}*\n\nNecesito verificar:\n• Que el pago sea a nombre de "Francesco Lucchesi"\n• Que la fecha y hora sea reciente`);
-    
+
     // Actualizar el estado de la sesión para esperar la captura
     await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
-    
+
   } catch (error) {
     logger.error(`Error handling payment confirmation: ${error.message}`);
     await bot.sendMessage(from, 'Ocurrió un error al procesar tu confirmación. Por favor, contacta con nuestro soporte.');
@@ -1480,9 +1480,9 @@ const verifyPaymentScreenshot = async (from, image) => {
     const session = await sessionService.getOrCreateSession(from);
     const packageReviews = session.packageReviews || '1';
     const packagePrice = session.packagePrice || 'S/4';
-    
+
     logger.info(`Received payment screenshot from ${from} for ${packageReviews} reviews`);
-    
+
     // Obtener la URL de la imagen
     let imageUrl;
     try {
@@ -1496,7 +1496,7 @@ const verifyPaymentScreenshot = async (from, image) => {
       await bot.sendMessage(from, 'No pudimos acceder a tu imagen. Por favor, intenta enviarla nuevamente.');
       return;
     }
-    
+
     // Descargar la imagen
     let imageBuffer;
     try {
@@ -1507,17 +1507,17 @@ const verifyPaymentScreenshot = async (from, image) => {
       await bot.sendMessage(from, 'Hubo un problema al descargar tu imagen. Por favor, intenta enviarla nuevamente.');
       return;
     }
-    
+
     // Verificar la imagen utilizando OpenAI
     let isValidPayment = false;
-    
+
     try {
       // Mensaje al usuario indicando que se está verificando el pago
       await bot.sendMessage(from, '⏳ Estamos verificando tu comprobante de pago...');
-      
+
       // Convertir imagen a base64
       const imageBase64 = imageBuffer.toString('base64');
-      
+
       // Consultar a OpenAI para verificar la imagen
       const systemPrompt = `Eres un asistente especializado en verificar comprobantes de pago. Necesitas verificar si la imagen es un comprobante de pago válido y contiene los siguientes elementos:
 1. Debe ser un comprobante de pago de Yape, Plin o alguna otra billetera digital peruana
@@ -1539,15 +1539,15 @@ Responde con un JSON que tenga los siguientes campos:
 - month: mes extraído (nombre o número)
 - year: año extraído (número)
 - reason: razón por la que es válido o inválido`;
-      
+
       const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de ${packagePrice} a Francesco Lucchesi o Francesco Lucchesi V. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
-      
+
       // Llamar a la API de OpenAI para analizar la imagen
       const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
-      
+
       // Parsear la respuesta
       logger.info(`Payment image analysis: ${imageAnalysis}`);
-      
+
       let analysisResult;
       try {
         // Buscar un JSON en la respuesta
@@ -1558,11 +1558,11 @@ Responde con un JSON que tenga los siguientes campos:
         } else {
           // Si no encuentra JSON, intentar extraer la validez de la respuesta
           logger.warn("No JSON found in OpenAI response, using text analysis fallback");
-          isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
-                          imageAnalysis.toLowerCase().includes('valido') ||
-                          imageAnalysis.toLowerCase().includes('correcto') ||
-                          imageAnalysis.toLowerCase().includes('francesco lucchesi');
-                          
+          isValidPayment = imageAnalysis.toLowerCase().includes('válido') ||
+            imageAnalysis.toLowerCase().includes('valido') ||
+            imageAnalysis.toLowerCase().includes('correcto') ||
+            imageAnalysis.toLowerCase().includes('francesco lucchesi');
+
           // Crear un objeto con la información disponible
           analysisResult = {
             isValid: isValidPayment,
@@ -1572,84 +1572,84 @@ Responde con un JSON que tenga los siguientes campos:
       } catch (parseError) {
         logger.error(`Error parsing analysis result: ${parseError.message}`);
         // Intentar determinar si es válido basado en el texto
-        isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
-                        imageAnalysis.toLowerCase().includes('valido') ||
-                        imageAnalysis.toLowerCase().includes('correcto');
-                        
+        isValidPayment = imageAnalysis.toLowerCase().includes('válido') ||
+          imageAnalysis.toLowerCase().includes('valido') ||
+          imageAnalysis.toLowerCase().includes('correcto');
+
         analysisResult = {
           isValid: isValidPayment,
           reason: 'No se pudo analizar la respuesta en formato JSON'
         };
       }
-      
+
       // Como fallback adicional, verificar si la imagen muestra los elementos críticos
       // incluso si OpenAI dijo que no era válido
       if (!analysisResult.isValid) {
         logger.info("Payment marked as invalid by OpenAI, checking for critical elements");
-        
+
         // Verificar si la respuesta menciona los elementos críticos de forma positiva
-        const hasCorrectName = analysisResult.recipientName && 
-                               analysisResult.recipientName.toLowerCase().includes('francesco');
-        
-        const hasCorrectAmount = analysisResult.amount && 
-                                analysisResult.amount.includes(packagePrice.replace('S/', ''));
-        
-        const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
-                            imageAnalysis.toLowerCase().includes('plin');
-        
+        const hasCorrectName = analysisResult.recipientName &&
+          analysisResult.recipientName.toLowerCase().includes('francesco');
+
+        const hasCorrectAmount = analysisResult.amount &&
+          analysisResult.amount.includes(packagePrice.replace('S/', ''));
+
+        const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') ||
+          imageAnalysis.toLowerCase().includes('plin');
+
         // MODIFICACIÓN: Ya no verificamos la fecha, solo el nombre y el monto
         // Nombre: Francesco o Francesco Lucchesi
         // Monto: debe coincidir con el precio del paquete
-        
+
         // Si tiene el nombre y monto correctos, considerarlo válido
         // Ya no verificamos la fecha ni la plataforma
-        if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
-            (hasCorrectAmount || imageAnalysis.toLowerCase().includes(packagePrice))) {
+        if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) &&
+          (hasCorrectAmount || imageAnalysis.toLowerCase().includes(packagePrice))) {
           logger.info("Critical elements found (name and amount), overriding OpenAI result to VALID");
           analysisResult.isValid = true;
           analysisResult.reason = "Pago verificado: contiene el nombre y monto correctos";
         }
       }
-      
+
       isValidPayment = analysisResult.isValid;
-      
+
       if (isValidPayment) {
         logger.info(`Payment validated successfully for user ${from}`);
-        
+
         // Extraer el monto del precio (convertir 'S/4' a 4)
         const priceValue = parseFloat(packagePrice.replace('S/', ''));
-        
+
         // Actualizar el contador de créditos del usuario
         await userService.addCVCredits(from, parseInt(packageReviews));
-        
+
         // Registrar la transacción
         await userService.recordTransaction(
-          from, 
-          priceValue, 
-          'cv_credits', 
+          from,
+          priceValue,
+          'cv_credits',
           `Compra de ${packageReviews} créditos para análisis de CV`
         );
-        
+
         // Enviar confirmación de que el pago ha sido verificado
         await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
-        
+
         // Restablecer el estado de CV procesado para permitir un nuevo análisis
         await sessionService.updateSession(from, { cvProcessed: false });
-        
+
         // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
         const postPaymentButtons = [
           { id: 'review_cv', text: '📋 Revisar mi CV' },
           { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
         ];
-        
+
         try {
           await bot.sendButtonMessage(
-            from, 
+            from,
             '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
             postPaymentButtons,
             'Opciones después del pago'
           );
-          
+
           // Actualizar el estado de la sesión a "payment_completed"
           await sessionService.updateSessionState(from, 'payment_completed');
         } catch (buttonError) {
@@ -1661,10 +1661,10 @@ Responde con un JSON que tenga los siguientes campos:
       } else {
         // El pago no es válido
         logger.warn(`Invalid payment image from user ${from}: ${analysisResult.reason}`);
-        
+
         // Informar al usuario por qué el pago fue rechazado
         let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
-        
+
         if (analysisResult.reason) {
           rejectionReason = analysisResult.reason;
         } else {
@@ -1677,23 +1677,23 @@ Responde con un JSON que tenga los siguientes campos:
             rejectionReason = "no pudimos verificar claramente el pago";
           }
         }
-        
+
         // Mensaje para el usuario
         await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n\nEnvía una nueva captura cuando lo hayas corregido.`);
-        
+
         // Mantener al usuario en el mismo estado para que pueda volver a intentar
         await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
-      
+
       // Informar al usuario del error técnico
       await bot.sendMessage(from, "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste.");
-      
+
       // Mantener al usuario en el mismo estado para que pueda volver a intentar
       await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
     }
-    
+
   } catch (error) {
     logger.error(`Error verifying payment screenshot: ${error.message}`);
     await bot.sendMessage(from, 'Ocurrió un error al verificar tu pago. Por favor, contacta con nuestro soporte.');
@@ -1751,17 +1751,17 @@ const handleButtonReply = async (from, buttonId) => {
       case 'accept_terms':
         // Usuario acepta los términos y condiciones
         logger.info(`User ${from} accepted terms and conditions`);
-        
+
         // En lugar de guardarlo en la sesión, simplemente mostramos el mensaje de bienvenida
         await showWelcomeMessage(from);
         break;
       case 'reject_terms':
         // Usuario rechaza los términos y condiciones
         logger.info(`User ${from} rejected terms and conditions`);
-        
+
         // Informar al usuario que debe aceptar los términos para usar el servicio
         await bot.sendMessage(from, 'Para utilizar nuestros servicios es necesario aceptar los términos y condiciones. Sin esta aceptación, no podemos continuar.');
-        
+
         // Volver a mostrar los términos y condiciones
         await handleTermsAndConditions(from);
         break;
@@ -1778,22 +1778,22 @@ const handleButtonReply = async (from, buttonId) => {
         break;
       case 'accept_advisor':
         await bot.sendMessage(from, `Yapea o Plinea S/60 a este número:\n954600805\n\nEstá a nombre de "Francesco Lucchesi"`);
-        
+
         const paymentButtons = [
           { id: 'advisor_payment_confirmed', text: '¡Ya pagué!' },
           { id: 'back_to_advisor', text: 'Volver atrás' }
         ];
-        
+
         try {
           await bot.sendButtonMessage(
-            from, 
+            from,
             `✅ Después de realizar el pago presiona el botón ¡Ya pagué!\n\n🔄 Si quieres cancelar, presiona el botón Volver atrás`,
             paymentButtons,
             'Confirmación de pago'
           );
-          
+
           await sessionService.updateSessionState(from, 'confirming_advisor_payment');
-          
+
         } catch (buttonError) {
           logger.warn(`Failed to send payment confirmation buttons: ${buttonError.message}`);
           await bot.sendMessage(from, 'Después de realizar el pago, responde con "pagado". Si quieres volver, responde con "volver".');
@@ -1803,17 +1803,17 @@ const handleButtonReply = async (from, buttonId) => {
       case 'advisor_cv_review':
       case 'advisor_interview':
         const advisorType = buttonId === 'advisor_cv_review' ? 'Revisión de CV' : 'Simulación de Entrevista';
-        
-        await sessionService.updateSession(from, { 
+
+        await sessionService.updateSession(from, {
           advisorType: advisorType
         });
-        
+
         logger.info(`User ${from} selected advisor type: ${advisorType}`);
-        
-        const serviceDescription = buttonId === 'advisor_cv_review' 
+
+        const serviceDescription = buttonId === 'advisor_cv_review'
           ? '• Evaluación profesional de tu CV\n• Recomendaciones para estructura y contenido\n• Consejos para destacar tus logros\n• Corrección de errores comunes'
           : '• Práctica realista de entrevistas\n• Feedback detallado sobre tu desempeño\n• Consejos para responder preguntas difíciles\n• Técnicas para destacar tus habilidades';
-        
+
         const advisorMessage = `
 *🌟 ASESORÍA PERSONALIZADA EN ${advisorType.toUpperCase()} 🌟*
 
@@ -1826,12 +1826,12 @@ ${serviceDescription}
 
 ¿Deseas agendar esta asesoría personalizada?
 `;
-        
+
         const advisorButtons = [
           { id: 'accept_advisor', text: 'ACEPTAR' },
           { id: 'back_to_advisor', text: 'Regresar' }
         ];
-        
+
         try {
           await bot.sendButtonMessage(
             from,
@@ -1839,12 +1839,12 @@ ${serviceDescription}
             advisorButtons,
             'Asesoría Personalizada'
           );
-          
+
           await sessionService.updateSessionState(from, 'advisor_service_selection');
-          
+
         } catch (buttonError) {
           logger.warn(`Failed to send advisor service buttons: ${buttonError.message}`);
-          
+
           await bot.sendMessage(from, `${advisorMessage}\n\nPara continuar, responde "ACEPTAR" o "REGRESAR".`);
           await sessionService.updateSessionState(from, 'advisor_service_selection');
         }
@@ -1892,20 +1892,20 @@ const sendPostCVOptions = async (from, analysis = null) => {
     let menuButtons = [
       { id: 'start_interview', text: '🎯 Simular entrevista' }
     ];
-    
+
     // Para la opción de revisar CV, mostrar el mismo texto independientemente si ya ha analizado uno antes
     if (hasAnalyzedCVBefore) {
       menuButtons.push({ id: 'premium_required', text: '📋 Revisar CV' });
     } else {
       menuButtons.push({ id: 'review_cv_again', text: '📋 Revisar CV' });
     }
-    
+
     // Agregar la opción de regresar al menú principal
     menuButtons.push({ id: 'back_to_main_menu', text: '🔙 Regresar al menú' });
-    
+
     // Actualizar estado de la sesión para manejar correctamente la respuesta
     await sessionService.updateSessionState(from, 'post_cv_options');
-    
+
     try {
       // Comentamos el mensaje con los botones principales
       /* 
@@ -1917,13 +1917,13 @@ const sendPostCVOptions = async (from, analysis = null) => {
       );
       logger.info(`Post-CV analysis options sent to user ${from}`);
       */
-      
+
       // Enviar mensaje adicional ofreciendo asesoría personalizada
       const advisorButtons = [
         { id: 'advisor_cv_review', text: '✅ ACEPTAR' },
         { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
       ];
-      
+
       try {
         await bot.sendButtonMessage(
           from,
@@ -1939,7 +1939,7 @@ const sendPostCVOptions = async (from, analysis = null) => {
           '¿Quieres que un especialista en RRHH revise detalladamente tu CV?\n\nResponde "asesoría cv" para recibir asesoría personalizada o "regresar" para volver al menú principal.'
         );
       }
-      
+
     } catch (buttonError) {
       logger.warn(`Failed to send button message, using text message instead: ${buttonError.message}`);
       await bot.sendMessage(from, 'Lo siento, hubo un error al enviar las opciones de post-análisis. Por favor, intenta nuevamente.');
@@ -1954,7 +1954,7 @@ const sendPostCVOptions = async (from, analysis = null) => {
 const showPostInterviewMenu = async (from) => {
   try {
     logger.info(`Showing post-interview menu to user ${from}`);
-    
+
     // Mensaje de felicitación por completar la entrevista
     const congratsMessage = `
 🎉 *¡FELICIDADES!* 🎉
@@ -1963,23 +1963,23 @@ Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
 
 ✨ Espero que el feedback te haya sido útil para mejorar tus habilidades en entrevistas.
     `;
-    
+
     // Primero enviamos el mensaje de felicitación
     await bot.sendMessage(from, congratsMessage);
-    
+
     // Esperamos un segundo antes de enviar los botones para evitar límites de velocidad
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // Actualizar estado de la sesión
     await sessionService.updateSessionState(from, 'post_interview_menu');
-    
+
     // Definir botones para el menú post-entrevista
     const menuButtons = [
       { id: 'review_cv', text: '📋 Revisar CV' },
       { id: 'new_interview', text: '🎯 Nueva Entrevista' },
       { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
     ];
-    
+
     // Comentamos el mensaje con los botones principales
     /*
     // Enviar mensaje con botones interactivos
@@ -1991,13 +1991,13 @@ Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
     );
     logger.info(`Post-interview menu sent to user ${from}`);
     */
-    
+
     // Enviar mensaje adicional ofreciendo asesoría personalizada para entrevistas
     const advisorButtons = [
       { id: 'advisor_interview', text: '✅ ACEPTAR' },
       { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
     ];
-    
+
     try {
       await bot.sendButtonMessage(
         from,
@@ -2013,7 +2013,7 @@ Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
         '¿Quieres mejorar tus habilidades para entrevistas con un especialista en RRHH?\n\nResponde "asesoría entrevista" para recibir asesoría personalizada o "regresar" para volver al menú principal.'
       );
     }
-    
+
   } catch (error) {
     logger.error(`Error sending post-interview menu: ${error.message}`);
     // Mensaje de texto alternativo si falla
@@ -2032,24 +2032,24 @@ Has completado todas las preguntas de la entrevista. ¡Excelente trabajo! 👏
 const handleAdvisorService = async (from) => {
   try {
     logger.info(`User ${from} requested advisor service`);
-    
+
     // Preguntar primero qué tipo de asesoría desea
     try {
       const advisorTypeButtons = [
         { id: 'advisor_cv_review', text: 'Asesoria CV' },
         { id: 'advisor_interview', text: 'Asesoria Entrevista' }
       ];
-      
+
       await bot.sendButtonMessage(
         from,
         '¿Qué tipo de asesoría personalizada te gustaría recibir?',
         advisorTypeButtons,
         'Selecciona una opción:'
       );
-      
+
       // Actualizar estado para manejar la selección del tipo de asesoría
       await sessionService.updateSessionState(from, 'selecting_advisor_type');
-      
+
     } catch (buttonError) {
       logger.warn(`Failed to send advisor type buttons: ${buttonError.message}`);
       await bot.sendMessage(from, 'Por favor, responde si deseas una asesoría para "Revisar CV" o "Simular Entrevista".');
@@ -2069,10 +2069,10 @@ const handleAdvisorPaymentConfirmation = async (from) => {
   try {
     // Solicitar captura de pantalla del pago
     await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de S/60*\n\nNecesito verificar:\n• Que el pago sea a nombre de "Francesco Lucchesi"\n• Que la fecha y hora sea reciente`);
-    
+
     // Actualizar el estado de la sesión para esperar la captura
     await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
-    
+
   } catch (error) {
     logger.error(`Error handling advisor payment confirmation: ${error.message}`);
     await bot.sendMessage(from, 'Ocurrió un error al procesar tu confirmación. Por favor, contacta con nuestro soporte.');
@@ -2087,7 +2087,7 @@ const handleAdvisorPaymentConfirmation = async (from) => {
 const verifyAdvisorPaymentScreenshot = async (from, image) => {
   try {
     logger.info(`Received advisor payment screenshot from ${from}`);
-    
+
     // Obtener la URL de la imagen
     let imageUrl;
     try {
@@ -2101,7 +2101,7 @@ const verifyAdvisorPaymentScreenshot = async (from, image) => {
       await bot.sendMessage(from, 'No pudimos acceder a tu imagen. Por favor, intenta enviarla nuevamente.');
       return;
     }
-    
+
     // Descargar la imagen
     let imageBuffer;
     try {
@@ -2112,21 +2112,21 @@ const verifyAdvisorPaymentScreenshot = async (from, image) => {
       await bot.sendMessage(from, 'Hubo un error al procesar tu imagen. Por favor, intenta nuevamente.');
       return;
     }
-    
+
     // Notificar al usuario que estamos procesando su pago
     await bot.sendMessage(from, '⏳ Estamos verificando tu comprobante de pago...');
-    
+
     // Obtener el tipo de asesoría seleccionada
     const session = await sessionService.getOrCreateSession(from);
     const advisorType = session.advisorType || 'Personalizada';
-    
+
     // Implementar verificación con OpenAI Vision
     let isValidPayment = false;
-    
+
     try {
       // Convertir imagen a base64
       const imageBase64 = imageBuffer.toString('base64');
-      
+
       // Consultar a OpenAI para verificar la imagen
       const systemPrompt = `Eres un asistente especializado en verificar comprobantes de pago. Necesitas verificar si la imagen es un comprobante de pago válido y contiene los siguientes elementos:
 1. Debe ser un comprobante de pago de Yape, Plin o alguna otra billetera digital peruana
@@ -2138,15 +2138,15 @@ Responde con un JSON que tenga los siguientes campos:
 - recipientName: nombre del destinatario que aparece en el comprobante (si está visible)
 - amount: monto del pago (si está visible)
 - reason: razón por la que es válido o inválido (enfocándose en nombre y monto)`;
-      
+
       const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi o Francesco Lucchesi V. Ignora la fecha del comprobante, solo valida el nombre y el monto.`;
-      
+
       // Llamar a la API de OpenAI para analizar la imagen
       const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
-      
+
       // Parsear la respuesta
       logger.info(`Advisor payment image analysis: ${imageAnalysis}`);
-      
+
       let analysisResult;
       try {
         // Buscar un JSON en la respuesta
@@ -2157,11 +2157,11 @@ Responde con un JSON que tenga los siguientes campos:
         } else {
           // Si no encuentra JSON, intentar extraer la validez de la respuesta
           logger.warn("No JSON found in OpenAI response, using text analysis fallback");
-          isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
-                          imageAnalysis.toLowerCase().includes('valido') ||
-                          imageAnalysis.toLowerCase().includes('correcto') ||
-                          imageAnalysis.toLowerCase().includes('francesco lucchesi');
-                          
+          isValidPayment = imageAnalysis.toLowerCase().includes('válido') ||
+            imageAnalysis.toLowerCase().includes('valido') ||
+            imageAnalysis.toLowerCase().includes('correcto') ||
+            imageAnalysis.toLowerCase().includes('francesco lucchesi');
+
           // Crear un objeto con la información disponible
           analysisResult = {
             isValid: isValidPayment,
@@ -2171,37 +2171,44 @@ Responde con un JSON que tenga los siguientes campos:
       } catch (parseError) {
         logger.error(`Error parsing OpenAI response: ${parseError.message}`);
         // Si hay error al parsear, intentar extraer la validez del texto
-        isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
-                        imageAnalysis.toLowerCase().includes('valido') ||
-                        imageAnalysis.toLowerCase().includes('correcto') ||
-                        imageAnalysis.toLowerCase().includes('francesco lucchesi');
-                        
+        isValidPayment = imageAnalysis.toLowerCase().includes('válido') ||
+          imageAnalysis.toLowerCase().includes('valido') ||
+          imageAnalysis.toLowerCase().includes('correcto') ||
+          imageAnalysis.toLowerCase().includes('francesco lucchesi');
+
         analysisResult = {
           isValid: isValidPayment,
           reason: "Pago verificado: contiene el nombre y monto correctos"
         };
       }
-      
+
       // Verificar si el pago es válido
       isValidPayment = analysisResult.isValid;
-      
+
       if (isValidPayment) {
         logger.info(`Advisor payment validated successfully for user ${from}`);
-        
+
         // Actualizar el estado de la sesión
         await sessionService.updateSession(from, {
           advisorPaymentVerified: true,
           advisorPaymentDate: new Date().toISOString()
         });
-        
+
         // Enviar confirmación de que el pago ha sido verificado
-        await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nTu pago de S/60 por la asesoría ${advisorType} ha sido confirmado. Pronto nos pondremos en contacto contigo para coordinar la sesión.`);
-        
+        await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nTu pago de S/60 por la asesoría ${advisorType} ha sido confirmado. \n Gracias por adquirir nuestra asesoría Simulación de Entrevista.
+
+📅 Agenda tu cita ahora mismo en este enlace:
+https://calendly.com/psicologa-workin2/30min
+
+👆 Haz clic en el enlace para elegir la fecha y hora que mejor se adapte a tu disponibilidad.
+
+Si tienes alguna duda, no dudes en escribirnos.`);
+
         // Enviar opciones post-pago
         const postPaymentButtons = [
           { id: 'back_to_main_menu', text: '🏠 Volver al menú' }
         ];
-        
+
         try {
           await bot.sendButtonMessage(
             from,
@@ -2213,21 +2220,21 @@ Responde con un JSON que tenga los siguientes campos:
           logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
           await bot.sendMessage(from, 'Escribe *!menu* para volver al menú principal.');
         }
-        
+
         // Actualizar el estado de la sesión
         await sessionService.updateSessionState(from, 'advisor_payment_completed');
-        
+
       } else {
         // El pago no es válido
         logger.warn(`Invalid advisor payment image from user ${from}: ${analysisResult.reason}`);
-        
+
         // Determinar la razón del rechazo
         let rejectionReason = analysisResult.reason || "no pudimos verificar claramente el pago";
-        
+
         // Informar al usuario por qué el pago fue rechazado
         await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de S/60\n\nEnvía una nueva captura cuando lo hayas corregido.`);
       }
-      
+
     } catch (error) {
       logger.error(`Error verifying advisor payment: ${error.message}`);
       await bot.sendMessage(from, 'Hubo un error al verificar tu pago. Por favor, intenta enviar la imagen nuevamente.');
@@ -2246,7 +2253,7 @@ Responde con un JSON que tenga los siguientes campos:
 const handleTermsAndConditions = async (from) => {
   try {
     logger.info(`Showing terms and conditions for user ${from}`);
-    
+
     // Mensaje de términos y condiciones
     const termsMessage = `
 Bienvenido a Worky
@@ -2259,13 +2266,13 @@ Privacidad: https://www.workin2.com/privacidad
 
 Al continuar, aceptas nuestros términos, nuestra política de privacidad.
     `;
-    
+
     // Intentar enviar los botones interactivos
     const termsButtons = [
       { id: 'accept_terms', text: 'Acepto' },
       { id: 'reject_terms', text: 'No acepto' }
     ];
-    
+
     try {
       // Usar el formato correcto de botones interactivos - sin headerText para usar el footer en su lugar
       await bot.sendButtonMessage(
@@ -2278,7 +2285,7 @@ Al continuar, aceptas nuestros términos, nuestra política de privacidad.
       // Fallback a mensaje de texto si fallan los botones
       await bot.sendMessage(from, `${termsMessage}\n\nPor favor, responde "Sí" para aceptar o "No" para rechazar los términos y condiciones.`);
     }
-    
+
     // Actualizar el estado para manejar la respuesta
     await sessionService.updateSessionState(from, 'terms_acceptance');
     logger.info(`Terms and conditions sent to user ${from}`);
@@ -2308,7 +2315,7 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
 
 ¿Cómo te gustaría que te ayude hoy?
     `;
-    
+
     // Intentar enviar botones para una mejor experiencia
     try {
       const menuButtons = [
@@ -2316,18 +2323,18 @@ Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
         { id: 'interview_simulation', text: '🎯 Simular entrevista' },
         { id: 'personalized_advice', text: '👨‍💼 Asesoría' }
       ];
-      
+
       await bot.sendButtonMessage(
         from,
         welcomeMessage,
         menuButtons,
         '¡Bienvenido a Worky!'
       );
-      
+
       await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
     } catch (buttonError) {
       logger.warn(`Failed to send button message, using text fallback: ${buttonError.message}`);
-      
+
       // Mensaje de texto alternativo si fallan los botones
       await bot.sendMessage(from, `${welcomeMessage}\n\nEnvía tu CV como documento para comenzar con el análisis o escribe *!interview* para simular una entrevista.`);
       await sessionService.updateSessionState(from, sessionService.SessionState.INITIAL);
