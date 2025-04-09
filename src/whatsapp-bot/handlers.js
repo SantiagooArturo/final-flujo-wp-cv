@@ -2068,7 +2068,7 @@ const handleAdvisorService = async (from) => {
 const handleAdvisorPaymentConfirmation = async (from) => {
   try {
     // Solicitar captura de pantalla del pago
-    await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de S/60*\n\nNecesito verificar:\n• Que el pago sea a nombre de "Francesco Lucchesi"\n• Que la fecha y hora sea reciente`);
+    await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de S/60*\n\nNecesito verificar:\n• El nro de operacion"\n• La fecha y hora sea reciente`);
 
     // Actualizar el estado de la sesión para esperar la captura
     await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
