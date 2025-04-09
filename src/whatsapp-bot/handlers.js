@@ -2386,12 +2386,11 @@ Al continuar, aceptas nuestros términos, nuestra política de privacidad y auto
     ];
     
     try {
-      // Usar el formato correcto de botones interactivos
+      // Usar el formato correcto de botones interactivos - sin headerText para usar el footer en su lugar
       await bot.sendButtonMessage(
         from,
         termsMessage,
-        termsButtons,
-        '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
+        termsButtons
       );
     } catch (buttonError) {
       logger.error(`Error sending terms buttons: ${buttonError.message}`);

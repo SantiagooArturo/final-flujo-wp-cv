@@ -73,6 +73,19 @@ class WhatsAppBot {
         };
       }
 
+      // Verificar si estamos enviando los botones de aceptación de términos
+      const isTermsAcceptance = buttons.length === 2 && 
+                               buttons.some(b => b.text === 'Sí') && 
+                               buttons.some(b => b.text === 'No');
+      
+      if (isTermsAcceptance) {
+        // Ajustar formato específicamente para los botones de términos y condiciones
+        // Asegurar que el footer muestre la pregunta para los botones Sí/No
+        payload.interactive.footer = {
+          text: '¿Aceptas los términos y condiciones, la política de privacidad y el uso de tus datos?'
+        };
+      }
+
       const response = await axios.post(
         `${this.apiUrl}/messages`,
         payload,
