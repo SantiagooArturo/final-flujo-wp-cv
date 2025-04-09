@@ -2381,8 +2381,8 @@ Al continuar, aceptas nuestros términos, nuestra política de privacidad.
     
     // Intentar enviar los botones interactivos
     const termsButtons = [
-      { id: 'accept_terms', text: 'Sí' },
-      { id: 'reject_terms', text: 'No' }
+      { id: 'accept_terms', text: 'Acepto' },
+      { id: 'reject_terms', text: 'No acepto' }
     ];
     
     try {
