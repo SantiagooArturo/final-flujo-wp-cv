@@ -1459,7 +1459,7 @@ const handlePaymentConfirmation = async (from) => {
     const packagePrice = session.packagePrice || 'S/4';
 
     // Solicitar captura de pantalla del pago en lugar de confirmar automáticamente
-    await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de ${packagePrice}*\n\nNecesito verificar:\n• Que el pago sea a nombre de "Francesco Lucchesi"\n• Que la fecha y hora sea reciente`);
+    await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de ${packagePrice}*\n\nNecesito verificar:\n• El Nro de operacion"\n• La fecha y hora`);
 
     // Actualizar el estado de la sesión para esperar la captura
     await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
@@ -2232,7 +2232,7 @@ Si tienes alguna duda, no dudes en escribirnos.`);
         let rejectionReason = analysisResult.reason || "no pudimos verificar claramente el pago";
 
         // Informar al usuario por qué el pago fue rechazado
-        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nPor favor, asegúrate de que:\n• El Nro de operacion sea correcto`);
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nPor favor, asegúrate de que:\n• El Nro de operacion sea correcto\n Envía una nueva captura cuando lo hayas corregido.`);
       }
 
     } catch (error) {
