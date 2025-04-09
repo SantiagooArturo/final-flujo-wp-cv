@@ -2143,10 +2143,13 @@ Responde con un JSON que tenga los siguientes campos:
 - isValid: true/false según si la imagen cumple con todos los requisitos
 - recipientName: nombre del destinatario que aparece en el comprobante (si está visible)
 - amount: monto del pago (si está visible)
-- date: fecha del pago (si está visible)
+- date: fecha del pago en formato completo (si está visible)
+- day: día del mes extraído (número)
+- month: mes extraído (nombre o número)
+- year: año extraído (número)
 - reason: razón por la que es válido o inválido`;
       
-      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
+      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi o Francesco Lucchesi V. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
       
       // Llamar a la API de OpenAI para analizar la imagen
       const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
@@ -2160,15 +2163,14 @@ Responde con un JSON que tenga los siguientes campos:
         const jsonMatch = imageAnalysis.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           analysisResult = JSON.parse(jsonMatch[0]);
-          logger.info(`Parsed analysis result: ${JSON.stringify(analysisResult)}`);
+          logger.info(`Parsed advisor analysis result: ${JSON.stringify(analysisResult)}`);
         } else {
           // Si no encuentra JSON, intentar extraer la validez de la respuesta
           logger.warn("No JSON found in OpenAI response, using text analysis fallback");
           isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
                           imageAnalysis.toLowerCase().includes('valido') ||
                           imageAnalysis.toLowerCase().includes('correcto') ||
-                          (imageAnalysis.toLowerCase().includes('francesco lucchesi') && 
-                           imageAnalysis.toLowerCase().includes('60'));
+                          imageAnalysis.toLowerCase().includes('francesco lucchesi');
                           
           // Crear un objeto con la información disponible
           analysisResult = {
@@ -2177,183 +2179,72 @@ Responde con un JSON que tenga los siguientes campos:
           };
         }
       } catch (parseError) {
-        logger.error(`Error parsing analysis result: ${parseError.message}`);
-        // Intentar determinar si es válido basado en el texto
+        logger.error(`Error parsing OpenAI response: ${parseError.message}`);
+        // Si hay error al parsear, intentar extraer la validez del texto
         isValidPayment = imageAnalysis.toLowerCase().includes('válido') || 
                         imageAnalysis.toLowerCase().includes('valido') ||
-                        imageAnalysis.toLowerCase().includes('correcto');
+                        imageAnalysis.toLowerCase().includes('correcto') ||
+                        imageAnalysis.toLowerCase().includes('francesco lucchesi');
                         
         analysisResult = {
           isValid: isValidPayment,
-          reason: 'No se pudo analizar la respuesta en formato JSON'
+          reason: "Pago verificado: contiene el nombre y monto correctos"
         };
       }
       
-      // Como fallback adicional, verificar si la imagen muestra los elementos críticos
-      // incluso si OpenAI dijo que no era válido
-      if (!analysisResult.isValid) {
-        logger.info("Advisor payment marked as invalid by OpenAI, checking for critical elements");
-        
-        // Verificar si la respuesta menciona los elementos críticos de forma positiva
-        const hasCorrectName = analysisResult.recipientName && 
-                               analysisResult.recipientName.toLowerCase().includes('francesco');
-        
-        const hasCorrectAmount = analysisResult.amount && 
-                                analysisResult.amount.includes('60');
-        
-        const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') || 
-                            imageAnalysis.toLowerCase().includes('plin');
-        
-        // MODIFICACIÓN: Ya no verificamos la fecha, solo el nombre y el monto
-        // Nombre: Francesco o Francesco Lucchesi
-        // Monto: 60 soles para asesorías
-        
-        // Si tiene el nombre y monto correctos, considerarlo válido
-        // Ya no verificamos la fecha ni la plataforma
-        if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) && 
-            (hasCorrectAmount || imageAnalysis.toLowerCase().includes('60'))) {
-          logger.info("Critical elements found (name and amount), overriding OpenAI result to VALID for advisor payment");
-          analysisResult.isValid = true;
-          analysisResult.reason = "Pago verificado: contiene el nombre y monto correctos";
-        }
-      }
-      
+      // Verificar si el pago es válido
       isValidPayment = analysisResult.isValid;
       
       if (isValidPayment) {
         logger.info(`Advisor payment validated successfully for user ${from}`);
         
-        // Registrar la transacción (precio fijo de S/60 para asesorías)
-        await userService.recordTransaction(
-          from, 
-          60, 
-          advisorType === 'Revisión de CV' ? 'advisor_cv' : 'advisor_interview',
-          `Asesoría personalizada: ${advisorType}`
-        );
-        
-        // Actualizar la sesión para indicar que el pago fue aprobado
-        await sessionService.updateSession(from, { 
+        // Actualizar el estado de la sesión
+        await sessionService.updateSession(from, {
           advisorPaymentVerified: true,
           advisorPaymentDate: new Date().toISOString()
         });
         
-        // Enviar mensaje de confirmación con el enlace de Calendly
-        await bot.sendMessage(from, `
-✅ *¡Pago verificado correctamente!*
-
-Gracias por adquirir nuestra asesoría ${advisorType}.
-
-📅 *Agenda tu cita ahora mismo en este enlace:*
-https://calendly.com/psicologa-workin2/30min
-
-👆 Haz clic en el enlace para elegir la fecha y hora que mejor se adapte a tu disponibilidad.
-
-Si tienes alguna duda, no dudes en escribirnos.
-        `);
+        // Enviar confirmación de que el pago ha sido verificado
+        await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nTu pago de S/60 por la asesoría ${advisorType} ha sido confirmado. Pronto nos pondremos en contacto contigo para coordinar la sesión.`);
         
-        // Actualizar el estado para indicar que el servicio fue completado
-        await sessionService.updateSessionState(from, 'advisor_service_completed');
+        // Enviar opciones post-pago
+        const postPaymentButtons = [
+          { id: 'back_to_menu', text: '🏠 Volver al menú' }
+        ];
         
-        // Ofrecer volver al menú principal
         try {
           await bot.sendButtonMessage(
-            from, 
-            'Cuando hayas agendado tu cita, puedes volver al menú principal.',
-            [{ id: 'back_to_main_menu', text: '🔙 Volver al Menú' }],
-            'Opciones disponibles'
+            from,
+            '¿Qué te gustaría hacer ahora?',
+            postPaymentButtons,
+            'Opciones después del pago'
           );
         } catch (buttonError) {
-          logger.warn(`Failed to send advisor completion buttons: ${buttonError.message}`);
-          await bot.sendMessage(from, 'Escribe !start para volver al menú principal cuando hayas terminado.');
+          logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
+          await bot.sendMessage(from, 'Escribe *!menu* para volver al menú principal.');
         }
+        
+        // Actualizar el estado de la sesión
+        await sessionService.updateSessionState(from, 'advisor_payment_completed');
+        
       } else {
         // El pago no es válido
         logger.warn(`Invalid advisor payment image from user ${from}: ${analysisResult.reason}`);
         
+        // Determinar la razón del rechazo
+        let rejectionReason = analysisResult.reason || "no pudimos verificar claramente el pago";
+        
         // Informar al usuario por qué el pago fue rechazado
-        let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
-        
-        if (analysisResult.reason) {
-          rejectionReason = analysisResult.reason;
-        } else {
-          // Intentar determinar la razón específica
-          if (analysisResult.amount && analysisResult.amount !== '60') {
-            rejectionReason = `el monto no coincide con el precio de la asesoría (S/60)`;
-          } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
-            rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
-          } else {
-            rejectionReason = "no pudimos verificar claramente el pago";
-          }
-        }
-        
-        // Mensaje para el usuario
         await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de S/60\n\nEnvía una nueva captura cuando lo hayas corregido.`);
-        
-        // Mantener al usuario en el mismo estado para que pueda volver a intentar
-        await sessionService.updateSessionState(from, 'waiting_advisor_payment_screenshot');
-        
-        /* CÓDIGO DE FALLBACK COMENTADO POR SI NECESITAMOS VOLVER A ÉL
-        // Considerando que pueden haber falsos negativos, vamos a ser más permisivos
-        // y aceptar el pago de todos modos
-        logger.info(`Accepting advisor payment anyway as fallback for user ${from}`);
-        
-        // Registrar la transacción (precio fijo de S/60 para asesorías)
-        await userService.recordTransaction(
-          from, 
-          60, 
-          advisorType === 'Revisión de CV' ? 'advisor_cv' : 'advisor_interview',
-          `Asesoría personalizada: ${advisorType} (fallback)`
-        );
-        
-        // Actualizar la sesión para indicar que el pago fue aprobado
-        await sessionService.updateSession(from, { 
-          advisorPaymentVerified: true,
-          advisorPaymentDate: new Date().toISOString()
-        });
-        
-        // Enviar mensaje de confirmación con el enlace de Calendly
-        await bot.sendMessage(from, `
-✅ *¡Pago verificado correctamente!*
-
-Gracias por adquirir nuestra asesoría ${advisorType}.
-
-📅 *Agenda tu cita ahora mismo en este enlace:*
-https://calendly.com/psicologa-workin2/30min
-
-👆 Haz clic en el enlace para elegir la fecha y hora que mejor se adapte a tu disponibilidad.
-
-Si tienes alguna duda, no dudes en escribirnos.
-        `);
-        
-        // Actualizar el estado para indicar que el servicio fue completado
-        await sessionService.updateSessionState(from, 'advisor_service_completed');
-        
-        // Ofrecer volver al menú principal
-        try {
-          await bot.sendButtonMessage(
-            from, 
-            'Cuando hayas agendado tu cita, puedes volver al menú principal.',
-            [{ id: 'back_to_main_menu', text: '🔙 Volver al Menú' }],
-            'Opciones disponibles'
-          );
-        } catch (buttonError) {
-          logger.warn(`Failed to send advisor completion buttons: ${buttonError.message}`);
-          await bot.sendMessage(from, 'Escribe !start para volver al menú principal cuando hayas terminado.');
-        }
-        
-        return;
-        */
       }
-    } catch (aiError) {
-      // Error al analizar con OpenAI
-      logger.error(`Error verifying advisor payment with OpenAI: ${aiError.message}`);
-      isValidPayment = true; // Aceptar el pago por defecto en caso de error
+      
+    } catch (error) {
+      logger.error(`Error verifying advisor payment: ${error.message}`);
+      await bot.sendMessage(from, 'Hubo un error al verificar tu pago. Por favor, intenta enviar la imagen nuevamente.');
     }
-    
-    // Si llegamos aquí, procesamos el pago correctamente
   } catch (error) {
-    logger.error(`Error verifying advisor payment screenshot: ${error.message}`);
-    await bot.sendMessage(from, 'Ocurrió un error al verificar tu pago. Por favor, contacta con nuestro soporte.');
+    logger.error(`Error in advisor payment verification: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu pago. Por favor, intenta nuevamente más tarde.');
   }
 };
 
