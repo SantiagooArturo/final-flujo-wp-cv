@@ -461,7 +461,7 @@ const handleText = async (from, text) => {
         logger.info(`Job position saved before CV for user ${from}: ${text}`);
 
         // Solicitar el CV
-        await bot.sendMessage(from, `Gracias por indicar el puesto de ${text}. Ahora, por favor envía tu CV como documento para analizarlo en relación con este puesto.`);
+        await bot.sendMessage(from, `Gracias por indicar el puesto de ${text}. Ahora, por favor envía tu CV en formato **PDF** como documento para analizarlo en relación con este puesto.`);
         await sessionService.updateSessionState(from, 'waiting_for_cv');
         break;
 
