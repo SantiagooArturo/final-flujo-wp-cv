@@ -2370,13 +2370,13 @@ const handleTermsAndConditions = async (from) => {
     const termsMessage = `
 Bienvenido a Worky
 
-Antes de continuar, por favor revisa y acepta los términos y condiciones aquí:
+Antes de continuar, revisa los siguientes enlaces:
 
 Términos y condiciones: https://www.workin2.com/terminos
 
 Privacidad: https://www.workin2.com/privacidad
 
-Al continuar, aceptas nuestros términos, nuestra política de privacidad y autorizas el uso y compartición.
+Al continuar, aceptas nuestros términos, nuestra política de privacidad.
     `;
     
     // Intentar enviar los botones interactivos
