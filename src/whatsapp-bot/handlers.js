@@ -1298,11 +1298,11 @@ const handlePremiumInfo = async (from) => {
               title: "6 Revisiones",
               description: "S/ 10 – 6 revisiones"
             },
-            {
+            /* {
               id: "package_10",
               title: "10 Revisiones",
               description: "S/ 15 – 10 revisiones"
-            }
+            } */
           ]
         }
       ];
