@@ -2232,7 +2232,7 @@ Si tienes alguna duda, no dudes en escribirnos.`);
         let rejectionReason = analysisResult.reason || "no pudimos verificar claramente el pago";
 
         // Informar al usuario por qué el pago fue rechazado
-        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nPor favor, asegúrate de que:\n• El Nro de operacion sea correcto\n Envía una nueva captura cuando lo hayas corregido.`);
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nPor favor, asegúrate de que:\n• El Nro de operacion sea correcto\n\n *Envía una nueva captura cuando lo hayas corregido.*`);
       }
 
     } catch (error) {
