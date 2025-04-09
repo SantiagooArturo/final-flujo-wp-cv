@@ -2132,24 +2132,14 @@ const verifyAdvisorPaymentScreenshot = async (from, image) => {
 1. Debe ser un comprobante de pago de Yape, Plin o alguna otra billetera digital peruana
 2. El pago debe ser a nombre de "Francesco Lucchesi" o similar
 3. El monto debe ser S/60 soles
-4. La fecha debe ser reciente (del mes actual o últimos 5 días)
-
-Analiza cuidadosamente la fecha en el comprobante y extrae:
-- Día (número)
-- Mes (nombre o número)
-- Año (número completo)
 
 Responde con un JSON que tenga los siguientes campos:
-- isValid: true/false según si la imagen cumple con todos los requisitos
+- isValid: true si el nombre y monto son correctos, false en caso contrario
 - recipientName: nombre del destinatario que aparece en el comprobante (si está visible)
 - amount: monto del pago (si está visible)
-- date: fecha del pago en formato completo (si está visible)
-- day: día del mes extraído (número)
-- month: mes extraído (nombre o número)
-- year: año extraído (número)
-- reason: razón por la que es válido o inválido`;
+- reason: razón por la que es válido o inválido (enfocándose en nombre y monto)`;
       
-      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi o Francesco Lucchesi V. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
+      const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de S/60 a Francesco Lucchesi o Francesco Lucchesi V. Ignora la fecha del comprobante, solo valida el nombre y el monto.`;
       
       // Llamar a la API de OpenAI para analizar la imagen
       const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
