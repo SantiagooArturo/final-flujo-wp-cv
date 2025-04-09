@@ -2256,7 +2256,7 @@ const handleTermsAndConditions = async (from) => {
 
     // Mensaje de términos y condiciones
     const termsMessage = `
-Bienvenido a Worky
+Bienvenido a Worky✨
 
 Antes de continuar, revisa los siguientes enlaces:
 
@@ -2305,7 +2305,7 @@ const showWelcomeMessage = async (from) => {
   try {
     // Mensaje de bienvenida mejorado con emojis y estilo más personal
     const welcomeMessage = `
-¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖✨
+¡Hola! 👋 Soy tu asistente virtual de *MyWorkIn* 🤖
 
 Estoy aquí para ayudarte a destacar en tu búsqueda de empleo:
 
