@@ -1,6 +1,8 @@
 const axios = require('axios');
 const config = require('./config');
 const logger = require('../utils/logger');
+const chatwootClient = require('../utils/chatwootClient');
+const sessionService = require('../core/sessionService');
 
 class WhatsAppBot {
   constructor() {
@@ -9,6 +11,60 @@ class WhatsAppBot {
       'Authorization': `Bearer ${config.token}`,
       'Content-Type': 'application/json',
     };
+  }
+
+  /**
+   * Reporta un mensaje saliente a Chatwoot
+   * @param {string} to - Número de teléfono del destinatario
+   * @param {string} content - Contenido del mensaje
+   * @private
+   */
+  async _reportToChatwoot(to, content) {
+    try {
+      // Primero verificar si tenemos una sesión con ID de conversación de Chatwoot
+      const session = await sessionService.getOrCreateSession(to);
+      let conversationId = session.chatwootConversationId;
+
+      if (!conversationId) {
+        logger.info(`No conversationId found for ${to}, attempting to create one`);
+        try {
+          // Buscar o crear contacto primero
+          const contactName = `WhatsApp ${to}`;
+          const contact = await chatwootClient.findOrCreateContact(to, contactName);
+          
+          if (contact && contact.id) {
+            // Crear una conversación nueva
+            const conversation = await chatwootClient.findOrCreateConversation(
+              contact.id, 
+              chatwootClient.whatsappInboxId || '1'
+            );
+            
+            if (conversation && conversation.id) {
+              conversationId = conversation.id;
+              // Guardar en la sesión para futuros mensajes
+              await sessionService.updateSession(to, { chatwootConversationId: conversationId });
+              logger.info(`Created and saved new Chatwoot conversation ID: ${conversationId} for user ${to}`);
+            }
+          }
+        } catch (createError) {
+          logger.error(`Failed to create conversation for reporting: ${createError.message}`);
+          return;
+        }
+      }
+
+      // Si aún no tenemos ID de conversación, no podemos continuar
+      if (!conversationId) {
+        logger.warn(`No se pudo reportar a Chatwoot: No se pudo crear una conversación para el usuario ${to}`);
+        return;
+      }
+
+      // Reportar mensaje a Chatwoot
+      await chatwootClient.createOutgoingMessage(conversationId, content);
+      logger.info(`Mensaje saliente reportado a Chatwoot, conversación ${conversationId}`);
+    } catch (error) {
+      logger.error(`Error al reportar mensaje a Chatwoot: ${error.message}`);
+      // No lanzar el error, solo registrarlo - no queremos que un error en Chatwoot interrumpa la comunicación con WhatsApp
+    }
   }
 
   async sendMessage(to, message) {
@@ -24,6 +80,10 @@ class WhatsAppBot {
         { headers: this.headers }
       );
       logger.info(`Message sent successfully to ${to}`);
+      
+      // Reportar a Chatwoot después de enviar exitosamente
+      await this._reportToChatwoot(to, message);
+      
       return response.data;
     } catch (error) {
       logger.error(`Error sending message: ${error.message}`);
@@ -92,6 +152,13 @@ class WhatsAppBot {
         { headers: this.headers }
       );
       logger.info(`Interactive button message sent successfully to ${to}`);
+      
+      // Reportar a Chatwoot después de enviar exitosamente
+      // Formateamos el contenido para incluir los botones
+      const buttonTextList = buttons.map(b => `[${b.text}]`).join(', ');
+      const chatwootContent = `${bodyText}\n\nBotones: ${buttonTextList}`;
+      await this._reportToChatwoot(to, chatwootContent);
+      
       return response.data;
     } catch (error) {
       logger.error(`Error sending interactive button message: ${error.message}`);
@@ -117,6 +184,10 @@ class WhatsAppBot {
         { headers: this.headers }
       );
       logger.info(`Template ${templateName} sent successfully to ${to}`);
+      
+      // Reportar a Chatwoot después de enviar exitosamente
+      await this._reportToChatwoot(to, `[Plantilla: ${templateName}]`);
+      
       return response.data;
     } catch (error) {
       logger.error(`Error sending template: ${error.message}`);
@@ -140,6 +211,13 @@ class WhatsAppBot {
         { headers: this.headers }
       );
       logger.info(`Document sent successfully to ${to}`);
+      
+      // Reportar a Chatwoot después de enviar exitosamente
+      const chatwootContent = caption ? 
+        `[Documento: ${documentUrl}]\n${caption}` : 
+        `[Documento: ${documentUrl}]`;
+      await this._reportToChatwoot(to, chatwootContent);
+      
       return response.data;
     } catch (error) {
       logger.error(`Error sending document: ${error.message}`);
@@ -292,6 +370,20 @@ class WhatsAppBot {
         { headers: this.headers }
       );
       logger.info(`Interactive list message sent successfully to ${to}`);
+      
+      // Reportar a Chatwoot después de enviar exitosamente
+      // Formateamos el contenido para incluir las opciones de la lista
+      let optionsText = '';
+      sections.forEach(section => {
+        optionsText += `\n${section.title}:\n`;
+        section.rows.forEach(row => {
+          optionsText += `- ${row.title}: ${row.description}\n`;
+        });
+      });
+      
+      const chatwootContent = `${headerText}\n${bodyText}\n\nOpciones:${optionsText}`;
+      await this._reportToChatwoot(to, chatwootContent);
+      
       return response.data;
     } catch (error) {
       logger.error(`Error sending interactive list message: ${error.message}`);
@@ -400,4 +492,4 @@ class WhatsAppBot {
   }
 }
 
-module.exports = new WhatsAppBot(); 
+module.exports = new WhatsAppBot();
