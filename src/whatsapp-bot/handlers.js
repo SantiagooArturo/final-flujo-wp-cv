@@ -301,18 +301,16 @@ const handleText = async (from, text) => {
         return;
       }
       // Validar el código UCAL
-      const codeData = await promoCodeService.validateCode(code);
-      if (!codeData) {
-        await bot.sendMessage(from, '❌ El código promocional UCAL no es válido, ya ha sido usado o ha expirado.');
-        return;
-      }
+      // const codeData = await promoCodeService.validateCode(code);
+      // if (!codeData) {
+      //   await bot.sendMessage(from, '❌ El código promocional UCAL no es válido, ya ha sido usado o ha expirado.');
+      //   return;
+      // }
       // Intentar canjear el código
-      const redeemed = await promoCodeService.redeemCode(from, codeData);
-      if (redeemed) {
-        // Si el código es UCAL20, añadir 99 créditos
-        if (code === 'UCAL20') {
-          await userService.addCVCredits(from, 99);
-        }
+      // const redeemed = await promoCodeService.redeemCode(from, codeData);
+      // Si el código es UCAL20, añadir 99 créditos
+      if (code === 'UCAL20') {
+        await userService.addCVCredits(from, 99);
         await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado por ser estudiante UCAL.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
         logger.info(`User ${from} successfully redeemed UCAL promo code ${codeData.id}`);
       } else {
@@ -352,6 +350,10 @@ const handleText = async (from, text) => {
           return;
         case 'promo':
           const code = text.substring(7).trim();
+          if (!code) {
+            await bot.sendMessage(from, 'Por favor, proporciona un código promocional. Usa: !promo TU_CODIGO');
+            return;
+          }
           logger.info(`Promo code command received: ${code}`);
           await handlePromoCode(from, code);
           return;
