@@ -288,7 +288,7 @@ const handleText = async (from, text) => {
 
     // --- ACTIVACIÓN AUTOMÁTICA CÓDIGO UCAL ---
     if (text.trim().toLowerCase().startsWith('¡hola, worky! soy estudiante de la ucal')) {
-      const code = 'UCAL';
+      const code = 'UCAL20';
       logger.info(`Activando código UCAL automáticamente para ${from}`);
       // Verificar si el usuario ya tiene acceso ilimitado
       const userDoc = await userService.registerOrUpdateUser(from);
@@ -309,6 +309,10 @@ const handleText = async (from, text) => {
       // Intentar canjear el código
       const redeemed = await promoCodeService.redeemCode(from, codeData);
       if (redeemed) {
+        // Si el código es UCAL20, añadir 99 créditos
+        if (code === 'UCAL20') {
+          await userService.addCVCredits(from, 99);
+        }
         await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado por ser estudiante UCAL.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
         logger.info(`User ${from} successfully redeemed UCAL promo code ${codeData.id}`);
       } else {
@@ -347,7 +351,7 @@ const handleText = async (from, text) => {
           }
           return;
         case 'promo':
-          const code = text.substring(6).trim();
+          const code = text.substring(7).trim();
           logger.info(`Promo code command received: ${code}`);
           await handlePromoCode(from, code);
           return;
