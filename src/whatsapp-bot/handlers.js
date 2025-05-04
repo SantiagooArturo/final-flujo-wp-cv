@@ -286,31 +286,63 @@ const handleText = async (from, text) => {
       return;
     }
 
-    if (text.trim().toLowerCase().startsWith('¡hola, worky! soy estudiante de la ucal.')) {
+    if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
       const code = 'UCAL20';
       logger.info(`Activando código UCAL automáticamente para ${from}`);
-      const userDoc = await userService.registerOrUpdateUser(from);
-      if (userDoc.hasUnlimitedAccess) {
-        await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado!');
-        return;
-      }
-      if (userDoc.redeemedPromoCode) {
-        await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
-        return;
-      }
-      const codeData = await promoCodeService.validateCode(code);
-      if (!codeData) {
-        await bot.sendMessage(from, '❌ El código promocional UCAL no es válido, ya ha sido usado o ha expirado.');
-        return;
-      }
-      const redeemed = await promoCodeService.redeemCode(from, codeData);
-      if (redeemed) {
-        await userService.addCVCredits(from, 99);
-        await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado por ser estudiante UCAL.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
-        logger.info(`User ${from} successfully redeemed UCAL promo code ${codeData.id}`);
-        return; // <-- Esto es clave para que no siga y caiga en el catch
-      } else {
-        await bot.sendMessage(from, '⚠️ Hubo un problema al intentar canjear el código UCAL. Puede que alguien más lo haya usado justo ahora. Intenta de nuevo o contacta soporte.');
+      
+      try {
+        // Asegurar que el código existe
+        await promoCodeService.ensurePromoCodeExists(code, {
+          estado: true,
+          description: 'Acceso ilimitado para estudiantes UCAL',
+          source: 'UCAL',
+          universidad: 'UCAL'
+        });
+        
+        const userDoc = await userService.registerOrUpdateUser(from);
+        if (userDoc.hasUnlimitedAccess) {
+          await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado como estudiante UCAL!');
+          return;
+        }
+        
+        if (userDoc.redeemedPromoCode) {
+          await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
+          return;
+        }
+        
+        const codeData = await promoCodeService.validateCode(code);
+        if (!codeData) {
+          logger.error(`Código UCAL20 no encontrado o inactivo en Firebase`);
+          await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte mencionando "error UCAL20".');
+          return;
+        }
+        
+        const redeemed = await promoCodeService.redeemCode(from, codeData);
+        if (redeemed) {
+          // Añadir créditos
+          const creditsAdded = await userService.addCVCredits(from, 99);
+          
+          // Guardar información adicional del estudiante
+          await userService.registerOrUpdateUser(from, {
+            universidad: 'UCAL',
+            codigoActivadoVia: 'mensaje_automatico',
+            fechaActivacionCodigo: new Date(),
+            tieneAccesoUCAL: true,
+            creditosDisponibles: creditsAdded
+          });
+          
+          // Mensaje personalizado para estudiantes UCAL
+          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n• 99 créditos para análisis de CV\n\n¡Comencemos tu camino profesional! Puedes enviar tu CV como documento PDF para analizarlo.`);
+          
+          logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
+          return;
+        } else {
+          await bot.sendMessage(from, '⚠️ Hubo un problema al activar tu código UCAL. Por favor, contacta a soporte mencionando "error activación UCAL20".');
+          return;
+        }
+      } catch (error) {
+        logger.error(`Error procesando activación UCAL: ${error.message}`);
+        await bot.sendMessage(from, '⚠️ Ocurrió un error inesperado. Por favor, intenta nuevamente o contacta a soporte.');
         return;
       }
     }
