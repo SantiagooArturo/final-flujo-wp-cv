@@ -328,11 +328,11 @@ const handleText = async (from, text) => {
             codigoActivadoVia: 'mensaje_automatico',
             fechaActivacionCodigo: new Date(),
             tieneAccesoUCAL: true,
-            creditosDisponibles: creditsAdded
+            cvCredits: creditsAdded
           });
           
           // Mensaje personalizado para estudiantes UCAL
-          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n• 99 créditos para análisis de CV\n\n¡Comencemos tu camino profesional! Puedes enviar tu CV como documento PDF para analizarlo.`);
+          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional! Puedes enviar tu CV como documento PDF para analizarlo.`);
           
           logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
           return;
