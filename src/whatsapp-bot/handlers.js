@@ -286,11 +286,9 @@ const handleText = async (from, text) => {
       return;
     }
 
-    // --- ACTIVACIÓN AUTOMÁTICA CÓDIGO UCAL ---
     if (text.trim().toLowerCase().startsWith('¡hola, worky! soy estudiante de la ucal')) {
       const code = 'UCAL20';
       logger.info(`Activando código UCAL automáticamente para ${from}`);
-      // Verificar si el usuario ya tiene acceso ilimitado
       const userDoc = await userService.registerOrUpdateUser(from);
       if (userDoc.hasUnlimitedAccess) {
         await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado!');
@@ -300,23 +298,21 @@ const handleText = async (from, text) => {
         await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
         return;
       }
-      // Validar el código UCAL
-      // const codeData = await promoCodeService.validateCode(code);
-      // if (!codeData) {
-      //   await bot.sendMessage(from, '❌ El código promocional UCAL no es válido, ya ha sido usado o ha expirado.');
-      //   return;
-      // }
-      // Intentar canjear el código
-      // const redeemed = await promoCodeService.redeemCode(from, codeData);
-      // Si el código es UCAL20, añadir 99 créditos
-      if (code === 'UCAL20') {
+      const codeData = await promoCodeService.validateCode(code);
+      if (!codeData) {
+        await bot.sendMessage(from, '❌ El código promocional UCAL no es válido, ya ha sido usado o ha expirado.');
+        return;
+      }
+      const redeemed = await promoCodeService.redeemCode(from, codeData);
+      if (redeemed) {
         await userService.addCVCredits(from, 99);
         await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado por ser estudiante UCAL.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
         logger.info(`User ${from} successfully redeemed UCAL promo code ${codeData.id}`);
+        return; // <-- Esto es clave para que no siga y caiga en el catch
       } else {
         await bot.sendMessage(from, '⚠️ Hubo un problema al intentar canjear el código UCAL. Puede que alguien más lo haya usado justo ahora. Intenta de nuevo o contacta soporte.');
+        return;
       }
-      return;
     }
 
     // Manejar comandos especiales primero
