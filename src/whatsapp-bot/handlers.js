@@ -286,7 +286,7 @@ const handleText = async (from, text) => {
       return;
     }
 
-    if (text.trim().toLowerCase().startsWith('¡hola, worky! soy estudiante de la ucal')) {
+    if (text.trim().toLowerCase().startsWith('¡hola, worky! soy estudiante de la ucal.')) {
       const code = 'UCAL20';
       logger.info(`Activando código UCAL automáticamente para ${from}`);
       const userDoc = await userService.registerOrUpdateUser(from);
