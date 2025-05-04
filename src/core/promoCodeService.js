@@ -16,7 +16,8 @@ const validateCode = async (code) => {
     const docSnap = await codeRef.get();
     if (!docSnap.exists) return null;
     const codeData = docSnap.data();
-    if (!codeData.isActive || codeData.usedBy) return null;
+    // Cambia 'isActive' por 'estado'
+    if (!codeData.estado || codeData.usedBy) return null;
     return { id: docSnap.id, ...codeData };
   } catch (error) {
     logger.error(`Error validating promo code ${code}: ${error.message}`);
