@@ -13,6 +13,7 @@ const path = require('path');
 const axios = require('axios');
 const userService = require('../core/userService');
 const promoCodeService = require('../core/promoCodeService');
+const { handlePromoCode } = require('./handlers/promoHandlers');
 
 const handleStart = async (from) => {
   try {
@@ -313,6 +314,11 @@ const handleText = async (from, text) => {
           } else {
             await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
           }
+          return;
+        case 'promo ':
+          const code = text.substring(6).trim();
+          logger.info(`Promo code command received: ${code}`);
+          await handlePromoCode(from, code);
           return;
         default:
           await bot.sendMessage(from, 'Comando no reconocido. Usa !help para ver los comandos disponibles.');
