@@ -12,6 +12,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const axios = require('axios');
 const userService = require('../core/userService');
+const promoCodeService = require('../core/promoCodeService');
 
 const handleStart = async (from) => {
   try {
@@ -327,6 +328,40 @@ const handleText = async (from, text) => {
         await bot.sendMessage(from, `📊 *Aquí está el enlace a tu PDF de análisis:*\n\n${session.lastPdfUrl}`);
       } else {
         await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
+      }
+      return;
+    }
+
+    // --- NUEVO: Gestión de códigos promocionales ---
+    if (text.toLowerCase().startsWith('!promo ')) {
+      const code = text.substring(7).trim();
+      if (!code) {
+        await bot.sendMessage(from, 'Por favor, proporciona un código promocional. Usa: !promo TU_CODIGO');
+        return;
+      }
+      // Verificar si el usuario ya tiene acceso ilimitado
+      const userDoc = await userService.registerOrUpdateUser(from);
+      if (userDoc.hasUnlimitedAccess) {
+        await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado!');
+        return;
+      }
+      if (userDoc.redeemedPromoCode) {
+        await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
+        return;
+      }
+      // Validar el código
+      const codeData = await promoCodeService.validateCode(code);
+      if (!codeData) {
+        await bot.sendMessage(from, '❌ El código promocional no es válido, ya ha sido usado o ha expirado.');
+        return;
+      }
+      // Intentar canjear el código
+      const redeemed = await promoCodeService.redeemCode(from, codeData);
+      if (redeemed) {
+        await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
+        logger.info(`User ${from} successfully redeemed promo code ${codeData.id} from source ${codeData.source}`);
+      } else {
+        await bot.sendMessage(from, '⚠️ Hubo un problema al intentar canjear el código. Puede que alguien más lo haya usado justo ahora. Intenta de nuevo o contacta soporte.');
       }
       return;
     }
@@ -881,7 +916,6 @@ const handleVideo = async (from, video) => {
   } catch (error) {
     logger.error(`Error handling video: ${error.message}`);
     await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');
-    throw error;
   }
 };
 
