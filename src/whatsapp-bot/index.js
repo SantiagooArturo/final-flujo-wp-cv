@@ -305,6 +305,34 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
+app.post("/chatwoot-webhook", async (req, res) => {
+  try {
+    const data = req.body;
+    logger.info(`Chatwoot webhook received: ${JSON.stringify(data)}`);
+
+    // Verificar si es un mensaje saliente de un agente
+    if (data.event === "message_created" && data.message_type === "outgoing" && !data.private) {
+      const phoneNumber = data.conversation.meta.sender.phone_number;
+      const content = data.content;
+      
+      // Enviar mensaje a WhatsApp
+      if (phoneNumber && content) {
+        try {
+          await bot.sendMessage(phoneNumber, content);
+          logger.info(`Message sent from Chatwoot to WhatsApp: ${phoneNumber}`);
+        } catch (error) {
+          logger.error(`Error sending message from Chatwoot to WhatsApp: ${error.message}`);
+        }
+      }
+    }
+    
+    res.status(200).send("Webhook processed");
+  } catch (error) {
+    logger.error(`Error processing Chatwoot webhook: ${error.message}`);
+    res.status(500).send("Error processing webhook");
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   logger.info(`WhatsApp bot server is running on port ${PORT}`);
