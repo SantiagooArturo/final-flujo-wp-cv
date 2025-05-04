@@ -984,6 +984,7 @@ const handleHelp = async (from) => {
 !help - Muestra esta lista de comandos
 !reset - Elimina tu sesión actual y reinicia el bot
 !url - Obtiene el enlace directo al último PDF de análisis de CV generado
+!promo [código] - Activa una promoción especial (si aplica)
 
 📄 *Para revisar tu CV:*
 1. Elige "Revisar mi CV" en el menú principal
