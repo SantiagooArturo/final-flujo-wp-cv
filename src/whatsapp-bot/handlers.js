@@ -286,6 +286,37 @@ const handleText = async (from, text) => {
       return;
     }
 
+    // --- ACTIVACIÓN AUTOMÁTICA CÓDIGO UCAL ---
+    if (text.trim().toLowerCase().startsWith('¡hola, worky! soy estudiante de la ucal')) {
+      const code = 'UCAL';
+      logger.info(`Activando código UCAL automáticamente para ${from}`);
+      // Verificar si el usuario ya tiene acceso ilimitado
+      const userDoc = await userService.registerOrUpdateUser(from);
+      if (userDoc.hasUnlimitedAccess) {
+        await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado!');
+        return;
+      }
+      if (userDoc.redeemedPromoCode) {
+        await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
+        return;
+      }
+      // Validar el código UCAL
+      const codeData = await promoCodeService.validateCode(code);
+      if (!codeData) {
+        await bot.sendMessage(from, '❌ El código promocional UCAL no es válido, ya ha sido usado o ha expirado.');
+        return;
+      }
+      // Intentar canjear el código
+      const redeemed = await promoCodeService.redeemCode(from, codeData);
+      if (redeemed) {
+        await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado por ser estudiante UCAL.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
+        logger.info(`User ${from} successfully redeemed UCAL promo code ${codeData.id}`);
+      } else {
+        await bot.sendMessage(from, '⚠️ Hubo un problema al intentar canjear el código UCAL. Puede que alguien más lo haya usado justo ahora. Intenta de nuevo o contacta soporte.');
+      }
+      return;
+    }
+
     // Manejar comandos especiales primero
     if (text.toLowerCase().startsWith('!')) {
       const command = text.toLowerCase().substring(1);
@@ -315,7 +346,7 @@ const handleText = async (from, text) => {
             await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
           }
           return;
-        case 'promo ':
+        case 'promo':
           const code = text.substring(6).trim();
           logger.info(`Promo code command received: ${code}`);
           await handlePromoCode(from, code);
@@ -1313,7 +1344,7 @@ Por favor, responde con un mensaje de audio o video.
 const handlePremiumInfo = async (from) => {
   try {
     // Primero enviar información sobre la revisión avanzada
-    await bot.sendMessage(from, '*Mas reivisiones* 😊\n\n¡Excelente!');
+    await bot.sendMessage(from, '*Mas revisiones* 😊\n\n¡Excelente!');
     await bot.sendMessage(from, `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`);
     await bot.sendMessage(from, `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`);
 
@@ -1721,18 +1752,12 @@ Responde con un JSON que tenga los siguientes campos:
 
         // Mensaje para el usuario
         await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n\nEnvía una nueva captura cuando lo hayas corregido.`);
-
-        // Mantener al usuario en el mismo estado para que pueda volver a intentar
-        await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
 
       // Informar al usuario del error técnico
       await bot.sendMessage(from, "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste.");
-
-      // Mantener al usuario en el mismo estado para que pueda volver a intentar
-      await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
     }
 
   } catch (error) {
