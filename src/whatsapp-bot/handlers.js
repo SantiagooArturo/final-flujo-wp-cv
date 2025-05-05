@@ -810,6 +810,15 @@ const handleAudio = async (from, audio) => {
         });
 
         if (transcription) {
+          // Guardar la transcripción en la sesión
+          await sessionService.saveInterviewAnswer(from, {
+            transcription: transcription,
+            timestamp: new Date(),
+            audioUrl: audioUrl
+          });
+          logger.info(`Transcripción guardada en la sesión para el usuario ${from}`);
+          // Enviar la transcripción al usuario
+          await bot.sendMessage(from, `🎤 *Transcripción de tu respuesta:*\n\n${transcription}`);
           logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
 
           // Analizar la transcripción
@@ -884,7 +893,7 @@ const handleAudio = async (from, audio) => {
         await interviewService.saveInterviewWithQuestions(
           from,
           candidateInfo,
-          questionsAndAnswers
+          questionsAndAnswers,
         );
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
         await showPostInterviewMenu(from);
