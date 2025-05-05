@@ -803,8 +803,9 @@ const handleAudio = async (from, audio) => {
         await fs.writeFile(tempFilePath, audioBuffer);
         logger.info(`[handleAudio] Archivo temporal creado: ${tempFilePath}`);
 
+        const fileBuffer = await fs.readFile(tempFilePath);
         const fileInfo = {
-          filepath: tempFilePath,
+          filepath: fileBuffer,
           originalFilename: tempFilename,
           mimetype: audio.mime_type || 'audio/ogg',
         };
