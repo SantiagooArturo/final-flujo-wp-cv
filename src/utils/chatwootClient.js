@@ -22,7 +22,7 @@ class ChatwootClient {
     if (!this.apiUrl || !this.token) {
       logger.warn('ChatwootClient: API URL o token no configurados');
     } else {
-      logger.info(`ChatwootClient inicializado con URL: ${this.apiUrl}`);
+      // logger.info(`ChatwootClient inicializado con URL: ${this.apiUrl}`); // Quitado logger info
     }
   }
 
@@ -52,7 +52,7 @@ class ChatwootClient {
         });
 
         if (searchResponse.data?.payload?.length > 0) {
-          logger.info(`Contacto encontrado: ${searchResponse.data.payload[0].id}`);
+          // logger.info(`Contacto encontrado: ${searchResponse.data.payload[0].id}`); // Quitado logger info
           return searchResponse.data.payload[0];
         }
       } catch (searchError) {
@@ -61,7 +61,7 @@ class ChatwootClient {
       }
 
       // Si no se encuentra, crear nuevo contacto
-      logger.info(`Creando nuevo contacto para ${name} (${normalizedPhone})`);
+      // logger.info(`Creando nuevo contacto para ${name} (${normalizedPhone})`); // Quitado logger info
       const createUrl = `${this.apiUrl}/accounts/${this.accountId}/contacts`;
 
       const inboxId = parseInt(chatwootConfig.whatsappInboxId, 10);
@@ -89,7 +89,7 @@ class ChatwootClient {
          return null; // Indicar fallo
       }
 
-      logger.info(`Contacto creado con ID: ${contactPayload.id}`);
+      // logger.info(`Contacto creado con ID: ${contactPayload.id}`); // Quitado logger info
       return contactPayload; // Devolver el objeto 'contact' completo
 
     } catch (error) {
@@ -130,7 +130,7 @@ class ChatwootClient {
         if (searchResponse.data?.payload?.length > 0) {
           const conversation = searchResponse.data.payload.find(conv => conv.inbox_id === inboxId);
           if (conversation) {
-            logger.info(`Conversación encontrada: ${conversation.id}`);
+            // logger.info(`Conversación encontrada: ${conversation.id}`); // Quitado logger info
             return conversation;
           }
         }
@@ -139,7 +139,7 @@ class ChatwootClient {
       }
 
       // Si no se encuentra, crear nueva conversación
-      logger.info(`Creando nueva conversación para contacto ${contactId} en bandeja ${inboxId}`);
+      // logger.info(`Creando nueva conversación para contacto ${contactId} en bandeja ${inboxId}`); // Quitado logger info
       const createUrl = `${this.apiUrl}/accounts/${this.accountId}/conversations`;
 
       const createPayload = {
@@ -158,7 +158,7 @@ class ChatwootClient {
         throw new Error('No se pudo obtener el ID de la conversación creada desde Chatwoot');
       }
 
-      logger.info(`Conversación creada: ${createdConversation.id}`);
+      // logger.info(`Conversación creada: ${createdConversation.id}`); // Quitado logger info
       return createdConversation; // Devolver el objeto conversación
 
     } catch (error) {
@@ -207,7 +207,7 @@ class ChatwootClient {
          throw new Error('No se pudo obtener el ID del mensaje creado desde Chatwoot');
       }
 
-      logger.info(`Mensaje entrante creado: ${createdMessage.id}`);
+      // logger.info(`Mensaje entrante creado: ${createdMessage.id}`); // Quitado logger info
       return createdMessage;
 
     } catch (error) {
@@ -253,7 +253,7 @@ class ChatwootClient {
          throw new Error('No se pudo obtener el ID del mensaje saliente creado desde Chatwoot');
       }
 
-      logger.info(`Mensaje saliente creado: ${createdMessage.id}`);
+      // logger.info(`Mensaje saliente creado: ${createdMessage.id}`); // Quitado logger info
       return createdMessage;
 
     } catch (error) {

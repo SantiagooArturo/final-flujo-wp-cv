@@ -78,7 +78,6 @@ app.post("/webhook", async (req, res) => {
 
           // Procesar cada mensaje
           for (const message of change.value.messages) {
-            logger.info(`Processing message of type: ${message.type}`);
 
             const metadata = change.value.metadata || {};
             const from = metadata.phone_number_id;
@@ -88,8 +87,6 @@ app.post("/webhook", async (req, res) => {
               logger.warn("Missing from or to in message");
               continue;
             }
-
-            logger.info(`Message from ${from} to ${to}`);
 
             // --- INICIO: Reportar mensaje ENTRANTE a Chatwoot ---
             try {
@@ -196,26 +193,20 @@ app.post("/webhook", async (req, res) => {
                   );
                   
                   if (conversation && conversation.id) {
-                    logger.info(`Chatwoot Conversation ID obtained: ${conversation.id}`);
                     
                     // Guardar el ID de conversación en la sesión para usarlo al enviar respuestas
                     try {
                       await sessionService.updateSession(to, {
                         chatwootConversationId: conversation.id,
                       });
-                      logger.info(`Chatwoot Conversation ID ${conversation.id} saved to session for user ${to}`);
                     } catch (sessionError) {
                       logger.error(`Error saving conversation ID to session: ${sessionError.message}`);
                     }
-                    
-                    // Usar el messageContent que ya fue formateado anteriormente
-                    logger.info(`Message content to report to Chatwoot: "${messageContent}"`);
+                  
                     
                     // Crear mensaje entrante en Chatwoot si hay contenido
                     if (messageContent) {
-                      logger.info(`Sending message to Chatwoot conversation ${conversation.id}`);
                       await chatwootClient.createIncomingMessage(conversation.id, messageContent);
-                      logger.info(`Reported incoming message to Chatwoot conversation ${conversation.id}`);
                     } else {
                       logger.warn('No message content extracted, skipping createIncomingMessage.');
                     }
@@ -251,19 +242,12 @@ app.post("/webhook", async (req, res) => {
                 await handlers.handleText(to, message.text.body);
               } else if (message.type === "interactive") {
                 if (message.interactive.type === "button_reply") {
-                  // Log detallado de la selección de botones
-                  logger.info(
-                    `👉 Usuario ${to} seleccionó botón: ID="${message.interactive.button_reply.id}", Texto="${message.interactive.button_reply.title}"`
-                  );
+                  
                   await handlers.handleButtonReply(
                     to,
                     message.interactive.button_reply.id
                   );
                 } else if (message.interactive.type === "list_reply") {
-                  // Log detallado de la selección de lista
-                  logger.info(
-                    `👉 Usuario ${to} seleccionó de lista: ID="${message.interactive.list_reply.id}", Texto="${message.interactive.list_reply.title}"`
-                  );
 
                   // Para list_reply, actualizamos la sesión con la información de la selección
                   const sessionService = require("../core/sessionService");
