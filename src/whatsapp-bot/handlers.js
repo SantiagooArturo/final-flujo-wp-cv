@@ -16,6 +16,7 @@ const axios = require('axios');
 const userService = require('../core/userService');
 const promoCodeService = require('../core/promoCodeService');
 const { handlePromoCode } = require('./handlers/promoHandlers');
+const { buffer } = require('stream/consumers');
 
 const handleStart = async (from) => {
   try {
@@ -805,7 +806,7 @@ const handleAudio = async (from, audio) => {
 
         const fileBuffer = await fs.readFile(tempFilePath);
         const fileInfo = {
-          filepath: fileBuffer,
+          buffer: fileBuffer,
           originalFilename: tempFilename,
           mimetype: audio.mime_type || 'audio/ogg',
         };

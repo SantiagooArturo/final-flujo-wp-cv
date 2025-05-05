@@ -2,7 +2,7 @@ const openaiUtil = require('../utils/openaiUtil');
 const logger = require('../utils/logger');
 const firebaseConfig = require('../config/firebase');
 const { getFirestore } = require('firebase-admin/firestore'); // Asegúrate de importar getFirestore
-const { sessionService } = require('./sessionService');
+const sessionService = require('./sessionService');
 /**
  * Generate an interview question based on job type
  * @param {string} type - Type of job (e.g., 'software', 'marketing', 'sales')
