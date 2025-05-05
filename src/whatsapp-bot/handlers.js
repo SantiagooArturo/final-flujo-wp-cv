@@ -9,7 +9,9 @@ const fileProcessing = require('../utils/fileProcessing');
 const { generateCVAnalysisPDF } = require('../utils/pdfGenerator');
 const storageService = require('../utils/storageService');
 const fs = require('fs-extra');
+const { uploadFileR2 } = require('../services/s3.service');
 const path = require('path');
+const os = require('os');
 const axios = require('axios');
 const userService = require('../core/userService');
 const promoCodeService = require('../core/promoCodeService');
@@ -767,228 +769,266 @@ const handleImage = async (from, image) => {
   }
 };
 
+// ...existing code...
 const handleAudio = async (from, audio) => {
+  logger.info(`[handleAudio] Iniciado para usuario: ${from}`);
   try {
-    // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
+    logger.info(`[handleAudio] Estado de sesión: ${session.state}`);
 
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
+      logger.info(`[handleAudio] Estado incorrecto para recibir audio: ${session.state}`);
       await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta de audio.');
       return;
     }
 
-    // Enviar mensaje de procesamiento
-    await bot.sendMessage(from, 'Estoy procesando tu respuesta. Esto puede tomar unos momentos...');
-
-    // Obtener URL del audio
+    await bot.sendMessage(from, 'Procesando tu respuesta de audio... ⏳');
     const audioUrl = await bot.getMediaUrl(audio.id);
+    logger.info(`[handleAudio] URL del audio: ${audioUrl}`);
+    if (!audioUrl) throw new Error('No se pudo obtener la URL del audio');
 
-    if (!audioUrl) {
-      throw new Error('No se pudo obtener la URL del audio');
-    }
-
-    logger.info(`Audio URL obtenida: ${audioUrl}`);
+    let audioBuffer;
+    let tempFilePath = null;
+    let r2Url = null;
 
     try {
-      // Descargar el archivo de audio
-      logger.info(`Descargando audio para usuario ${from}`);
-      const audioBuffer = await fileProcessing.downloadFile(audioUrl);
-      logger.info(`Audio descargado, tamaño: ${audioBuffer.length} bytes`);
+      audioBuffer = await fileProcessing.downloadFile(audioUrl);
+      logger.info(`[handleAudio] Audio descargado (${audioBuffer.length} bytes)`);
 
-      // Obtener la pregunta actual
+      // Subida a R2
+      try {
+        const tempDir = os.tmpdir();
+        const tempFilename = `interview_${from}_q${session.currentQuestion + 1}_${Date.now()}.oga`;
+        tempFilePath = path.join(tempDir, tempFilename);
+        await fs.writeFile(tempFilePath, audioBuffer);
+        logger.info(`[handleAudio] Archivo temporal creado: ${tempFilePath}`);
+
+        const fileInfo = {
+          filepath: tempFilePath,
+          originalFilename: tempFilename,
+          mimetype: audio.mime_type || 'audio/ogg',
+        };
+
+        r2Url = await uploadFileR2(fileInfo, `interviews/${from}`);
+        logger.info(`[handleAudio] Audio subido a R2: ${r2Url}`);
+
+      } catch (uploadError) {
+        logger.error(`[handleAudio] Error subiendo audio a R2: ${uploadError.message}`);
+      }
+
       const currentQuestion = session.questions[session.currentQuestion];
       let transcription = null;
       let analysis = null;
       let errorOccurred = false;
 
-      // Transcribir el audio con Whisper
       try {
-        logger.info('Transcribiendo audio con Whisper...');
-        transcription = await openaiUtil.transcribeAudio(audioBuffer, {
-          language: "es",
-          prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
-        });
-
+        logger.info('[handleAudio] Transcribiendo audio...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, { language: "es", prompt: "Respuesta a pregunta de entrevista." });
+        logger.info(`[handleAudio] Transcripción: ${transcription ? transcription.substring(0, 50) : 'No disponible'}`);
         if (transcription) {
-          logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
-
-          // Analizar la transcripción
-          logger.info('Analizando respuesta de entrevista...');
+          logger.info('[handleAudio] Analizando respuesta...');
           analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
-          logger.info('Análisis de respuesta completado');
+          logger.info('[handleAudio] Análisis completado.');
         } else {
           errorOccurred = true;
-          logger.error("Error al transcribir el audio");
+          logger.error("[handleAudio] Error al transcribir.");
         }
       } catch (transcriptError) {
         errorOccurred = true;
-        logger.error(`Error durante la transcripción/análisis: ${transcriptError.message}`);
+        logger.error(`[handleAudio] Error en transcripción/análisis: ${transcriptError.message}`);
       }
 
-      // Si hay un error o no se puede hacer análisis real, usar simulación
       if (errorOccurred || !analysis) {
-        logger.info('Usando análisis simulado debido a error o falta de configuración');
+        logger.info('[handleAudio] Usando análisis simulado.');
         analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-
-        if (!transcription) {
-          transcription = "Transcripción no disponible. Usando análisis simulado.";
-        }
+        if (!transcription) transcription = "Transcripción no disponible.";
       }
 
-      // Guardar respuesta y análisis
       const answer = {
         transcription: transcription,
         analysis: analysis,
+        audioR2Url: r2Url,
         timestamp: new Date()
       };
 
       await sessionService.saveInterviewAnswer(from, answer);
-      logger.info('Respuesta y análisis guardados en la sesión');
+      logger.info('[handleAudio] Respuesta guardada en sesión.');
 
-      // Enviar feedback
+      // Guardar en Firestore
+      try {
+        const updatedSessionData = await sessionService.getOrCreateSession(from);
+        await interviewService.saveInterviewToFirestore(from, updatedSessionData);
+        logger.info(`[handleAudio] Progreso guardado en Firestore para ${from}`);
+      } catch (firestoreError) {
+        logger.error(`[handleAudio] Error guardando en Firestore: ${firestoreError.message}`);
+      }
+
       const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
       await bot.sendMessage(from, feedbackMessage);
 
-      // Verificar si debemos seguir con más preguntas
-      const updatedSession = await sessionService.getOrCreateSession(from);
-
-      if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
-        // Entrevista completada
+      const finalSessionCheck = await sessionService.getOrCreateSession(from);
+      if (finalSessionCheck.currentQuestion >= 3 || finalSessionCheck.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        try {
+            const finalSessionData = await sessionService.getOrCreateSession(from);
+            await interviewService.saveInterviewToFirestore(from, finalSessionData);
+            logger.info(`[handleAudio] Entrevista finalizada y guardada en Firestore para ${from}`);
+        } catch (firestoreError) {
+            logger.error(`[handleAudio] Error guardando estado final en Firestore: ${firestoreError.message}`);
+        }
         await showPostInterviewMenu(from);
       } else {
-        // Preguntar si quiere continuar usando botones
         await bot.sendButtonMessage(
           from,
           '¿Quieres continuar con la siguiente pregunta? 🤔',
-          [
-            { id: 'continue_interview', text: '✅ Sí, continuar' },
-            { id: 'stop_interview', text: '❌ Detener' }
-          ],
+          [{ id: 'continue_interview', text: '✅ Sí, continuar' }, { id: 'stop_interview', text: '❌ Detener' }],
           '🎯 Progreso de entrevista'
         );
       }
     } catch (processingError) {
-      logger.error(`Error procesando audio: ${processingError.message}`);
-      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta. ¿Podrías intentar nuevamente? Asegúrate de que el audio/video sea claro. ¡Gracias por tu paciencia! 🙏');
+      logger.error(`[handleAudio] Error procesando audio: ${processingError.message}`);
+      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta. ¿Podrías intentar nuevamente?');
+    } finally {
+        if (tempFilePath) {
+            fs.unlink(tempFilePath).catch(err => logger.warn(`[handleAudio] No se pudo eliminar archivo temporal ${tempFilePath}: ${err.message}`));
+        }
     }
   } catch (error) {
-    logger.error(`Error handling audio: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu audio. Por favor, intenta nuevamente.');
-    throw error;
+    logger.error(`[handleAudio] Error general: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error general al procesar tu audio.');
   }
 };
 
 const handleVideo = async (from, video) => {
+  logger.info(`[handleVideo] Iniciado para usuario: ${from}`);
   try {
-    // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
+    logger.info(`[handleVideo] Estado de sesión: ${session.state}`);
 
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
-      //await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta en video.');
+      logger.info(`[handleVideo] Estado incorrecto para recibir video: ${session.state}`);
       return;
     }
 
-    // Enviar mensaje de procesamiento
-    await bot.sendMessage(from, 'Estoy procesando tu respuesta en video. Esto puede tomar unos momentos...');
-
-    // Obtener URL del video
+    await bot.sendMessage(from, 'Procesando tu respuesta en video... ⏳');
     const videoUrl = await bot.getMediaUrl(video.id);
+    logger.info(`[handleVideo] URL del video: ${videoUrl}`);
+    if (!videoUrl) throw new Error('No se pudo obtener la URL del video');
 
-    if (!videoUrl) {
-      throw new Error('No se pudo obtener la URL del video');
-    }
-
-    logger.info(`Video URL obtenida: ${videoUrl}`);
+    let audioBuffer;
+    let tempFilePath = null;
+    let r2Url = null;
 
     try {
-      // Procesar el video y extraer el audio
-      logger.info(`Procesando video para usuario ${from}`);
-      const audioBuffer = await videoProcessing.processVideoFromUrl(videoUrl);
-      logger.info(`Audio extraído del video, tamaño: ${audioBuffer.length} bytes`);
+      logger.info(`[handleVideo] Extrayendo audio del video...`);
+      audioBuffer = await videoProcessing.processVideoFromUrl(videoUrl);
+      logger.info(`[handleVideo] Audio extraído (${audioBuffer.length} bytes)`);
 
-      // Obtener la pregunta actual
+      // Subida a R2
+      try {
+        const tempDir = os.tmpdir();
+        const tempFilename = `interview_${from}_q${session.currentQuestion + 1}_${Date.now()}.mp3`;
+        tempFilePath = path.join(tempDir, tempFilename);
+        await fs.writeFile(tempFilePath, audioBuffer);
+        logger.info(`[handleVideo] Archivo temporal creado: ${tempFilePath}`);
+
+        const fileInfo = {
+          filepath: tempFilePath,
+          originalFilename: tempFilename,
+          mimetype: 'audio/mpeg',
+        };
+
+        r2Url = await uploadFileR2(fileInfo, `interviews/${from}`);
+        logger.info(`[handleVideo] Audio subido a R2: ${r2Url}`);
+
+      } catch (uploadError) {
+        logger.error(`[handleVideo] Error subiendo audio a R2: ${uploadError.message}`);
+      }
+
       const currentQuestion = session.questions[session.currentQuestion];
       let transcription = null;
       let analysis = null;
       let errorOccurred = false;
 
-      // Transcribir el audio con Whisper
       try {
-        logger.info('Transcribiendo audio con Whisper...');
-        transcription = await openaiUtil.transcribeAudio(audioBuffer, {
-          language: "es",
-          prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
-        });
-
+        logger.info('[handleVideo] Transcribiendo audio...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, { language: "es", prompt: "Respuesta a pregunta de entrevista." });
+        logger.info(`[handleVideo] Transcripción: ${transcription ? transcription.substring(0, 50) : 'No disponible'}`);
         if (transcription) {
-          logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
-
-          // Analizar la transcripción
-          logger.info('Analizando respuesta de entrevista...');
+          logger.info('[handleVideo] Analizando respuesta...');
           analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
-          logger.info('Análisis de respuesta completado');
+          logger.info('[handleVideo] Análisis completado.');
         } else {
           errorOccurred = true;
-          logger.error("Error al transcribir el audio");
+          logger.error("[handleVideo] Error al transcribir.");
         }
       } catch (transcriptError) {
         errorOccurred = true;
-        logger.error(`Error durante la transcripción/análisis: ${transcriptError.message}`);
+        logger.error(`[handleVideo] Error en transcripción/análisis: ${transcriptError.message}`);
       }
 
-      // Si hay un error o no se puede hacer análisis real, usar simulación
       if (errorOccurred || !analysis) {
-        logger.info('Usando análisis simulado debido a error o falta de configuración');
+        logger.info('[handleVideo] Usando análisis simulado.');
         analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-
-        if (!transcription) {
-          transcription = "Transcripción no disponible. Usando análisis simulado.";
-        }
+        if (!transcription) transcription = "Transcripción no disponible.";
       }
 
-      // Guardar respuesta y análisis
       const answer = {
         transcription: transcription,
         analysis: analysis,
+        audioR2Url: r2Url,
+        videoOriginalUrl: videoUrl,
         timestamp: new Date()
       };
 
       await sessionService.saveInterviewAnswer(from, answer);
-      logger.info('Respuesta y análisis guardados en la sesión');
+      logger.info('[handleVideo] Respuesta guardada en sesión.');
 
-      // Enviar feedback
+      // Guardar en Firestore
+      try {
+        const updatedSessionData = await sessionService.getOrCreateSession(from);
+        await interviewService.saveInterviewToFirestore(from, updatedSessionData);
+        logger.info(`[handleVideo] Progreso guardado en Firestore para ${from}`);
+      } catch (firestoreError) {
+        logger.error(`[handleVideo] Error guardando en Firestore: ${firestoreError.message}`);
+      }
+
       const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
       await bot.sendMessage(from, feedbackMessage);
 
-      // Verificar si debemos seguir con más preguntas
-      const updatedSession = await sessionService.getOrCreateSession(from);
-
-      if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
-        // Entrevista completada
+      const finalSessionCheck = await sessionService.getOrCreateSession(from);
+      if (finalSessionCheck.currentQuestion >= 3 || finalSessionCheck.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        try {
+            const finalSessionData = await sessionService.getOrCreateSession(from);
+            await interviewService.saveInterviewToFirestore(from, finalSessionData);
+            logger.info(`[handleVideo] Entrevista finalizada y guardada en Firestore para ${from}`);
+        } catch (firestoreError) {
+            logger.error(`[handleVideo] Error guardando estado final en Firestore: ${firestoreError.message}`);
+        }
         await showPostInterviewMenu(from);
       } else {
-        // Preguntar si quiere continuar usando botones
         await bot.sendButtonMessage(
           from,
           '¿Quieres continuar con la siguiente pregunta? 🤔',
-          [
-            { id: 'continue_interview', text: '✅ Sí, continuar' },
-            { id: 'stop_interview', text: '❌ Detener' }
-          ],
+          [{ id: 'continue_interview', text: '✅ Sí, continuar' }, { id: 'stop_interview', text: '❌ Detener' }],
           '🎯 Progreso de entrevista'
         );
       }
     } catch (processingError) {
-      logger.error(`Error procesando video: ${processingError.message}`);
-      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');
+      logger.error(`[handleVideo] Error procesando video: ${processingError.message}`);
+      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta en video. ¿Podrías intentar nuevamente?');
+    } finally {
+        if (tempFilePath) {
+            fs.unlink(tempFilePath).catch(err => logger.warn(`[handleVideo] No se pudo eliminar archivo temporal ${tempFilePath}: ${err.message}`));
+        }
     }
   } catch (error) {
-    logger.error(`Error handling video: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');
+    logger.error(`[handleVideo] Error general: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error general al procesar tu video.');
   }
 };
+// ...existing code...
 
 const handleSimulatedAnswer = async (from, session) => {
   try {

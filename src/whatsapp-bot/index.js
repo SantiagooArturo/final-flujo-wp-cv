@@ -8,9 +8,27 @@ const logger = require("../utils/logger");
 const sessionService = require("../core/sessionService");
 const chatwootClient = require("../utils/chatwootClient");
 const chatwootConfig = require("../config/chatwootConfig");
+const { uploadFileR2 } = require("../services/s3.service");
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() }); // Guarda el archivo en memoria
 
 const app = express();
 app.use(bodyParser.json());
+
+app.post('/test-upload', upload.single('file'), (req, res) => {
+  const file = req.file;
+  if (!file) {
+    return res.status(400).send('No file uploaded.');
+  }
+  uploadFileR2(file)
+    .then((url) => {
+      res.status(200).send(`File uploaded successfully: ${url}`);
+    })
+    .catch((error) => {
+      logger.error('Error uploading file:', error);
+      res.status(500).send('Error uploading file.');
+    });
+});
 
 // Servir archivos estáticos desde el directorio 'public'
 const publicDir = path.join(process.cwd(), "public");

@@ -1,5 +1,7 @@
 const openaiUtil = require('../utils/openaiUtil');
 const logger = require('../utils/logger');
+const firebaseConfig = require('../config/firebase');
+const { getFirestore } = require('firebase-admin/firestore'); // Asegúrate de importar getFirestore
 
 /**
  * Generate an interview question based on job type
@@ -439,10 +441,75 @@ function generateMockInterviewAnalysis(question) {
   return mockAnalysis;
 }
 
+/**
+ * Guarda o actualiza la información completa de una entrevista en Firestore,
+ * usando el userId como ID del documento.
+ * @param {string} userId - ID del usuario (ej. número de teléfono).
+ * @param {Object} sessionData - Datos de la sesión que contienen la información de la entrevista.
+ * @returns {Promise<string>} - ID del documento de entrevista guardado/actualizado (será el userId).
+ */
+const saveInterviewToFirestore = async (userId, sessionData) => {
+  logger.info('[saveInterviewToFirestore] Iniciando guardado de entrevista...');
+  if (!firebaseConfig.isInitialized()) {
+    logger.warn('[saveInterviewToFirestore] Firebase not initialized, skipping interview save.');
+    return null;
+  }
+
+  try {
+    logger.info('[saveInterviewToFirestore] Obteniendo instancia de Firestore...');
+    const db = firebaseConfig.getFirestore();
+    const interviewsCollection = db.collection('interviews');
+    const interviewDocRef = interviewsCollection.doc(); // ID aleatorio
+
+    logger.info('[saveInterviewToFirestore] Construyendo candidateInfo...');
+    const candidateInfo = {
+      nombre: sessionData.userName || "Nombre no disponible",
+      telefono: userId,
+      fechaEntrevista: sessionData.interviewStartTime || new Date(),
+      estado: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
+    };
+
+    logger.info('[saveInterviewToFirestore] Construyendo array de preguntas...');
+    const questions = (sessionData.questions || []).map((question, index) => {
+      const answer = (sessionData.answers || [])[index] || {};
+      return {
+        questionNumber: index + 1,
+        questionText: question.question || "Pregunta no disponible",
+        audioUrl: answer.audioR2Url || null,
+        videoUrl: answer.videoR2Url || null,
+        transcription: answer.transcription || null,
+        analysis: answer.analysis || null
+      };
+    });
+
+    logger.info('[saveInterviewToFirestore] Construyendo documento de entrevista...');
+    const interviewDoc = {
+      candidateInfo,
+      questions,
+      userId: userId,
+      jobPosition: sessionData.jobPosition || 'No especificado',
+      currentQuestionIndex: sessionData.currentQuestion ?? -1,
+      lastUpdatedAt: new Date()
+    };
+
+    logger.info('[saveInterviewToFirestore] Guardando documento en Firestore...');
+    await interviewDocRef.set(interviewDoc, { merge: true });
+
+    logger.info(`[saveInterviewToFirestore] Entrevista guardada/actualizada correctamente para userId: ${userId}`);
+    return interviewDocRef.id; // Devuelve el ID real del documento
+
+  } catch (error) {
+    logger.error(`[saveInterviewToFirestore] Error al guardar/actualizar entrevista para userId ${userId}: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
+  // ... tus otras exportaciones ...
   generateInterviewQuestion,
   analyzeVideoResponse,
   getDefaultQuestion,
   generateMockInterviewAnalysis,
-  normalizeJobType
-}; 
+  normalizeJobType,
+  saveInterviewToFirestore, // Asegúrate que esté exportada
+};
