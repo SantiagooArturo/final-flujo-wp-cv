@@ -439,10 +439,47 @@ function generateMockInterviewAnalysis(question) {
   return mockAnalysis;
 }
 
+/**
+ * Guarda una entrevista completa en Firestore usando subcolección 'questions'.
+ * @param {string} userId - ID del usuario (phoneNumber)
+ * @param {Object} candidateInfo - Información del candidato
+ * @param {Array} questionsAndAnswers - Array de objetos { questionNumber, questionText, audioUrl, videoUrl, transcription, analysis, timestamp }
+ * @returns {Promise<string>} - ID de la entrevista guardada
+ */
+const saveInterviewWithQuestions = async (userId, candidateInfo, questionsAndAnswers) => {
+  try {
+    const db = require('../config/firebase').getFirestore();
+    const interviewRef = db.collection('interviews').doc();
+    // Guardar datos generales
+    await interviewRef.set({
+      userId,
+      candidateInfo,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      status: 'completed',
+      totalQuestions: questionsAndAnswers.length
+    });
+    // Guardar cada pregunta como documento en la subcolección 'questions'
+    const questionsRef = interviewRef.collection('questions');
+    for (const qa of questionsAndAnswers) {
+      await questionsRef.doc(`question_${qa.questionNumber}`).set({
+        ...qa,
+        timestamp: qa.timestamp ? new Date(qa.timestamp) : new Date()
+      });
+    }
+    logger.info(`Entrevista guardada correctamente para usuario ${userId}, ID: ${interviewRef.id}`);
+    return interviewRef.id;
+  } catch (error) {
+    logger.error(`Error guardando entrevista: ${error.message}`);
+    throw error;
+  }
+};
+
 module.exports = {
   generateInterviewQuestion,
   analyzeVideoResponse,
   getDefaultQuestion,
   generateMockInterviewAnalysis,
-  normalizeJobType
-}; 
+  normalizeJobType,
+  saveInterviewWithQuestions
+};

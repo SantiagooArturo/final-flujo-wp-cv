@@ -839,7 +839,9 @@ const handleAudio = async (from, audio) => {
       const answer = {
         transcription: transcription,
         analysis: analysis,
-        timestamp: new Date()
+        timestamp: new Date(),
+        audioUrl: mediaInfo && mediaInfo.contentType && mediaInfo.contentType.startsWith('audio') ? mediaInfo.storagePath : undefined,
+        videoUrl: mediaInfo && mediaInfo.contentType && mediaInfo.contentType.startsWith('video') ? mediaInfo.storagePath : undefined
       };
 
       await sessionService.saveInterviewAnswer(from, answer);
@@ -854,6 +856,36 @@ const handleAudio = async (from, audio) => {
 
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
+        // Guardar la entrevista y preguntas en Firestore usando la función recomendada
+        const candidateInfo = {
+          nombre: updatedSession.userName || from,
+          posicion: updatedSession.jobPosition || 'No especificado',
+          proceso: updatedSession.jobPosition || 'No especificado',
+          modoTrabajo: 'Remoto',
+          salario: updatedSession.salary || '',
+          expectativaSalarial: updatedSession.salaryExpectation || '',
+          puntaje: calcularPuntajePromedio(updatedSession.answers),
+          fechaEntrevista: new Date().toISOString(),
+          telefono: from,
+          ubicacion: updatedSession.ubicacion || '',
+          disponibilidadInmediata: true,
+          estado: 'Completado'
+        };
+        const questionsAndAnswers = updatedSession.questions.map((q, i) => ({
+          questionNumber: i + 1,
+          questionText: q.question,
+          audioUrl: updatedSession.answers[i]?.audioUrl || null,
+          videoUrl: updatedSession.answers[i]?.videoUrl || null,
+          transcription: updatedSession.answers[i]?.transcription || '',
+          analysis: updatedSession.answers[i]?.analysis || {},
+          timestamp: updatedSession.answers[i]?.timestamp || new Date()
+        }));
+        const interviewService = require('../core/interviewService');
+        await interviewService.saveInterviewWithQuestions(
+          from,
+          candidateInfo,
+          questionsAndAnswers
+        );
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
         await showPostInterviewMenu(from);
       } else {
@@ -951,7 +983,9 @@ const handleVideo = async (from, video) => {
       const answer = {
         transcription: transcription,
         analysis: analysis,
-        timestamp: new Date()
+        timestamp: new Date(),
+        audioUrl: mediaInfo && mediaInfo.contentType && mediaInfo.contentType.startsWith('audio') ? mediaInfo.storagePath : undefined,
+        videoUrl: mediaInfo && mediaInfo.contentType && mediaInfo.contentType.startsWith('video') ? mediaInfo.storagePath : undefined
       };
 
       await sessionService.saveInterviewAnswer(from, answer);
@@ -966,6 +1000,36 @@ const handleVideo = async (from, video) => {
 
       if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         // Entrevista completada
+        // Guardar la entrevista y preguntas en Firestore usando la función recomendada
+        const candidateInfo = {
+          nombre: updatedSession.userName || from,
+          posicion: updatedSession.jobPosition || 'No especificado',
+          proceso: updatedSession.jobPosition || 'No especificado',
+          modoTrabajo: 'Remoto',
+          salario: updatedSession.salary || '',
+          expectativaSalarial: updatedSession.salaryExpectation || '',
+          puntaje: calcularPuntajePromedio(updatedSession.answers),
+          fechaEntrevista: new Date().toISOString(),
+          telefono: from,
+          ubicacion: updatedSession.ubicacion || '',
+          disponibilidadInmediata: true,
+          estado: 'Completado'
+        };
+        const questionsAndAnswers = updatedSession.questions.map((q, i) => ({
+          questionNumber: i + 1,
+          questionText: q.question,
+          audioUrl: updatedSession.answers[i]?.audioUrl || null,
+          videoUrl: updatedSession.answers[i]?.videoUrl || null,
+          transcription: updatedSession.answers[i]?.transcription || '',
+          analysis: updatedSession.answers[i]?.analysis || {},
+          timestamp: updatedSession.answers[i]?.timestamp || new Date()
+        }));
+        const interviewService = require('../core/interviewService');
+        await interviewService.saveInterviewWithQuestions(
+          from,
+          candidateInfo,
+          questionsAndAnswers
+        );
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
         await showPostInterviewMenu(from);
       } else {
