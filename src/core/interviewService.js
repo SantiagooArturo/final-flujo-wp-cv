@@ -475,8 +475,7 @@ const saveInterviewToFirestore = async (userId, sessionData) => {
       return {
         questionNumber: index + 1,
         questionText: question.question || "Pregunta no disponible",
-        audioUrl: answer.audioR2Url || null,
-        videoUrl: answer.videoR2Url || null,
+        mediaUrl: answer.audioR2Url || null,
         transcription: answer.transcription || null,
         analysis: answer.analysis || null
       };
