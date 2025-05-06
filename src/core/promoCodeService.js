@@ -84,4 +84,4 @@ module.exports = {
   validateCode,
   redeemCode,
   ensurePromoCodeExists,
-};
+};  
