@@ -454,7 +454,7 @@ const saveInterviewToFirestore = async (userId, sessionData) => {
     logger.warn('[saveInterviewToFirestore] Firebase not initialized, skipping interview save.');
     return null;
   }
-
+  logger.info(`[saveInterviewToFirestore] Datos de sesión recibidos para userId ${userId}: ${JSON.stringify(sessionData)}`);
   if (!sessionData.currentActiveInterviewId) {
     logger.error(`[saveInterviewToFirestore] No se encontró 'currentActiveInterviewId' en sessionData para userId: ${userId}. No se puede guardar la entrevista. Asegúrate de que se genera al iniciar la entrevista.`);
     return null; // Es crucial que este ID exista para saber qué documento actualizar.
