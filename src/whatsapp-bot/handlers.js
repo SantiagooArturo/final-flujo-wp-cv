@@ -917,33 +917,71 @@ const handleVideo = async (from, video) => {
     logger.info(`[handleVideo] URL del video: ${videoUrl}`);
     if (!videoUrl) throw new Error('No se pudo obtener la URL del video');
 
-    let videoBuffer;
-    let tempVideoPath = null;
-    let videoR2Url = null;
+    let audioBuffer;
+    let tempFilePath = null;
+    let r2Url = null;
 
     try {
-      // Descargar el video original
+      logger.info(`[handleVideo] Extrayendo audio del video...`);
       videoBuffer = await fileProcessing.downloadFile(videoUrl);
       logger.info(`[handleVideo] Video descargado (${videoBuffer.length} bytes)`);
 
-      // Guardar el video en un archivo temporal
-      const tempVideoFilename = `interview_${from}_q${session.currentQuestion + 1}_${Date.now()}.mp4`;
-      tempVideoPath = path.join(os.tmpdir(), tempVideoFilename);
-      await fs.writeFile(tempVideoPath, videoBuffer);
-      logger.info(`[handleVideo] Archivo temporal de video creado: ${tempVideoPath}`);
+      audioBuffer = await videoProcessing.processVideoFromUrl(videoUrl);
+      logger.info(`[handleVideo] Audio extraído (${audioBuffer.length} bytes)`);
 
-      // Subir el video a R2
-      const videoFileInfo = {
-        buffer: videoBuffer,
-        originalname: tempVideoFilename,
-        mimetype: 'video/mp4',
-      };
-      videoR2Url = await uploadFileR2(videoFileInfo, `interviews/${from}`);
-      logger.info(`[handleVideo] Video subido a R2: ${videoR2Url}`);
+      // Subida a R2
+      try {
+          // Guardar el video en un archivo temporal
+        const tempVideoFilename = `interview_${from}_q${session.currentQuestion + 1}_${Date.now()}.mp4`;
+        tempVideoPath = path.join(os.tmpdir(), tempVideoFilename);
+        await fs.writeFile(tempVideoPath, videoBuffer);
+        logger.info(`[handleVideo] Archivo temporal de video creado: ${tempVideoPath}`);
 
-      // Guardar la respuesta en la sesión (solo el video)
+        // Subir el video a R2
+        const videoFileInfo = {
+          buffer: videoBuffer,
+          originalname: tempVideoFilename,
+          mimetype: 'video/mp4',
+        };
+        r2Url = await uploadFileR2(videoFileInfo, `interviews/${from}`);
+        logger.info(`[handleVideo] Video subido a R2: ${r2Url}`);
+      } catch (uploadError) {
+        logger.error(`[handleVideo] Error subiendo video a R2: ${uploadError.message}`);
+      }
+
+      const currentQuestion = session.questions[session.currentQuestion];
+      let transcription = null;
+      let analysis = null;
+      let errorOccurred = false;
+
+      try {
+        logger.info('[handleVideo] Transcribiendo audio...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, { language: "es", prompt: "Respuesta a pregunta de entrevista." });
+        logger.info(`[handleVideo] Transcripción: ${transcription ? transcription.substring(0, 50) : 'No disponible'}`);
+        if (transcription) {
+          logger.info('[handleVideo] Analizando respuesta...');
+          analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
+          logger.info('[handleVideo] Análisis completado.');
+        } else {
+          errorOccurred = true;
+          logger.error("[handleVideo] Error al transcribir.");
+        }
+      } catch (transcriptError) {
+        errorOccurred = true;
+        logger.error(`[handleVideo] Error en transcripción/análisis: ${transcriptError.message}`);
+      }
+
+      if (errorOccurred || !analysis) {
+        logger.info('[handleVideo] Usando análisis simulado.');
+        analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
+        if (!transcription) transcription = "Transcripción no disponible.";
+      }
+
       const answer = {
-        videoR2Url: videoR2Url,
+        transcription: transcription,
+        analysis: analysis,
+        audioR2Url: r2Url,
+        videoOriginalUrl: videoUrl,
         timestamp: new Date()
       };
 
@@ -959,15 +997,35 @@ const handleVideo = async (from, video) => {
         logger.error(`[handleVideo] Error guardando en Firestore: ${firestoreError.message}`);
       }
 
-      await bot.sendMessage(from, '¡Tu video ha sido recibido y guardado correctamente!');
+      const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
+      await bot.sendMessage(from, feedbackMessage);
 
+      const finalSessionCheck = await sessionService.getOrCreateSession(from);
+      if (finalSessionCheck.currentQuestion >= 3 || finalSessionCheck.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
+        await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        try {
+            const finalSessionData = await sessionService.getOrCreateSession(from);
+            await interviewService.saveInterviewToFirestore(from, finalSessionData);
+            logger.info(`[handleVideo] Entrevista finalizada y guardada en Firestore para ${from}`);
+        } catch (firestoreError) {
+            logger.error(`[handleVideo] Error guardando estado final en Firestore: ${firestoreError.message}`);
+        }
+        await showPostInterviewMenu(from);
+      } else {
+        await bot.sendButtonMessage(
+          from,
+          '¿Quieres continuar con la siguiente pregunta? 🤔',
+          [{ id: 'continue_interview', text: '✅ Sí, continuar' }, { id: 'stop_interview', text: '❌ Detener' }],
+          '🎯 Progreso de entrevista'
+        );
+      }
     } catch (processingError) {
       logger.error(`[handleVideo] Error procesando video: ${processingError.message}`);
-      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu video. ¿Podrías intentar nuevamente?');
+      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta en video. ¿Podrías intentar nuevamente?');
     } finally {
-      if (tempVideoPath) {
-        fs.unlink(tempVideoPath).catch(err => logger.warn(`[handleVideo] No se pudo eliminar archivo temporal ${tempVideoPath}: ${err.message}`));
-      }
+        if (tempFilePath) {
+            fs.unlink(tempFilePath).catch(err => logger.warn(`[handleVideo] No se pudo eliminar archivo temporal ${tempFilePath}: ${err.message}`));
+        }
     }
   } catch (error) {
     logger.error(`[handleVideo] Error general: ${error.message}`);
