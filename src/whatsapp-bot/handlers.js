@@ -934,12 +934,12 @@ const handleVideo = async (from, video) => {
         await fs.writeFile(tempFilePath, audioBuffer);
         logger.info(`[handleVideo] Archivo temporal creado: ${tempFilePath}`);
 
+        const fileBuffer = await fs.readFile(tempFilePath);
         const fileInfo = {
-          filepath: tempFilePath,
-          originalFilename: tempFilename,
+          buffer: fileBuffer,
+          originalname: tempFilename,
           mimetype: 'audio/mpeg',
         };
-
         r2Url = await uploadFileR2(fileInfo, `interviews/${from}`);
         logger.info(`[handleVideo] Audio subido a R2: ${r2Url}`);
 

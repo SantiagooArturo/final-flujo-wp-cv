@@ -310,15 +310,22 @@ const updateSession = async (userId, data) => {
 
     const db = firebaseConfig.getFirestore();
     const sessionRef = db.collection(SESSIONS_COLLECTION).doc(userId.toString());
-    
+
+    // Verificar si el documento existe
+    const sessionDoc = await sessionRef.get();
     const updateData = {
       ...data,
       updatedAt: new Date()
     };
-    
-    await sessionRef.update(updateData);
-    logger.info(`Session updated for user ${userId}`);
-    
+
+    if (sessionDoc.exists) {
+      await sessionRef.update(updateData);
+      logger.info(`Session updated for user ${userId}`);
+    } else {
+      await sessionRef.set(updateData); // Crea el documento si no existe
+      logger.info(`Session created for user ${userId}`);
+    }
+
     // Obtener la sesión actualizada
     const updatedSession = await sessionRef.get();
     return updatedSession.data();
