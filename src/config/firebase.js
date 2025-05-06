@@ -164,18 +164,58 @@ const isInitialized = () => {
  */
 const getFirestore = () => {
   if (usingMockImplementation) {
+    if (!mockFirestore) { // Asegurar que el mock exista si se fuerza el uso
+        logger.warn('[getFirestore] usingMockImplementation is true, but mockFirestore is null. Creating mock now.');
+        mockFirestore = createMockFirestore();
+    }
+    logger.info('[getFirestore] Returning MOCK Firestore instance because usingMockImplementation is true.');
     return mockFirestore;
   }
   
-  if (!firebaseApp) {
-    initializeFirebase();
-    
+  // Intentar inicializar si aún no se ha hecho y no estamos en modo mock forzado.
+  // Esto es una salvaguarda, idealmente initializeFirebase() se llama una vez al inicio.
+  if (!isInitialized()) {
+    try {
+      logger.warn('[getFirestore] Firebase not initialized, attempting to initialize now...');
+      initializeFirebase(); // initializeFirebase puede lanzar un error o activar el mock si falla
+    } catch (initError) {
+        logger.error(`[getFirestore] Error during on-demand initialization: ${initError.message}. Will attempt to use mock.`);
+        // No es necesario activar usingMockImplementation aquí si initializeFirebase ya lo hace al fallar
+    }
+    // Verificar de nuevo si la inicialización bajo demanda activó el mock
     if (usingMockImplementation) {
-      return mockFirestore;
+        logger.info('[getFirestore] Returning MOCK Firestore instance after on-demand initialization led to mock.');
+        if (!mockFirestore) mockFirestore = createMockFirestore();
+        return mockFirestore;
     }
   }
   
-  return admin.firestore();
+  if (!isInitialized() || !admin.apps.length || !admin.firestore) {
+      logger.error('[getFirestore] CRITICAL: Firebase not properly initialized or admin.firestore is not available even after attempt. Falling back to MOCK.');
+      if (!mockFirestore) {
+        mockFirestore = createMockFirestore();
+      }
+      usingMockImplementation = true; // Marcar que estamos usando mock como último recurso
+      return mockFirestore; 
+  }
+  
+  const firestoreInstance = admin.firestore();
+  logger.info(`[getFirestore] REAL admin.firestore() instance type: ${typeof firestoreInstance}`);
+  if (firestoreInstance && typeof firestoreInstance.collection === 'function') {
+    logger.info('[getFirestore] REAL instance has a .collection method.');
+  } else {
+    logger.error('[getFirestore] CRITICAL: REAL instance DOES NOT have a .collection method or is invalid. Returning MOCK as fallback.');
+    // Loguear las propiedades del objeto para ver qué es
+    if (firestoreInstance) {
+        logger.info(`[getFirestore] Properties of firestoreInstance: ${Object.keys(firestoreInstance).join(', ')}`);
+    }
+    if (!mockFirestore) { // Asegurar que el mock exista
+        mockFirestore = createMockFirestore();
+    }
+    usingMockImplementation = true; // Marcar que estamos usando mock
+    return mockFirestore;
+  }
+  return firestoreInstance;
 };
 
 /**
