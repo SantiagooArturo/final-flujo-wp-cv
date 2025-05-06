@@ -224,19 +224,50 @@ const getFirestore = () => {
  */
 const getStorage = () => {
   if (usingMockImplementation) {
-    return createMockStorage();
+    if (!mockStorage) { // Asumiendo que tienes una variable mockStorage similar a mockFirestore
+        logger.warn('[getStorage] usingMockImplementation is true, but mockStorage is null. Creating mock now.');
+        mockStorage = createMockStorage(); // Debes tener una variable global mockStorage
+    }
+    logger.info('[getStorage] Returning MOCK Storage instance because usingMockImplementation is true.');
+    return mockStorage;
   }
-  
-  if (!firebaseApp) {
-    initializeFirebase();
-    
+
+  if (!isInitialized()) {
+    try {
+      logger.warn('[getStorage] Firebase not initialized, attempting to initialize now...');
+      initializeFirebase();
+    } catch (initError) {
+      logger.error(`[getStorage] Error during on-demand initialization: ${initError.message}. Will use mock.`);
+      // initializeFirebase debería setear usingMockImplementation si falla críticamente
+    }
     if (usingMockImplementation) {
-      return createMockStorage();
+      logger.info('[getStorage] Returning MOCK Storage instance after on-demand initialization led to mock.');
+      if (!mockStorage) mockStorage = createMockStorage();
+      return mockStorage;
     }
   }
+
+  if (!isInitialized() || !admin.apps.length || !admin.storage) {
+    logger.error('[getStorage] CRITICAL: Firebase not properly initialized or admin.storage is not available. Falling back to MOCK.');
+    if (!mockStorage) mockStorage = createMockStorage();
+    usingMockImplementation = true;
+    return mockStorage;
+  }
+
+  // Asegúrate de que firebaseApp esté definido si lo vas a usar explícitamente.
+  // O simplemente confía en la app por defecto si solo tienes una.
+  // const storageInstance = firebaseApp ? admin.storage(firebaseApp).bucket() : admin.storage().bucket();
+  // Por simplicidad, si initializeFirebase() asigna firebaseApp o si solo hay una app:
+  const storageInstance = admin.storage().bucket(process.env.FIREBASE_STORAGE_BUCKET || undefined);
   
-  return admin.storage().bucket();
+  logger.info(`[getStorage] REAL admin.storage().bucket() instance obtained for bucket: ${storageInstance.name}`);
+  return storageInstance;
 };
+
+// ...existing code...
+// Asegúrate de declarar mockStorage globalmente si no lo has hecho:
+let mockStorage = null; 
+// ...existing code...
 
 module.exports = {
   initializeFirebase,
