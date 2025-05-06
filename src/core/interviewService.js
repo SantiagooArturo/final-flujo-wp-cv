@@ -454,18 +454,26 @@ const saveInterviewToFirestore = async (userId, sessionData) => {
     logger.warn('[saveInterviewToFirestore] Firebase not initialized, skipping interview save.');
     return null;
   }
+  logger.info(`[saveInterviewToFirestore] Datos de sesión recibidos para userId ${userId}: ${JSON.stringify(sessionData)}`);
+  if (!sessionData.currentActiveInterviewId) {
+    logger.error(`[saveInterviewToFirestore] No se encontró 'currentActiveInterviewId' en sessionData para userId: ${userId}. No se puede guardar la entrevista. Asegúrate de que se genera al iniciar la entrevista.`);
+    return null; // Es crucial que este ID exista para saber qué documento actualizar.
+  }
 
   try {
     logger.info('[saveInterviewToFirestore] Obteniendo instancia de Firestore...');
     const db = firebaseConfig.getFirestore();
     const interviewsCollection = db.collection('interviews');
-    const interviewDocRef = interviewsCollection.doc(); // ID aleatorio
+    // Usar el ID de la entrevista activa que está en la sesión del usuario
+    const interviewDocRef = interviewsCollection.doc(sessionData.currentActiveInterviewId);
+
+    logger.info(`[saveInterviewToFirestore] ID del documento de entrevista a usar: ${sessionData.currentActiveInterviewId}`);
 
     logger.info('[saveInterviewToFirestore] Construyendo candidateInfo...');
     const candidateInfo = {
       nombre: sessionData.userName || "Nombre no disponible",
-      telefono: userId,
-      fechaEntrevista: sessionData.interviewStartTime || new Date(),
+      telefono: userId, // El userId sigue siendo relevante para saber quién es el candidato
+      fechaEntrevista: sessionData.interviewStartTime || new Date(), // Hora de inicio de esta instancia
       estado: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
     };
 
@@ -477,6 +485,7 @@ const saveInterviewToFirestore = async (userId, sessionData) => {
         questionText: question.question || "Pregunta no disponible",
         audioUrl: answer.audioR2Url || null,
         videoUrl: answer.videoR2Url || null,
+        mediaUrl: answer.mediaUrl || answer.audioR2Url || null, // Usar mediaUrl si existe, sino audioR2Url por retrocompatibilidad
         transcription: answer.transcription || null,
         analysis: answer.analysis || null
       };
@@ -486,23 +495,26 @@ const saveInterviewToFirestore = async (userId, sessionData) => {
     const interviewDoc = {
       candidateInfo,
       questions,
-      userId: userId,
+      userId: userId, // Guardar el userId en el documento de la entrevista para poder buscar todas las entrevistas de un usuario
       jobPosition: sessionData.jobPosition || 'No especificado',
       currentQuestionIndex: sessionData.currentQuestion ?? -1,
-      lastUpdatedAt: new Date()
+      interviewStartTime: sessionData.interviewStartTime || new Date(), // Redundante con candidateInfo pero puede ser útil
+      lastUpdatedAt: new Date(),
+      // El estado de la entrevista en sí mismo, no el estado de la sesión general
+      status: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
     };
 
     logger.info('[saveInterviewToFirestore] Guardando documento en Firestore...');
-    await interviewDocRef.set(interviewDoc, { merge: true });
+    await interviewDocRef.set(interviewDoc, { merge: true }); // merge: true es importante para actualizar
 
-    logger.info(`[saveInterviewToFirestore] Entrevista guardada/actualizada correctamente para userId: ${userId}`);
-    return interviewDocRef.id; // Devuelve el ID real del documento
-
+    logger.info(`[saveInterviewToFirestore] Entrevista guardada/actualizada correctamente con ID: ${sessionData.currentActiveInterviewId} para userId: ${userId}`);
+    return sessionData.currentActiveInterviewId; // Devuelve el ID de la entrevista
   } catch (error) {
-    logger.error(`[saveInterviewToFirestore] Error al guardar/actualizar entrevista para userId ${userId}: ${error.message}`);
+    logger.error(`[saveInterviewToFirestore] Error al guardar/actualizar entrevista con ID ${sessionData.currentActiveInterviewId} para userId ${userId}: ${error.message}`);
     throw error;
   }
 };
+// ...existing code...
 
 module.exports = {
   // ... tus otras exportaciones ...
