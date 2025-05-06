@@ -207,13 +207,32 @@ const saveInterviewAnswer = async (userId, answer) => {
  * @returns {Promise<Object>} Sesión actualizada
  */
 const startInterview = async (userId) => {
-  return updateSessionState(userId, SessionState.INTERVIEW_STARTED, {
-    questions: [],
-    answers: [],
-    feedback: [],
-    currentQuestion: 0,
-    updatedAt: new Date()
-  });
+  let newInterviewId = null;
+  try {
+    if (firebaseConfig.isInitialized()) {
+      const db = firebaseConfig.getFirestore();
+      newInterviewId = db.collection('interviews').doc().id; // Genera un ID único para la nueva entrevista
+    } else {
+      // Fallback si Firebase no está inicializado (para pruebas locales sin conexión, etc.)
+      newInterviewId = `mock_interview_${userId}_${Date.now()}`;
+      logger.warn(`Firebase not initialized, using mock interview ID: ${newInterviewId}`);
+    }
+
+    return updateSessionState(userId, SessionState.INTERVIEW_STARTED, {
+      questions: [],
+      answers: [],
+      feedback: [],
+      currentQuestion: 0,
+      interviewStartTime: new Date(), // Registrar el inicio de esta instancia de entrevista
+      currentActiveInterviewId: newInterviewId, // Guardar el ID de la entrevista activa en la sesión
+      updatedAt: new Date()
+    });
+  } catch (error) {
+    logger.error(`Error starting interview for user ${userId}: ${error.message}`);
+    // Devolver un estado que refleje el fallo o la sesión anterior si es más seguro
+    const session = await getOrCreateSession(userId); // Obtener sesión actual para no perderla
+    return session; // O manejar el error de forma más específica
+  }
 };
 
 /**
