@@ -1,6 +1,7 @@
 const admin = require('firebase-admin'); // <--- AÑADIR ESTA LÍNEA
 const { getFirestore } = require('../config/firebase'); // Asumiendo que así obtienes getFirestore
 const logger = require('../utils/logger'); // Asumiendo que así obtienes logger
+const { ensureDir } = require('fs-extra');
 // ...otros require que puedas tener...
 
 const PROMO_CODES_COLLECTION = 'promotionalCodes'; // Asegúrate que esta constante esté definida
@@ -73,5 +74,5 @@ const redeemCode = async (userId, codeData) => {
 module.exports = {
   validateCode,
   redeemCode,
-  // ...otras funciones que exportes
+  ensurePromoCodeExists,
 };
