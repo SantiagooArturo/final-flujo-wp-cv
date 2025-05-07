@@ -31,6 +31,7 @@ const registerOrUpdateUser = async (userId, userData = {}) => {
         id: userId,
         name: userData.name || 'Unknown',
         phoneNumber: userId,
+        career: userData.career || 'Unknown', 
         createdAt: new Date(),
         updatedAt: new Date(),
         totalCVAnalyzed: 0,
@@ -433,6 +434,40 @@ const getTransactionHistory = async (userId) => {
   }
 };
 
+/**
+ * Estima el tamaño de los datos de un documento de usuario en Firestore.
+ * @param {string} userId - ID del usuario.
+ * @returns {Promise<number>} Tamaño estimado en bytes, o -1 si el usuario no existe o hay un error.
+ */
+const estimateUserDocumentSize = async (userId) => {
+  try {
+    if (!firebaseConfig.isInitialized()) {
+      logger.warn('Firebase not initialized, cannot estimate document size.');
+      return -1;
+    }
+
+    const db = firebaseConfig.getFirestore();
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      logger.info(`User document ${userId} does not exist. Cannot estimate size.`);
+      return -1;
+    }
+
+    const userData = userDoc.data();
+    const jsonString = JSON.stringify(userData);
+    const sizeInBytes = Buffer.byteLength(jsonString, 'utf8'); // Más preciso para UTF-8
+
+    logger.info(`Estimated size for user document ${userId}: ${sizeInBytes} bytes.`);
+    return sizeInBytes;
+
+  } catch (error) {
+    logger.error(`Error estimating user document size for ${userId}: ${error.message}`);
+    return -1;
+  }
+};
+
 module.exports = {
   registerOrUpdateUser,
   recordCVAnalysis,
@@ -445,5 +480,6 @@ module.exports = {
   getRemainingCVCredits,
   recordTransaction,
   getTotalSpent,
-  getTransactionHistory
-}; 
+  getTransactionHistory,
+  estimateUserDocumentSize
+};

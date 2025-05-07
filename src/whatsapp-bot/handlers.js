@@ -315,7 +315,7 @@ const handleText = async (from, text) => {
         const codeData = await promoCodeService.validateCode(code);
         if (!codeData) {
           logger.error(`Código UCAL20 no encontrado o inactivo en Firebase`);
-          await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte mencionando "error UCAL20".');
+          await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte. ');
           return;
         }
         
