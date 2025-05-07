@@ -37,7 +37,9 @@ const validateCode = async (code) => {
     const docSnap = await codeRef.get();
     if (!docSnap.exists) return null;
     const codeData = docSnap.data();
-    if (!codeData.estado || codeData.usedBy) return null;
+    // Modificación: Se elimina la comprobación de codeData.usedBy aquí.
+    // La lógica de si un usuario específico ya usó el código está en redeemCode.
+    if (!codeData.estado) return null; 
     return { id: docSnap.id, ...codeData };
   } catch (error) {
     logger.error(`Error validating promo code ${code}: ${error.message}`);
