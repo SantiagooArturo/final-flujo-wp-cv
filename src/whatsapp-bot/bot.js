@@ -247,10 +247,7 @@ class WhatsAppBot {
           { headers }
         );
         
-        logger.info(`Media API Response: ${JSON.stringify(response.data, null, 2)}`);
-        
         if (response.data && response.data.url) {
-          logger.info(`Document URL found: ${response.data.url}`);
           return response.data.url;
         } else {
           logger.warn('No URL found in media API response');
