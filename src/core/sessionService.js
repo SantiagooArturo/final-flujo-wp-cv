@@ -77,7 +77,6 @@ const getOrCreateSession = async (userId) => {
     } else {
       // Devolver sesión existente
       const sessionData = sessionDoc.data();
-      logger.info(`Session retrieved for user: ${userId}, state: ${sessionData.state}`);
       return sessionData;
     }
   } catch (error) {

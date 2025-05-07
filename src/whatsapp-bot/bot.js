@@ -60,7 +60,6 @@ class WhatsAppBot {
 
       // Reportar mensaje a Chatwoot
       await chatwootClient.createOutgoingMessage(conversationId, content);
-      logger.info(`Mensaje saliente reportado a Chatwoot, conversación ${conversationId}`);
     } catch (error) {
       logger.error(`Error al reportar mensaje a Chatwoot: ${error.message}`);
       // No lanzar el error, solo registrarlo - no queremos que un error en Chatwoot interrumpa la comunicación con WhatsApp

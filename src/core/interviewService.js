@@ -446,6 +446,27 @@ function generateMockInterviewAnalysis(question) {
 }
 
 /**
+ * Helper function to safely convert various date inputs to a JavaScript Date object.
+ * @param {*} dateInput - The input to convert (Firestore Timestamp, JS Date, string, number).
+ * @returns {Date|null} A valid JavaScript Date object or null if conversion fails.
+ */
+const safeConvertToJsDate = (dateInput) => {
+  if (!dateInput) return null;
+  if (dateInput.toDate && typeof dateInput.toDate === 'function') { // Firestore Timestamp
+    return dateInput.toDate();
+  }
+  if (dateInput instanceof Date && !isNaN(dateInput)) { // JavaScript Date
+    return dateInput;
+  }
+  const parsedDate = new Date(dateInput); // Attempt to parse string or number
+  if (parsedDate instanceof Date && !isNaN(parsedDate)) {
+    return parsedDate;
+  }
+  logger.warn(`[safeConvertToJsDate] Could not convert to valid JS Date: ${JSON.stringify(dateInput)}`);
+  return null;
+};
+
+/**
  * Guarda o actualiza la información completa de una entrevista en Firestore,
  * añadiéndola al historial de entrevistas del usuario en la colección 'users'.
  * @param {string} userId - ID del usuario (ej. número de teléfono).
@@ -456,68 +477,63 @@ const saveInterviewToFirestore = async (userId, sessionData) => {
   logger.info(`[saveInterviewToFirestore] Iniciando guardado de entrevista para usuario: ${userId}`);
   if (!firebaseConfig.isInitialized()) {
     logger.warn('[saveInterviewToFirestore] Firebase not initialized, skipping interview save.');
-    return userId; // O null si es más apropiado para el flujo de llamada
+    return userId;
   }
 
   try {
     const db = firebaseConfig.getFirestore();
-    // Referencia al documento del usuario en la colección 'users'
     const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
 
-    // Información del candidato para la entrada de la entrevista
+    const jsInterviewStartTime = safeConvertToJsDate(sessionData.interviewStartTime) || new Date();
+
     const candidateInfo = {
-      nombre: sessionData.userName || "Nombre no disponible", // Asumiendo que sessionData puede tener userName
-      // telefono: userId, // Redundante, ya que es el ID del documento del usuario
-      fechaEntrevista: admin.firestore.Timestamp.fromDate(sessionData.interviewStartTime || new Date()),
+      nombre: sessionData.userName || "Nombre no disponible",
+      fechaEntrevista: admin.firestore.Timestamp.fromDate(jsInterviewStartTime), // Corregido
       estado: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
     };
 
-    // Mapeo de preguntas y respuestas
     const questionsAndAnswers = (sessionData.questions || []).map((question, index) => {
       const answer = (sessionData.answers || [])[index] || {};
+      const jsAnswerTimestamp = safeConvertToJsDate(answer.timestamp);
+      
       return {
         questionNumber: index + 1,
         questionText: question.question || "Pregunta no disponible",
         mediaUrl: answer.audioR2Url || answer.videoR2Url || null,
         transcription: answer.transcription || null,
         analysis: answer.analysis || null,
-        answerTimestamp: answer.timestamp ? admin.firestore.Timestamp.fromDate(new Date(answer.timestamp)) : null
+        answerTimestamp: jsAnswerTimestamp ? admin.firestore.Timestamp.fromDate(jsAnswerTimestamp) : null // Corregido
       };
     });
 
-    // Construir el objeto de entrada para el historial de entrevistas
     const interviewEntry = {
-      interviewId: db.collection('temp').doc().id, // Genera un ID único para esta entrada de entrevista
+      interviewId: db.collection('temp').doc().id,
       candidateInfo,
       questionsAndAnswers,
       jobPosition: sessionData.jobPosition || 'No especificado',
       interviewStatus: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
-      startedAt: admin.firestore.Timestamp.fromDate(sessionData.interviewStartTime || new Date()),
+      startedAt: admin.firestore.Timestamp.fromDate(jsInterviewStartTime), // Corregido
       completedAt: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? admin.firestore.Timestamp.now() : null,
       lastUpdatedAt: admin.firestore.Timestamp.now()
     };
 
     logger.info(`[saveInterviewToFirestore] Intentando añadir entrevista al historial del usuario: ${userId}`);
     
-    // Actualizar el documento del usuario añadiendo la nueva entrevista al array 'interviewHistory'
-    // Se asume que el documento del usuario ya existe. Si no, update() fallará.
-    // userService.registerOrUpdateUser debería encargarse de la creación inicial del usuario.
     await userRef.update({
       interviewHistory: admin.firestore.FieldValue.arrayUnion(interviewEntry),
-      lastInterviewActivity: admin.firestore.Timestamp.now() // Campo para rastrear la última actividad de entrevista
+      lastInterviewActivity: admin.firestore.Timestamp.now()
     });
 
     logger.info(`[saveInterviewToFirestore] Entrevista añadida correctamente al historial del usuario: ${userId}`);
-    return userId; // Devuelve el ID del usuario, ya que es el documento que se actualizó.
+    return userId;
 
   } catch (error) {
     logger.error(`[saveInterviewToFirestore] Error al guardar entrevista en historial para userId ${userId}: ${error.message}`);
-    // Considerar manejar el caso donde el documento del usuario no existe, si es necesario.
     throw error;
   }
 };
 
-// ...existing code...
+
 module.exports = {
   generateInterviewQuestion,
   analyzeVideoResponse,
@@ -526,4 +542,3 @@ module.exports = {
   normalizeJobType,
   saveInterviewToFirestore,
 };
-

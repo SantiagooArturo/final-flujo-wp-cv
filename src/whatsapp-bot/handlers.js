@@ -275,7 +275,6 @@ const handleText = async (from, text) => {
   try {
     logger.info('Firebase already initialized');
     const session = await sessionService.getOrCreateSession(from);
-    logger.info(`Session retrieved for user: ${from}, state: ${session.state}`);
 
     logger.info(`Handling text message from user ${from} in state: ${session.state}`);
 
@@ -1851,17 +1850,13 @@ Responde con un JSON que tenga los siguientes campos:
  * @returns {Promise<void>}
  */
 const handleButtonReply = async (from, buttonId) => {
-  logger.info(`Button reply received from user ${from}: ${buttonId}`);
 
   try {
     // Obtener el estado actual de la sesión
     const session = await sessionService.getOrCreateSession(from);
     const currentState = session.state;
-    logger.info(`Session retrieved for user: ${from}, state: ${currentState}`);
-
     // Si el ID comienza con 'package_', redirigir a handlePackageSelection
     if (buttonId.startsWith('package_')) {
-      logger.info(`Redirecting package selection from button handler: ${buttonId}`);
       await handlePackageSelection(from, buttonId);
       return;
     }
@@ -2030,8 +2025,6 @@ const sendPostCVOptions = async (from, analysis = null) => {
     // Verificar si el usuario ya ha analizado un CV antes
     const totalAnalysisCount = await userService.getCVAnalysisCount(from);
     const hasAnalyzedCVBefore = totalAnalysisCount > 1;
-    logger.info(`Session retrieved for user: ${from}, state: ${await sessionService.getOrCreateSession(from).then(session => session.state)}`);
-
     // Definir las opciones del menú post-análisis
     let menuButtons = [
       { id: 'start_interview', text: '🎯 Simular entrevista' }
