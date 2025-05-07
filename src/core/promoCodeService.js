@@ -1,11 +1,30 @@
-const admin = require('firebase-admin'); // <--- AÑADIR ESTA LÍNEA
-const { getFirestore } = require('../config/firebase'); // Asumiendo que así obtienes getFirestore
-const logger = require('../utils/logger'); // Asumiendo que así obtienes logger
-const { ensureDir } = require('fs-extra');
-// ...otros require que puedas tener...
+const { getFirestore } = require('../config/firebase');
+const logger = require('../utils/logger');
+const admin = require('firebase-admin');
 
-const PROMO_CODES_COLLECTION = 'promotionalCodes'; // Asegúrate que esta constante esté definida
-const USERS_COLLECTION = 'users'; // Asegúrate que esta constante esté definida
+const PROMO_CODES_COLLECTION = 'promotionalCodes';
+const USERS_COLLECTION = 'users';
+
+const ensurePromoCodeExists = async (codeId, defaultData) => {
+  try {
+    const db = getFirestore();
+    const codeRef = db.collection('promotionalCodes').doc(codeId);
+    const docSnap = await codeRef.get();
+    
+    if (!docSnap.exists) {
+      logger.info(`Creando código promocional ${codeId} en Firebase`);
+      await codeRef.set({
+        ...defaultData,
+        createdAt: new Date()
+      });
+      return true;
+    }
+    return true;
+  } catch (error) {
+    logger.error(`Error al verificar/crear código promocional: ${error.message}`);
+    return false;
+  }
+};
 
 /**
  * Valida un código promocional.
@@ -55,7 +74,7 @@ const redeemCode = async (userId, codeData) => {
           hasUnlimitedAccess: true,
           redeemedPromoCodes: admin.firestore.FieldValue.arrayUnion(codeData.id),
           promoSource: codeData.source,
-          lastUpdatedAt: new Date(), // Considera usar admin.firestore.Timestamp.now() para consistencia
+          lastUpdatedAt: new Date(),
         },
         { merge: true }
       );
@@ -68,8 +87,6 @@ const redeemCode = async (userId, codeData) => {
     return false;
   }
 };
-
-// ...resto de tus funciones como ensurePromoCodeExists, etc.
 
 module.exports = {
   validateCode,
