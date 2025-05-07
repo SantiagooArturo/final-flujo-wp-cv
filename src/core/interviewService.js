@@ -3,6 +3,10 @@ const logger = require('../utils/logger');
 const firebaseConfig = require('../config/firebase');
 const { getFirestore } = require('firebase-admin/firestore'); // Asegúrate de importar getFirestore
 const sessionService = require('./sessionService');
+const admin = require('firebase-admin');
+
+const USERS_COLLECTION = 'users';
+
 /**
  * Generate an interview question based on job type
  * @param {string} type - Type of job (e.g., 'software', 'marketing', 'sales')
@@ -443,72 +447,83 @@ function generateMockInterviewAnalysis(question) {
 
 /**
  * Guarda o actualiza la información completa de una entrevista en Firestore,
- * usando el userId como ID del documento.
+ * añadiéndola al historial de entrevistas del usuario en la colección 'users'.
  * @param {string} userId - ID del usuario (ej. número de teléfono).
  * @param {Object} sessionData - Datos de la sesión que contienen la información de la entrevista.
- * @returns {Promise<string>} - ID del documento de entrevista guardado/actualizado (será el userId).
+ * @returns {Promise<string>} - ID del documento del usuario actualizado.
  */
 const saveInterviewToFirestore = async (userId, sessionData) => {
-  logger.info('[saveInterviewToFirestore] Iniciando guardado de entrevista...');
+  logger.info(`[saveInterviewToFirestore] Iniciando guardado de entrevista para usuario: ${userId}`);
   if (!firebaseConfig.isInitialized()) {
     logger.warn('[saveInterviewToFirestore] Firebase not initialized, skipping interview save.');
-    return null;
+    return userId; // O null si es más apropiado para el flujo de llamada
   }
 
   try {
-    logger.info('[saveInterviewToFirestore] Obteniendo instancia de Firestore...');
     const db = firebaseConfig.getFirestore();
-    const interviewsCollection = db.collection('interviews');
-    const interviewDocRef = interviewsCollection.doc(); // ID aleatorio
+    // Referencia al documento del usuario en la colección 'users'
+    const userRef = db.collection(USERS_COLLECTION).doc(userId.toString());
 
-    logger.info('[saveInterviewToFirestore] Construyendo candidateInfo...');
+    // Información del candidato para la entrada de la entrevista
     const candidateInfo = {
-      nombre: sessionData.userName || "Nombre no disponible",
-      telefono: userId,
-      fechaEntrevista: sessionData.interviewStartTime || new Date(),
+      nombre: sessionData.userName || "Nombre no disponible", // Asumiendo que sessionData puede tener userName
+      // telefono: userId, // Redundante, ya que es el ID del documento del usuario
+      fechaEntrevista: admin.firestore.Timestamp.fromDate(sessionData.interviewStartTime || new Date()),
       estado: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
     };
 
-    logger.info('[saveInterviewToFirestore] Construyendo array de preguntas...');
-    const questions = (sessionData.questions || []).map((question, index) => {
+    // Mapeo de preguntas y respuestas
+    const questionsAndAnswers = (sessionData.questions || []).map((question, index) => {
       const answer = (sessionData.answers || [])[index] || {};
       return {
         questionNumber: index + 1,
         questionText: question.question || "Pregunta no disponible",
-        mediaUrl: answer.audioR2Url || null,
+        mediaUrl: answer.audioR2Url || answer.videoR2Url || null,
         transcription: answer.transcription || null,
-        analysis: answer.analysis || null
+        analysis: answer.analysis || null,
+        answerTimestamp: answer.timestamp ? admin.firestore.Timestamp.fromDate(new Date(answer.timestamp)) : null
       };
     });
 
-    logger.info('[saveInterviewToFirestore] Construyendo documento de entrevista...');
-    const interviewDoc = {
+    // Construir el objeto de entrada para el historial de entrevistas
+    const interviewEntry = {
+      interviewId: db.collection('temp').doc().id, // Genera un ID único para esta entrada de entrevista
       candidateInfo,
-      questions,
-      userId: userId,
+      questionsAndAnswers,
       jobPosition: sessionData.jobPosition || 'No especificado',
-      currentQuestionIndex: sessionData.currentQuestion ?? -1,
-      lastUpdatedAt: new Date()
+      interviewStatus: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? "Completado" : "En Progreso",
+      startedAt: admin.firestore.Timestamp.fromDate(sessionData.interviewStartTime || new Date()),
+      completedAt: sessionData.state === sessionService.SessionState.INTERVIEW_COMPLETED ? admin.firestore.Timestamp.now() : null,
+      lastUpdatedAt: admin.firestore.Timestamp.now()
     };
 
-    logger.info('[saveInterviewToFirestore] Guardando documento en Firestore...');
-    await interviewDocRef.set(interviewDoc, { merge: true });
+    logger.info(`[saveInterviewToFirestore] Intentando añadir entrevista al historial del usuario: ${userId}`);
+    
+    // Actualizar el documento del usuario añadiendo la nueva entrevista al array 'interviewHistory'
+    // Se asume que el documento del usuario ya existe. Si no, update() fallará.
+    // userService.registerOrUpdateUser debería encargarse de la creación inicial del usuario.
+    await userRef.update({
+      interviewHistory: admin.firestore.FieldValue.arrayUnion(interviewEntry),
+      lastInterviewActivity: admin.firestore.Timestamp.now() // Campo para rastrear la última actividad de entrevista
+    });
 
-    logger.info(`[saveInterviewToFirestore] Entrevista guardada/actualizada correctamente para userId: ${userId}`);
-    return interviewDocRef.id; // Devuelve el ID real del documento
+    logger.info(`[saveInterviewToFirestore] Entrevista añadida correctamente al historial del usuario: ${userId}`);
+    return userId; // Devuelve el ID del usuario, ya que es el documento que se actualizó.
 
   } catch (error) {
-    logger.error(`[saveInterviewToFirestore] Error al guardar/actualizar entrevista para userId ${userId}: ${error.message}`);
+    logger.error(`[saveInterviewToFirestore] Error al guardar entrevista en historial para userId ${userId}: ${error.message}`);
+    // Considerar manejar el caso donde el documento del usuario no existe, si es necesario.
     throw error;
   }
 };
 
+// ...existing code...
 module.exports = {
-  // ... tus otras exportaciones ...
   generateInterviewQuestion,
   analyzeVideoResponse,
   getDefaultQuestion,
   generateMockInterviewAnalysis,
   normalizeJobType,
-  saveInterviewToFirestore, // Asegúrate que esté exportada
+  saveInterviewToFirestore,
 };
+
