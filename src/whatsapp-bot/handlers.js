@@ -288,67 +288,6 @@ const handleText = async (from, text) => {
       return;
     }
 
-    // if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
-    //   const code = 'UCAL20';
-    //   logger.info(`Activando código UCAL automáticamente para ${from}`);
-      
-    //   try {
-    //     // Asegurar que el código existe
-    //     await promoCodeService.ensurePromoCodeExists(code, {
-    //       estado: true,
-    //       description: 'Acceso ilimitado para estudiantes UCAL',
-    //       source: 'UCAL',
-    //       universidad: 'UCAL'
-    //     });
-        
-    //     const userDoc = await userService.registerOrUpdateUser(from);
-    //     if (userDoc.hasUnlimitedAccess) {
-    //       await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado como estudiante UCAL!');
-    //       return;
-    //     }
-        
-    //     if (userDoc.redeemedPromoCode) {
-    //       await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
-    //       return;
-    //     }
-        
-    //     const codeData = await promoCodeService.validateCode(code);
-    //     if (!codeData) {
-    //       logger.error(`Código UCAL20 no encontrado o inactivo en Firebase`);
-    //       await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte. ');
-    //       return;
-    //     }
-        
-    //     const redeemed = await promoCodeService.redeemCode(from, codeData);
-    //     if (redeemed) {
-    //       // Añadir créditos
-    //       const creditsAdded = await userService.addCVCredits(from, 99);
-          
-    //       // Guardar información adicional del estudiante
-    //       await userService.registerOrUpdateUser(from, {
-    //         universidad: 'UCAL',
-    //         codigoActivadoVia: 'mensaje_automatico',
-    //         fechaActivacionCodigo: new Date(),
-    //         tieneAccesoUCAL: true,
-    //         cvCredits: creditsAdded
-    //       });
-          
-    //       // Mensaje personalizado para estudiantes UCAL
-    //       await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional!`);
-
-    //       logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
-    //       return;
-    //     } else {
-    //       await bot.sendMessage(from, '⚠️ Hubo un problema al activar tu código UCAL. Por favor, contacta a soporte mencionando "error activación UCAL20".');
-    //       return;
-    //     }
-    //   } catch (error) {
-    //     logger.error(`Error procesando activación UCAL: ${error.message}`);
-    //     await bot.sendMessage(from, '⚠️ Ocurrió un error inesperado. Por favor, intenta nuevamente o contacta a soporte.');
-    //     return;
-    //   }
-    // }
-
     // Manejar comandos especiales primero
     if (text.toLowerCase().startsWith('!')) {
       const command = text.toLowerCase().substring(1);
@@ -378,15 +317,6 @@ const handleText = async (from, text) => {
             await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
           }
           return;
-        case 'promo':
-          const code = text.substring(7).trim();
-          if (!code) {
-            await bot.sendMessage(from, 'Por favor, proporciona un código promocional. Usa: !promo TU_CODIGO');
-            return;
-          }
-          logger.info(`Promo code command received: ${code}`);
-          await handlePromoCode(from, code);
-          return;
         default:
           await bot.sendMessage(from, 'Comando no reconocido. Usa !help para ver los comandos disponibles.');
           return;
@@ -401,40 +331,6 @@ const handleText = async (from, text) => {
         await bot.sendMessage(from, `📊 *Aquí está el enlace a tu PDF de análisis:*\n\n${session.lastPdfUrl}`);
       } else {
         await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
-      }
-      return;
-    }
-
-    // --- NUEVO: Gestión de códigos promocionales ---
-    if (text.toLowerCase().startsWith('!promo ')) {
-      const code = text.substring(7).trim();
-      if (!code) {
-        await bot.sendMessage(from, 'Por favor, proporciona un código promocional. Usa: !promo TU_CODIGO');
-        return;
-      }
-      // Verificar si el usuario ya tiene acceso ilimitado
-      const userDoc = await userService.registerOrUpdateUser(from);
-      if (userDoc.hasUnlimitedAccess) {
-        await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado!');
-        return;
-      }
-      if (userDoc.redeemedPromoCode) {
-        await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
-        return;
-      }
-      // Validar el código
-      const codeData = await promoCodeService.validateCode(code);
-      if (!codeData) {
-        await bot.sendMessage(from, '❌ El código promocional no es válido, ya ha sido usado o ha expirado.');
-        return;
-      }
-      // Intentar canjear el código
-      const redeemed = await promoCodeService.redeemCode(from, codeData);
-      if (redeemed) {
-        await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
-        logger.info(`User ${from} successfully redeemed promo code ${codeData.id} from source ${codeData.source}`);
-      } else {
-        await bot.sendMessage(from, '⚠️ Hubo un problema al intentar canjear el código. Puede que alguien más lo haya usado justo ahora. Intenta de nuevo o contacta soporte.');
       }
       return;
     }
@@ -1098,7 +994,6 @@ const handleHelp = async (from) => {
 !help - Muestra esta lista de comandos
 !reset - Elimina tu sesión actual y reinicia el bot
 !url - Obtiene el enlace directo al último PDF de análisis de CV generado
-!promo [código] - Activa una promoción especial (si aplica)
 
 📄 *Para revisar tu CV:*
 1. Elige "Revisar mi CV" en el menú principal
