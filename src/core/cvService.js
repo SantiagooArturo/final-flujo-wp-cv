@@ -54,7 +54,7 @@ const registerUser = async (user) => {
  * @param {String|Object} documentOrUrl - Document object or URL from WhatsApp
  * @param {string} userId - User ID
  * @param {string} [jobPosition] - Optional job position the user is applying for
- * @returns {Promise<Object>} Analysis results
+ * @returns {Promise<String>} PDF URL of analysis results
  */
 const processCV = async (documentOrUrl, userId, jobPosition = null) => {
   let startTime = Date.now();
@@ -111,13 +111,36 @@ const processCV = async (documentOrUrl, userId, jobPosition = null) => {
           logger.info(`[${userId}] Storing analysis reference in Firestore`);
           const db = firebaseConfig.getFirestore();
           
-          // Verificar si es una string (enlace directo) o un objeto
-          const analysisUrl = typeof analysis === 'string' ? analysis : (analysis.pdfUrl || analysis.url || publicUrl);
+          // Verificar si es una string (enlace directo) o un objeto completo de análisis
+          let analysisUrl;
+          let fullAnalysisObject;
           
-          // Guardar solo la referencia al análisis, no el contenido completo
+          if (typeof analysis === 'string') {
+            // Si es solo una URL
+            analysisUrl = analysis;
+            fullAnalysisObject = null;
+          } else if (analysis && analysis.extractedData && analysis.extractedData.analysisResults && analysis.extractedData.analysisResults.pdf_url) {
+            // Si es el objeto completo de respuesta del API
+            analysisUrl = analysis.extractedData.analysisResults.pdf_url;
+            fullAnalysisObject = analysis;
+          } else if (analysis && analysis.pdfUrl) {
+            // Formato alternativo
+            analysisUrl = analysis.pdfUrl;
+            fullAnalysisObject = analysis;
+          } else if (analysis && analysis.url) {
+            // Otro formato alternativo
+            analysisUrl = analysis.url;
+            fullAnalysisObject = analysis;
+          } else {
+            // Si no se puede extraer una URL, usar la URL del documento original
+            analysisUrl = publicUrl;
+            fullAnalysisObject = null;
+          }
+          
+          // Guardar solo la referencia al análisis en la colección CVS_COLLECTION
           await db.collection(CVS_COLLECTION).add({
             userId,
-            analysisUrl: analysisUrl,  // Guardar solo la URL, no el objeto completo
+            analysisUrl: analysisUrl,
             jobPosition,
             createdAt: new Date(),
             documentType: mimeType,
@@ -126,17 +149,66 @@ const processCV = async (documentOrUrl, userId, jobPosition = null) => {
           });
           logger.info(`[${userId}] Analysis reference stored in Firestore`);
           
-          // INICIO DEL CÓDIGO INTEGRADO DE saveCVAnalysis
+          // INICIO DEL CÓDIGO INTEGRADO DE HISTORIAL (reemplaza la llamada a saveCVAnalysis)
           try {
             logger.info(`[${userId}] Guardando análisis en historial de usuario...`);
-            const extractedData = await saveCVAnalysis(userId, publicUrl, jobPosition);
-            logger.info(`[${userId}] Análisis guardado en historial: ${JSON.stringify(extractedData)}`);
+            
+            // Preparar los datos para guardar en el historial
+            let analysisData;
+            
+            // Si tenemos el objeto completo del API, usarlo directamente
+            if (fullAnalysisObject && fullAnalysisObject.analysis_id) {
+              analysisData = {
+                analysisId: fullAnalysisObject.analysis_id,
+                candidateInfo: fullAnalysisObject.extractedData.extractedData,
+                analysisResults: fullAnalysisObject.extractedData.analysisResults,
+                cvUrl: fullAnalysisObject.extractedData.cvOriginalFileUrl,
+                pdf_report_url: fullAnalysisObject.extractedData.analysisResults?.pdf_url,
+                createdAt: new Date()
+              };
+            } else {
+              // Si solo tenemos la URL, crear un objeto simplificado
+              analysisData = {
+                pdf_report_url: analysisUrl,
+                cvUrl: publicUrl,
+                createdAt: new Date()
+              };
+            }
+            
+            // Guardar en el historial del usuario
+            const userRef = db.collection(USER_CV_ANALYSIS_COLLECTION).doc(userId);
+            const userDoc = await userRef.get();
+            
+            if (userDoc.exists) {
+              // Si el documento existe, actualiza el array añadiendo el nuevo análisis
+              await userRef.update({
+                cvAnalysisHistorial: admin.firestore.FieldValue.arrayUnion({
+                  extracted_data: analysisData,
+                  jobPosition: jobPosition || 'No especificado',
+                  createdAt: new Date()
+                }),
+                updatedAt: new Date()
+              });
+            } else {
+              // Si el documento no existe, créalo con un nuevo array
+              await userRef.set({
+                id: userId,
+                cvAnalysisHistorial: [{
+                  extracted_data: analysisData,
+                  jobPosition: jobPosition || 'No especificado',
+                  createdAt: new Date()
+                }],
+                updatedAt: new Date()
+              });
+            }
+            
+            logger.info(`[${userId}] Análisis guardado en historial: ${JSON.stringify(analysisData)}`);
             logger.info(`[${userId}] Análisis de CV guardado exitosamente en el historial`);
           } catch (historialError) {
             logger.error(`[${userId}] Error guardando en historial: ${historialError.message}`);
             logger.info(`[${userId}] Continuando sin guardar en historial`);
           }
-          // FIN DEL CÓDIGO INTEGRADO DE saveCVAnalysis
+          // FIN DEL CÓDIGO INTEGRADO DE HISTORIAL
           
         } catch (firestoreError) {
           logger.error(`[${userId}] Error storing analysis in Firestore: ${firestoreError.message}`);
@@ -148,7 +220,23 @@ const processCV = async (documentOrUrl, userId, jobPosition = null) => {
       
       const totalTime = (Date.now() - startTime)/1000;
       logger.info(`[${userId}] CV processing completed in ${totalTime}s`);
-      return analysis;
+      
+      // CAMBIO: Extraer y retornar solo la URL del PDF de análisis
+      if (typeof analysis === 'string') {
+        // Si ya es una URL, devolverla directamente
+        return analysis;
+      } else if (analysis && analysis.extractedData && analysis.extractedData.analysisResults && analysis.extractedData.analysisResults.pdf_url) {
+        // Si es el objeto completo, extraer la URL del PDF
+        return analysis.extractedData.analysisResults.pdf_url;
+      } else if (analysis && analysis.pdfUrl) {
+        return analysis.pdfUrl;
+      } else if (analysis && analysis.url) {
+        return analysis.url;
+      } else {
+        // Si no se puede extraer una URL, usar la URL del documento original
+        return publicUrl;
+      }
+      
     } catch (analysisError) {
       logger.error(`[${userId}] Error in CV analysis: ${analysisError.message}`);
       
@@ -163,70 +251,6 @@ const processCV = async (documentOrUrl, userId, jobPosition = null) => {
   }
 };
 
-const saveCVAnalysis = async (userId, documentoOrUrl, jobPosition) => {
-  try {
-    const response = await axios.get(`${CV_ANALYSIS_ENDPOINT}`, {
-      params: {
-        pdf_url: documentoOrUrl,
-        puesto_postular: jobPosition
-      }
-    });
-    
-    if (response.status !== 200) {
-      throw new Error(`Error fetching CV analysis: ${response.statusText}`);
-    }
-    
-    // Verificar que tenemos datos válidos
-    if (!response.data || !response.data.extractedData) {
-      throw new Error('Respuesta del API no contiene datos de análisis');
-    }
-    
-    // Extraer datos para guardar
-    const analysisData = {
-      analysisId: response.data.analysis_id,
-      candidateInfo: response.data.extractedData.extractedData,
-      analysisResults: response.data.extractedData.analysisResults,
-      cvUrl: response.data.extractedData.cvOriginalFileUrl,
-      pdf_report_url: response.data.extractedData.analysisResults?.pdf_url,
-      createdAt: new Date()
-    };
-    
-    const db = firebaseConfig.getFirestore();
-    const userRef = db.collection(USER_CV_ANALYSIS_COLLECTION).doc(userId);
-    
-    // Obtener el documento actual del usuario para verificar si ya existe
-    const userDoc = await userRef.get();
-    
-    if (userDoc.exists) {
-      // Si el documento existe, actualiza el array añadiendo el nuevo análisis
-      await userRef.update({
-        cvAnalysisHistorial: admin.firestore.FieldValue.arrayUnion({
-          extracted_data: analysisData,
-          jobPosition: jobPosition || 'No especificado',
-          createdAt: new Date()
-        }),
-        updatedAt: new Date()
-      });
-    } else {
-      // Si el documento no existe, créalo con un nuevo array
-      await userRef.set({
-        id: userId,
-        cvAnalysisHistorial: [{
-          extracted_data: analysisData,
-          jobPosition: jobPosition || 'No especificado',
-          createdAt: new Date()
-        }],
-        updatedAt: new Date()
-      });
-    }
-    
-    logger.info(`[${userId}] Análisis de CV guardado exitosamente en el historial`);
-    return analysisData;
-  } catch (error) {
-    logger.error(`[${userId}] Error saving CV analysis: ${error.message}`);
-    throw error;
-  }
-};
 /**
  * Generate a PDF report from analysis
  * @param {Object} analysis - CV analysis results
