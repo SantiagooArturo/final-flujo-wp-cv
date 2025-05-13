@@ -279,22 +279,9 @@ const handleText = async (from, text) => {
     logger.info(`Handling text message from user ${from} in state: ${session.state}`);
 
     // Si es un usuario nuevo o está en estado inicial y es su primer mensaje
-    // Si es un usuario nuevo o está en estado inicial
-    if (session.state === sessionService.SessionState.INITIAL) {
-      // Verificar si el usuario ya aceptó los términos
-      if (!session.hasAcceptedTerms) {
-        // Mostrar términos y condiciones
-        await handleTermsAndConditions(from);
-        return;
-      } else if (!session.hasReceivedWelcomeMessage) {
-        // Si ya aceptó términos pero no ha recibido mensaje de bienvenida
-        await sessionService.updateSession(from, { hasReceivedWelcomeMessage: true });
-        await showWelcomeMessage(from);
-        return;
-      }
-    }
-
-    if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
+    if (session.state === sessionService.SessionState.INITIAL && !session.hasReceivedWelcomeMessage) {
+      
+      if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
       const code = 'UCAL20';
       logger.info(`Activando código UCAL automáticamente para ${from}`);
       
@@ -340,8 +327,8 @@ const handleText = async (from, text) => {
           });
           
           // Mensaje personalizado para estudiantes UCAL
-          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional! Puedes enviar tu CV como documento PDF para analizarlo.`);
-          
+          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional!`);
+
           logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
           return;
         } else {
@@ -353,6 +340,14 @@ const handleText = async (from, text) => {
         await bot.sendMessage(from, '⚠️ Ocurrió un error inesperado. Por favor, intenta nuevamente o contacta a soporte.');
         return;
       }
+      }
+      
+      // Marcar que ya recibió el mensaje de bienvenida
+      await sessionService.updateSession(from, { hasReceivedWelcomeMessage: true });
+
+      // Mostrar mensaje de bienvenida como si hubiera enviado !start
+      await handleStart(from);
+      return;
     }
 
     // Manejar comandos especiales primero
