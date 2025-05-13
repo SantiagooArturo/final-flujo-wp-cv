@@ -16,7 +16,7 @@ const sendToCVAnalysisEndpoint = async (pdfUrl, jobPosition) => {
     }
     
     // Construir la URL completa con los parámetros
-    const url = `https://myworkin-cv.onrender.com/analizar-cv/?pdf_url=${encodeURIComponent(pdfUrl)}&puesto_postular=${encodeURIComponent(jobPosition)}`;
+    const url = `https://api-cv-myworkin.onrender.com/analizar-cv/?pdf_url=${encodeURIComponent(pdfUrl)}&puesto_postular=${encodeURIComponent(jobPosition)}`;
     
     logger.info(`Sending GET request to: ${url}`);
     
