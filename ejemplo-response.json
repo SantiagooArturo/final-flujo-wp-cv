@@ -1,0 +1,67 @@
+{
+    "status": "success", 
+    "message": "CV procesado y análisis guardado exitosamente.",
+    "analysisId": "string_id_unico_analisis_generado",
+    "extractedData": { 
+        "jobPositionApplied": "string_puesto_al_que_aplica_con_este_cv",
+        "cvOriginalFileUrl": "string_url_al_pdf_original_en_storage",
+        "analysisDateTime": "timestamp_iso8601", 
+        "processingTimeMs": "number_milisegundos_que_tardo_el_analisis", 
+      
+        "extractedData": { 
+          "candidateName": "string_nombre_completo_extraido",
+          "contactInfo": {
+            "email": "string_email_extraido",
+            "phone": "string_telefono_extraido",
+            "linkedin": "string_url_linkedin_extraido",
+            "address": "string_direccion_extraida"
+          },
+          "professionalSummary": "string_resumen_o_perfil_profesional_extraido",
+          "workExperience": [
+            {
+              "role": "string_puesto",
+              "company": "string_empresa",
+              "duration": "string_periodo_ej_ene_2020_dic_2022",
+              "description": "string_descripcion_responsabilidades_logros"
+            }
+          ],
+          "education": [
+            {
+              "degree": "string_titulo_obtenido",
+              "institution": "string_institucion_educativa",
+              "graduationYear": "string_o_number_año_graduacion"
+            }
+
+          ],
+          "skills": {
+            "technical": ["string_habilidad_tecnica1", "string_habilidad_tecnica2"],
+            "soft": ["string_habilidad_blanda1", "string_habilidad_blanda2"],
+            "languages": ["string_idioma_nivel1", "string_idioma_nivel2"]
+          },
+          "rawText": "string_texto_completo_extraido_del_cv"
+        },
+      
+        "analysisResults": { 
+          "overallScore": "number_puntaje_0_100", 
+          "atsCompliance": { 
+            "score": "number_puntaje_ats_0_100",
+            "issues": ["string_problema_ats1", "string_problema_ats2"], 
+            "recommendations": ["string_sugerencia_ats1"]
+          },
+          "strengths": ["string_fortaleza_identificada1", "string_fortaleza_identificada2"],
+          "areasForImprovement": ["string_area_mejora1", "string_area_mejora2"], 
+          "keywordAnalysis": {
+            "jobKeywordsFound": ["string_keyword_puesto_encontrada1"],
+            "jobKeywordsMissing": ["string_keyword_puesto_faltante1"], 
+            "generalSkillsKeywordsFound": ["string_keyword_habilidad_encontrada1"]
+          },
+          "formattingAndLanguage": {
+            "clarity": "string_evaluacion_claridad", 
+            "professionalism": "string_evaluacion_profesionalismo",
+            "grammarSpellingErrorsCount": "number_cantidad_errores",
+            "actionVerbsUsed": "boolean"
+          },
+          "feedbackSummary": "string_resumen_del_feedback_general_para_el_usuario"
+        }
+      }
+  }

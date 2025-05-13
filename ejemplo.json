@@ -1,0 +1,44 @@
+{
+    "nombreCompleto": "Carlos Mendoza Ruiz",
+    "carrera": "Ciencias de la Comunicación", 
+    "estado": "Activo",
+    "fechaRegistro": "2025-01-15T10:00:00Z", 
+    "ultimaActividadTimestamp": "2025-03-21T14:30:00Z", 
+    "puestoAspiradoPrincipal": "Analista de Marketing Senior",
+    "areasInteresProfesional": ["Marketing Digital", "Análisis de Datos"], 
+    "puntajeGeneralPromedio": 85, 
+
+    "cvHistory": [ 
+      {
+        "nombreCompleto": "Carlos Mendoza Ruiz",
+        "carrera": "Ciencias de la Comunicación",
+        "fechaSubida": "2025-03-20T10:00:00Z",
+        "puestoAspiradoParaCV": "Practicante de Marketing",
+        "urlCVOriginal": "https://storage.example.com/cv_carlos_1.pdf",
+        "puntajeCV": 82,
+        "analisisDetalladoCV": {
+          "erroresComunesDetectados": ["Falta de logros cuantificables", "Formato inconsistente"],
+          "palabrasClaveFaltantes": ["SEO", "Google Ads"],
+          "palabrasClaveEncontradas": ["Redes Sociales", "Mailchimp"],
+          "feedbackGeneral": "Buen CV, mejorar cuantificación de logros.",
+          "sugerenciasATS": ["Usar plantilla más simple", "Añadir sección de resumen profesional"]
+        }
+      },
+      {
+        "nombreCompleto": "Carlos Mendoza Ruiz",
+        "carrera": "Ciencias de la Comunicación",
+        "cvAnalysisId": "cv_analisis_002",
+        "fechaSubida": "2025-03-21T14:00:00Z",
+        "puestoAspiradoParaCV": "Analista de Marketing",
+        "urlCVOriginal": "https://storage.example.com/cv_carlos_2.pdf",
+        "puntajeCV": 88,
+        "analisisDetalladoCV": {
+          "erroresComunesDetectados": ["Falta de palabras clave relevantes"],
+          "palabrasClaveFaltantes": ["Google Analytics Avanzado"],
+          "palabrasClaveEncontradas": ["SEO", "Google Ads", "Gestión de Proyectos"],
+          "feedbackGeneral": "Excelente mejora, muy bien enfocado.",
+          "sugerenciasATS": ["Revisar consistencia en fechas de experiencia"]
+        }
+      }
+    ]
+}

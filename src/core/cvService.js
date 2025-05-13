@@ -176,6 +176,21 @@ const saveCVAnalysis = async (userId, documentoOrUrl, jobPosition) => {
       throw new Error(`Error fetching CV analysis: ${response.statusText}`);
     }
     
+    // Verificar que tenemos datos válidos
+    if (!response.data || !response.data.extractedData) {
+      throw new Error('Respuesta del API no contiene datos de análisis');
+    }
+    
+    // Extraer datos para guardar
+    const analysisData = {
+      analysisId: response.data.analysis_id,
+      candidateInfo: response.data.extractedData.extractedData,
+      analysisResults: response.data.extractedData.analysisResults,
+      cvUrl: response.data.extractedData.cvOriginalFileUrl,
+      pdf_report_url: response.data.extractedData.analysisResults?.pdf_url,
+      createdAt: new Date()
+    };
+    
     const db = firebaseConfig.getFirestore();
     const userRef = db.collection(USER_CV_ANALYSIS_COLLECTION).doc(userId);
     
@@ -186,7 +201,7 @@ const saveCVAnalysis = async (userId, documentoOrUrl, jobPosition) => {
       // Si el documento existe, actualiza el array añadiendo el nuevo análisis
       await userRef.update({
         cvAnalysisHistorial: admin.firestore.FieldValue.arrayUnion({
-          extracted_data: response.extracted_data,
+          extracted_data: analysisData,
           jobPosition: jobPosition || 'No especificado',
           createdAt: new Date()
         }),
@@ -197,7 +212,7 @@ const saveCVAnalysis = async (userId, documentoOrUrl, jobPosition) => {
       await userRef.set({
         id: userId,
         cvAnalysisHistorial: [{
-          extracted_data: response.extracted_data,
+          extracted_data: analysisData,
           jobPosition: jobPosition || 'No especificado',
           createdAt: new Date()
         }],
@@ -206,7 +221,7 @@ const saveCVAnalysis = async (userId, documentoOrUrl, jobPosition) => {
     }
     
     logger.info(`[${userId}] Análisis de CV guardado exitosamente en el historial`);
-    return response.extracted_data;
+    return analysisData;
   } catch (error) {
     logger.error(`[${userId}] Error saving CV analysis: ${error.message}`);
     throw error;

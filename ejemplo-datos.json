@@ -1,0 +1,72 @@
+{
+    "status": "success",
+    "message": "CV procesado y análisis guardado exitosamente.",
+    "analysisId": "cv_analisis_789xyz123",
+    "extractedData": {
+        "jobPositionApplied": "Desarrollador Fullstack Senior",
+        "cvOriginalFileUrl": "https://firebasestorage.googleapis.com/v0/b/workln-app.appspot.com/o/cvs%2Fuser123%2Fcv_juan_perez_2025.pdf?alt=media",
+        "analysisDateTime": "2025-05-08T10:30:00Z",
+        "processingTimeMs": 4500,
+      
+        "extractedData": {
+          "candidateName": "Ana Sofía Rodríguez",
+          "contactInfo": {
+            "email": "ana.rodriguez@email.com",
+            "phone": "+51987654321",
+            "linkedin": "linkedin.com/in/anasofiarodriguez",
+            "address": "Lima, Perú"
+          },
+          "professionalSummary": "Desarrolladora Fullstack con más de 8 años de experiencia en el diseño, desarrollo e implementación de aplicaciones web escalables. Experta en JavaScript (React, Node.js) y bases de datos NoSQL. Apasionada por crear soluciones innovadoras y eficientes.",
+          "workExperience": [
+            {
+              "role": "Desarrolladora Fullstack Senior",
+              "company": "Innovatech Solutions",
+              "duration": "Enero 2020 - Presente",
+              "description": "Lideré el desarrollo del frontend y backend para múltiples proyectos SaaS. Implementé microservicios y optimicé el rendimiento de la base de datos, resultando en una reducción del 30% en tiempos de carga. Mentoría de desarrolladores junior."
+            },
+            {
+              "role": "Desarrolladora Web",
+              "company": "TechStart Peru",
+              "duration": "Junio 2017 - Diciembre 2019",
+              "description": "Participé en el ciclo completo de desarrollo de aplicaciones web para clientes del sector financiero. Desarrollo de APIs RESTful y colaboración en equipos Agile."
+            }
+          ],
+          "education": [
+            {
+              "degree": "Ingeniería de Software",
+              "institution": "Universidad Nacional de Ingeniería",
+              "graduationYear": "2017"
+            }
+          ],
+          "skills": {
+            "technical": ["JavaScript", "React", "Node.js", "Express.js", "MongoDB", "PostgreSQL", "Docker", "AWS", "Git", "CI/CD"],
+            "soft": ["Liderazgo de equipos", "Resolución de problemas", "Comunicación efectiva", "Pensamiento crítico", "Adaptabilidad"],
+            "languages": ["Español (Nativo)", "Inglés (Avanzado C1)"]
+          },
+          "rawText": "Ana Sofía Rodríguez\nLima, Perú | +51987654321 | ana.rodriguez@email.com | linkedin.com/in/anasofiarodriguez\n\nResumen Profesional\nDesarrolladora Fullstack con más de 8 años de experiencia...\n\nExperiencia Laboral\nDesarrolladora Fullstack Senior | Innovatech Solutions | Enero 2020 - Presente\nLideré el desarrollo del frontend y backend...\n\nEducación\nIngeniería de Software | Universidad Nacional de Ingeniería | 2017\n\nHabilidades\nJavaScript, React, Node.js, MongoDB..."
+        },
+      
+        "analysisResults": {
+          "overallScore": 88,
+          "atsCompliance": {
+            "score": 75,
+            "issues": ["Faltan algunas palabras clave específicas del puesto.", "Secciones podrían tener encabezados más estándar para ATS."],
+            "recommendations": ["Revisar la descripción del trabajo y añadir palabras clave como 'arquitectura de software' o 'pruebas unitarias'.", "Utilizar encabezados simples como 'Experiencia Profesional' en lugar de 'Mi Trayectoria'."]
+          },
+          "strengths": ["Sólida experiencia técnica en tecnologías demandadas.", "Logros cuantificables en roles anteriores.", "Buen nivel de inglés."],
+          "areasForImprovement": ["Detallar más el impacto de proyectos personales o contribuciones open source si existen.", "Asegurar que todas las habilidades listadas estén respaldadas por ejemplos en la experiencia."],
+          "keywordAnalysis": {
+            "jobKeywordsFound": ["React", "Node.js", "API RESTful", "Microservicios"],
+            "jobKeywordsMissing": ["Arquitectura de Software", "Pruebas Unitarias Avanzadas", "Kubernetes"],
+            "generalSkillsKeywordsFound": ["Liderazgo", "JavaScript", "MongoDB"]
+          },
+          "formattingAndLanguage": {
+            "clarity": "Alta",
+            "professionalism": "Muy Profesional",
+            "grammarSpellingErrorsCount": 0,
+            "actionVerbsUsed": true
+          },
+          "feedbackSummary": "Excelente perfil con una sólida trayectoria. Para optimizar aún más, considera añadir palabras clave específicas de la oferta y detallar proyectos que demuestren habilidades en arquitectura de software."
+        }
+      }
+  }
