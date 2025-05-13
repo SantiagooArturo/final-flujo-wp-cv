@@ -276,7 +276,7 @@ const handleText = async (from, text) => {
     logger.info('Firebase already initialized');
     const session = await sessionService.getOrCreateSession(from);
 
-    logger.info(`Handling text message from user ${from} in state: ${session.state}`);
+    logger.info(`Handling text message from user ${from}. Session state: ${session.state}, hasReceivedWelcomeMessage: ${session.hasReceivedWelcomeMessage}`);
 
     // Si es un usuario nuevo o está en estado inicial y es su primer mensaje
     if (session.state === sessionService.SessionState.INITIAL && !session.hasReceivedWelcomeMessage) {
