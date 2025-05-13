@@ -9,9 +9,14 @@ const fileProcessing = require('../utils/fileProcessing');
 const { generateCVAnalysisPDF } = require('../utils/pdfGenerator');
 const storageService = require('../utils/storageService');
 const fs = require('fs-extra');
+const { uploadFileR2 } = require('../services/s3.service');
 const path = require('path');
+const os = require('os');
 const axios = require('axios');
 const userService = require('../core/userService');
+const promoCodeService = require('../core/promoCodeService');
+const { handlePromoCode } = require('./handlers/promoHandlers');
+const { buffer } = require('stream/consumers');
 
 const handleStart = async (from) => {
   try {
@@ -270,7 +275,6 @@ const handleText = async (from, text) => {
   try {
     logger.info('Firebase already initialized');
     const session = await sessionService.getOrCreateSession(from);
-    logger.info(`Session retrieved for user: ${from}, state: ${session.state}`);
 
     logger.info(`Handling text message from user ${from} in state: ${session.state}`);
 
@@ -282,6 +286,67 @@ const handleText = async (from, text) => {
       // Mostrar mensaje de bienvenida como si hubiera enviado !start
       await handleStart(from);
       return;
+    }
+
+    if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
+      const code = 'UCAL20';
+      logger.info(`Activando código UCAL automáticamente para ${from}`);
+      
+      try {
+        // Asegurar que el código existe
+        await promoCodeService.ensurePromoCodeExists(code, {
+          estado: true,
+          description: 'Acceso ilimitado para estudiantes UCAL',
+          source: 'UCAL',
+          universidad: 'UCAL'
+        });
+        
+        const userDoc = await userService.registerOrUpdateUser(from);
+        if (userDoc.hasUnlimitedAccess) {
+          await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado como estudiante UCAL!');
+          return;
+        }
+        
+        if (userDoc.redeemedPromoCode) {
+          await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
+          return;
+        }
+        
+        const codeData = await promoCodeService.validateCode(code);
+        if (!codeData) {
+          logger.error(`Código UCAL20 no encontrado o inactivo en Firebase`);
+          await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte. ');
+          return;
+        }
+        
+        const redeemed = await promoCodeService.redeemCode(from, codeData);
+        if (redeemed) {
+          // Añadir créditos
+          const creditsAdded = await userService.addCVCredits(from, 99);
+          
+          // Guardar información adicional del estudiante
+          await userService.registerOrUpdateUser(from, {
+            universidad: 'UCAL',
+            codigoActivadoVia: 'mensaje_automatico',
+            fechaActivacionCodigo: new Date(),
+            tieneAccesoUCAL: true,
+            cvCredits: creditsAdded
+          });
+          
+          // Mensaje personalizado para estudiantes UCAL
+          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional! Puedes enviar tu CV como documento PDF para analizarlo.`);
+          
+          logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
+          return;
+        } else {
+          await bot.sendMessage(from, '⚠️ Hubo un problema al activar tu código UCAL. Por favor, contacta a soporte mencionando "error activación UCAL20".');
+          return;
+        }
+      } catch (error) {
+        logger.error(`Error procesando activación UCAL: ${error.message}`);
+        await bot.sendMessage(from, '⚠️ Ocurrió un error inesperado. Por favor, intenta nuevamente o contacta a soporte.');
+        return;
+      }
     }
 
     // Manejar comandos especiales primero
@@ -313,6 +378,15 @@ const handleText = async (from, text) => {
             await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
           }
           return;
+        case 'promo':
+          const code = text.substring(7).trim();
+          if (!code) {
+            await bot.sendMessage(from, 'Por favor, proporciona un código promocional. Usa: !promo TU_CODIGO');
+            return;
+          }
+          logger.info(`Promo code command received: ${code}`);
+          await handlePromoCode(from, code);
+          return;
         default:
           await bot.sendMessage(from, 'Comando no reconocido. Usa !help para ver los comandos disponibles.');
           return;
@@ -327,6 +401,40 @@ const handleText = async (from, text) => {
         await bot.sendMessage(from, `📊 *Aquí está el enlace a tu PDF de análisis:*\n\n${session.lastPdfUrl}`);
       } else {
         await bot.sendMessage(from, 'No tienes ningún PDF generado recientemente. Envía tu CV para generar un análisis.');
+      }
+      return;
+    }
+
+    // --- NUEVO: Gestión de códigos promocionales ---
+    if (text.toLowerCase().startsWith('!promo ')) {
+      const code = text.substring(7).trim();
+      if (!code) {
+        await bot.sendMessage(from, 'Por favor, proporciona un código promocional. Usa: !promo TU_CODIGO');
+        return;
+      }
+      // Verificar si el usuario ya tiene acceso ilimitado
+      const userDoc = await userService.registerOrUpdateUser(from);
+      if (userDoc.hasUnlimitedAccess) {
+        await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado!');
+        return;
+      }
+      if (userDoc.redeemedPromoCode) {
+        await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
+        return;
+      }
+      // Validar el código
+      const codeData = await promoCodeService.validateCode(code);
+      if (!codeData) {
+        await bot.sendMessage(from, '❌ El código promocional no es válido, ya ha sido usado o ha expirado.');
+        return;
+      }
+      // Intentar canjear el código
+      const redeemed = await promoCodeService.redeemCode(from, codeData);
+      if (redeemed) {
+        await bot.sendMessage(from, `✅ ¡Código promocional *${codeData.id}* activado con éxito! Ahora tienes acceso ilimitado.\nOrigen: ${codeData.source} (${codeData.description || ''})`);
+        logger.info(`User ${from} successfully redeemed promo code ${codeData.id} from source ${codeData.source}`);
+      } else {
+        await bot.sendMessage(from, '⚠️ Hubo un problema al intentar canjear el código. Puede que alguien más lo haya usado justo ahora. Intenta de nuevo o contacta soporte.');
       }
       return;
     }
@@ -661,229 +769,269 @@ const handleImage = async (from, image) => {
   }
 };
 
+// ...existing code...
 const handleAudio = async (from, audio) => {
+  logger.info(`[handleAudio] Iniciado para usuario: ${from}`);
   try {
-    // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
+    logger.info(`[handleAudio] Estado de sesión: ${session.state}`);
 
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
+      logger.info(`[handleAudio] Estado incorrecto para recibir audio: ${session.state}`);
       await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta de audio.');
       return;
     }
 
-    // Enviar mensaje de procesamiento
-    await bot.sendMessage(from, 'Estoy procesando tu respuesta. Esto puede tomar unos momentos...');
-
-    // Obtener URL del audio
+    await bot.sendMessage(from, 'Procesando tu respuesta de audio... ⏳');
     const audioUrl = await bot.getMediaUrl(audio.id);
+    logger.info(`[handleAudio] URL del audio: ${audioUrl}`);
+    if (!audioUrl) throw new Error('No se pudo obtener la URL del audio');
 
-    if (!audioUrl) {
-      throw new Error('No se pudo obtener la URL del audio');
-    }
-
-    logger.info(`Audio URL obtenida: ${audioUrl}`);
+    let audioBuffer;
+    let tempFilePath = null;
+    let r2Url = null;
 
     try {
-      // Descargar el archivo de audio
-      logger.info(`Descargando audio para usuario ${from}`);
-      const audioBuffer = await fileProcessing.downloadFile(audioUrl);
-      logger.info(`Audio descargado, tamaño: ${audioBuffer.length} bytes`);
+      audioBuffer = await fileProcessing.downloadFile(audioUrl);
+      logger.info(`[handleAudio] Audio descargado (${audioBuffer.length} bytes)`);
 
-      // Obtener la pregunta actual
+      // Subida a R2
+      try {
+        const tempDir = os.tmpdir();
+        const tempFilename = `interview_${from}_q${session.currentQuestion + 1}_${Date.now()}.oga`;
+        tempFilePath = path.join(tempDir, tempFilename);
+        await fs.writeFile(tempFilePath, audioBuffer);
+        logger.info(`[handleAudio] Archivo temporal creado: ${tempFilePath}`);
+
+        const fileBuffer = await fs.readFile(tempFilePath);
+        const fileInfo = {
+          buffer: fileBuffer,
+          originalFilename: tempFilename,
+          mimetype: audio.mime_type || 'audio/ogg',
+        };
+
+        r2Url = await uploadFileR2(fileInfo, `interviews/${from}`);
+        logger.info(`[handleAudio] Audio subido a R2: ${r2Url}`);
+
+      } catch (uploadError) {
+        logger.error(`[handleAudio] Error subiendo audio a R2: ${uploadError.message}`);
+      }
+
       const currentQuestion = session.questions[session.currentQuestion];
       let transcription = null;
       let analysis = null;
       let errorOccurred = false;
 
-      // Transcribir el audio con Whisper
       try {
-        logger.info('Transcribiendo audio con Whisper...');
-        transcription = await openaiUtil.transcribeAudio(audioBuffer, {
-          language: "es",
-          prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
-        });
-
+        logger.info('[handleAudio] Transcribiendo audio...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, { language: "es", prompt: "Respuesta a pregunta de entrevista." });
+        logger.info(`[handleAudio] Transcripción: ${transcription ? transcription.substring(0, 50) : 'No disponible'}`);
         if (transcription) {
-          logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
-
-          // Analizar la transcripción
-          logger.info('Analizando respuesta de entrevista...');
+          logger.info('[handleAudio] Analizando respuesta...');
           analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
-          logger.info('Análisis de respuesta completado');
+          logger.info('[handleAudio] Análisis completado.');
         } else {
           errorOccurred = true;
-          logger.error("Error al transcribir el audio");
+          logger.error("[handleAudio] Error al transcribir.");
         }
       } catch (transcriptError) {
         errorOccurred = true;
-        logger.error(`Error durante la transcripción/análisis: ${transcriptError.message}`);
+        logger.error(`[handleAudio] Error en transcripción/análisis: ${transcriptError.message}`);
       }
 
-      // Si hay un error o no se puede hacer análisis real, usar simulación
       if (errorOccurred || !analysis) {
-        logger.info('Usando análisis simulado debido a error o falta de configuración');
+        logger.info('[handleAudio] Usando análisis simulado.');
         analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-
-        if (!transcription) {
-          transcription = "Transcripción no disponible. Usando análisis simulado.";
-        }
+        if (!transcription) transcription = "Transcripción no disponible.";
       }
 
-      // Guardar respuesta y análisis
       const answer = {
         transcription: transcription,
         analysis: analysis,
+        audioR2Url: r2Url,
         timestamp: new Date()
       };
 
       await sessionService.saveInterviewAnswer(from, answer);
-      logger.info('Respuesta y análisis guardados en la sesión');
+      logger.info('[handleAudio] Respuesta guardada en sesión.');
 
-      // Enviar feedback
+      // Guardar en Firestore
+      try {
+        const updatedSessionData = await sessionService.getOrCreateSession(from);
+        await interviewService.saveInterviewToFirestore(from, updatedSessionData);
+        logger.info(`[handleAudio] Progreso guardado en Firestore para ${from}`);
+      } catch (firestoreError) {
+        logger.error(`[handleAudio] Error guardando en Firestore: ${firestoreError.message}`);
+      }
+
       const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
       await bot.sendMessage(from, feedbackMessage);
 
-      // Verificar si debemos seguir con más preguntas
-      const updatedSession = await sessionService.getOrCreateSession(from);
-
-      if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
-        // Entrevista completada
+      const finalSessionCheck = await sessionService.getOrCreateSession(from);
+      if (finalSessionCheck.currentQuestion >= 3 || finalSessionCheck.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        try {
+            const finalSessionData = await sessionService.getOrCreateSession(from);
+            await interviewService.saveInterviewToFirestore(from, finalSessionData);
+            logger.info(`[handleAudio] Entrevista finalizada y guardada en Firestore para ${from}`);
+        } catch (firestoreError) {
+            logger.error(`[handleAudio] Error guardando estado final en Firestore: ${firestoreError.message}`);
+        }
         await showPostInterviewMenu(from);
       } else {
-        // Preguntar si quiere continuar usando botones
         await bot.sendButtonMessage(
           from,
           '¿Quieres continuar con la siguiente pregunta? 🤔',
-          [
-            { id: 'continue_interview', text: '✅ Sí, continuar' },
-            { id: 'stop_interview', text: '❌ Detener' }
-          ],
+          [{ id: 'continue_interview', text: '✅ Sí, continuar' }, { id: 'stop_interview', text: '❌ Detener' }],
           '🎯 Progreso de entrevista'
         );
       }
     } catch (processingError) {
-      logger.error(`Error procesando audio: ${processingError.message}`);
-      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta. ¿Podrías intentar nuevamente? Asegúrate de que el audio/video sea claro. ¡Gracias por tu paciencia! 🙏');
+      logger.error(`[handleAudio] Error procesando audio: ${processingError.message}`);
+      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta. ¿Podrías intentar nuevamente?');
+    } finally {
+        if (tempFilePath) {
+            fs.unlink(tempFilePath).catch(err => logger.warn(`[handleAudio] No se pudo eliminar archivo temporal ${tempFilePath}: ${err.message}`));
+        }
     }
   } catch (error) {
-    logger.error(`Error handling audio: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu audio. Por favor, intenta nuevamente.');
-    throw error;
+    logger.error(`[handleAudio] Error general: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error general al procesar tu audio.');
   }
 };
 
 const handleVideo = async (from, video) => {
+  logger.info(`[handleVideo] Iniciado para usuario: ${from}`);
   try {
-    // Obtener sesión del usuario
     const session = await sessionService.getOrCreateSession(from);
+    logger.info(`[handleVideo] Estado de sesión: ${session.state}`);
 
     if (session.state !== sessionService.SessionState.QUESTION_ASKED) {
-      //await bot.sendMessage(from, 'Por favor, espera a que te haga una pregunta antes de enviar una respuesta en video.');
+      logger.info(`[handleVideo] Estado incorrecto para recibir video: ${session.state}`);
       return;
     }
 
-    // Enviar mensaje de procesamiento
-    await bot.sendMessage(from, 'Estoy procesando tu respuesta en video. Esto puede tomar unos momentos...');
-
-    // Obtener URL del video
+    await bot.sendMessage(from, 'Procesando tu respuesta en video... ⏳');
     const videoUrl = await bot.getMediaUrl(video.id);
+    logger.info(`[handleVideo] URL del video: ${videoUrl}`);
+    if (!videoUrl) throw new Error('No se pudo obtener la URL del video');
 
-    if (!videoUrl) {
-      throw new Error('No se pudo obtener la URL del video');
-    }
-
-    logger.info(`Video URL obtenida: ${videoUrl}`);
+    let audioBuffer;
+    let tempFilePath = null;
+    let r2Url = null;
 
     try {
-      // Procesar el video y extraer el audio
-      logger.info(`Procesando video para usuario ${from}`);
-      const audioBuffer = await videoProcessing.processVideoFromUrl(videoUrl);
-      logger.info(`Audio extraído del video, tamaño: ${audioBuffer.length} bytes`);
+      logger.info(`[handleVideo] Extrayendo audio del video...`);
+      videoBuffer = await fileProcessing.downloadFile(videoUrl);
+      logger.info(`[handleVideo] Video descargado (${videoBuffer.length} bytes)`);
 
-      // Obtener la pregunta actual
+      audioBuffer = await videoProcessing.processVideoFromUrl(videoUrl);
+      logger.info(`[handleVideo] Audio extraído (${audioBuffer.length} bytes)`);
+
+      // Subida a R2
+      try {
+          // Guardar el video en un archivo temporal
+        const tempVideoFilename = `interview_${from}_q${session.currentQuestion + 1}_${Date.now()}.mp4`;
+        tempVideoPath = path.join(os.tmpdir(), tempVideoFilename);
+        await fs.writeFile(tempVideoPath, videoBuffer);
+        logger.info(`[handleVideo] Archivo temporal de video creado: ${tempVideoPath}`);
+
+        // Subir el video a R2
+        const videoFileInfo = {
+          buffer: videoBuffer,
+          originalname: tempVideoFilename,
+          mimetype: 'video/mp4',
+        };
+        r2Url = await uploadFileR2(videoFileInfo, `interviews/${from}`);
+        logger.info(`[handleVideo] Video subido a R2: ${r2Url}`);
+      } catch (uploadError) {
+        logger.error(`[handleVideo] Error subiendo video a R2: ${uploadError.message}`);
+      }
+
       const currentQuestion = session.questions[session.currentQuestion];
       let transcription = null;
       let analysis = null;
       let errorOccurred = false;
 
-      // Transcribir el audio con Whisper
       try {
-        logger.info('Transcribiendo audio con Whisper...');
-        transcription = await openaiUtil.transcribeAudio(audioBuffer, {
-          language: "es",
-          prompt: "Esta es una respuesta a una pregunta de entrevista de trabajo."
-        });
-
+        logger.info('[handleVideo] Transcribiendo audio...');
+        transcription = await openaiUtil.transcribeAudio(audioBuffer, { language: "es", prompt: "Respuesta a pregunta de entrevista." });
+        logger.info(`[handleVideo] Transcripción: ${transcription ? transcription.substring(0, 50) : 'No disponible'}`);
         if (transcription) {
-          logger.info(`Audio transcrito exitosamente: ${transcription.length} caracteres`);
-
-          // Analizar la transcripción
-          logger.info('Analizando respuesta de entrevista...');
+          logger.info('[handleVideo] Analizando respuesta...');
           analysis = await openaiUtil.analyzeInterviewResponse(transcription, currentQuestion.question);
-          logger.info('Análisis de respuesta completado');
+          logger.info('[handleVideo] Análisis completado.');
         } else {
           errorOccurred = true;
-          logger.error("Error al transcribir el audio");
+          logger.error("[handleVideo] Error al transcribir.");
         }
       } catch (transcriptError) {
         errorOccurred = true;
-        logger.error(`Error durante la transcripción/análisis: ${transcriptError.message}`);
+        logger.error(`[handleVideo] Error en transcripción/análisis: ${transcriptError.message}`);
       }
 
-      // Si hay un error o no se puede hacer análisis real, usar simulación
       if (errorOccurred || !analysis) {
-        logger.info('Usando análisis simulado debido a error o falta de configuración');
+        logger.info('[handleVideo] Usando análisis simulado.');
         analysis = interviewService.generateMockInterviewAnalysis(currentQuestion);
-
-        if (!transcription) {
-          transcription = "Transcripción no disponible. Usando análisis simulado.";
-        }
+        if (!transcription) transcription = "Transcripción no disponible.";
       }
 
-      // Guardar respuesta y análisis
       const answer = {
         transcription: transcription,
         analysis: analysis,
+        audioR2Url: r2Url,
+        videoOriginalUrl: videoUrl,
         timestamp: new Date()
       };
 
       await sessionService.saveInterviewAnswer(from, answer);
-      logger.info('Respuesta y análisis guardados en la sesión');
+      logger.info('[handleVideo] Respuesta guardada en sesión.');
 
-      // Enviar feedback
+      // Guardar en Firestore
+      try {
+        const updatedSessionData = await sessionService.getOrCreateSession(from);
+        await interviewService.saveInterviewToFirestore(from, updatedSessionData);
+        logger.info(`[handleVideo] Progreso guardado en Firestore para ${from}`);
+      } catch (firestoreError) {
+        logger.error(`[handleVideo] Error guardando en Firestore: ${firestoreError.message}`);
+      }
+
       const feedbackMessage = formatInterviewFeedback(analysis, currentQuestion);
       await bot.sendMessage(from, feedbackMessage);
 
-      // Verificar si debemos seguir con más preguntas
-      const updatedSession = await sessionService.getOrCreateSession(from);
-
-      if (updatedSession.currentQuestion >= 3 || updatedSession.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
-        // Entrevista completada
+      const finalSessionCheck = await sessionService.getOrCreateSession(from);
+      if (finalSessionCheck.currentQuestion >= 3 || finalSessionCheck.state === sessionService.SessionState.INTERVIEW_COMPLETED) {
         await sessionService.updateSessionState(from, sessionService.SessionState.INTERVIEW_COMPLETED);
+        try {
+            const finalSessionData = await sessionService.getOrCreateSession(from);
+            await interviewService.saveInterviewToFirestore(from, finalSessionData);
+            logger.info(`[handleVideo] Entrevista finalizada y guardada en Firestore para ${from}`);
+        } catch (firestoreError) {
+            logger.error(`[handleVideo] Error guardando estado final en Firestore: ${firestoreError.message}`);
+        }
         await showPostInterviewMenu(from);
       } else {
-        // Preguntar si quiere continuar usando botones
         await bot.sendButtonMessage(
           from,
           '¿Quieres continuar con la siguiente pregunta? 🤔',
-          [
-            { id: 'continue_interview', text: '✅ Sí, continuar' },
-            { id: 'stop_interview', text: '❌ Detener' }
-          ],
+          [{ id: 'continue_interview', text: '✅ Sí, continuar' }, { id: 'stop_interview', text: '❌ Detener' }],
           '🎯 Progreso de entrevista'
         );
       }
     } catch (processingError) {
-      logger.error(`Error procesando video: ${processingError.message}`);
-      await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');
+      logger.error(`[handleVideo] Error procesando video: ${processingError.message}`);
+      await bot.sendMessage(from, '😓 Lo siento, hubo un error al procesar tu respuesta en video. ¿Podrías intentar nuevamente?');
+    } finally {
+        if (tempFilePath) {
+            fs.unlink(tempFilePath).catch(err => logger.warn(`[handleVideo] No se pudo eliminar archivo temporal ${tempFilePath}: ${err.message}`));
+        }
     }
   } catch (error) {
-    logger.error(`Error handling video: ${error.message}`);
-    await bot.sendMessage(from, 'Lo siento, hubo un error al procesar tu video. Por favor, intenta nuevamente.');
-    throw error;
+    logger.error(`[handleVideo] Error general: ${error.message}`);
+    await bot.sendMessage(from, 'Lo siento, hubo un error general al procesar tu video.');
   }
 };
+// ...existing code...
 
 const handleSimulatedAnswer = async (from, session) => {
   try {
@@ -950,6 +1098,7 @@ const handleHelp = async (from) => {
 !help - Muestra esta lista de comandos
 !reset - Elimina tu sesión actual y reinicia el bot
 !url - Obtiene el enlace directo al último PDF de análisis de CV generado
+!promo [código] - Activa una promoción especial (si aplica)
 
 📄 *Para revisar tu CV:*
 1. Elige "Revisar mi CV" en el menú principal
@@ -1272,7 +1421,7 @@ Por favor, responde con un mensaje de audio o video.
 const handlePremiumInfo = async (from) => {
   try {
     // Primero enviar información sobre la revisión avanzada
-    await bot.sendMessage(from, '*Mas reivisiones* 😊\n\n¡Excelente!');
+    await bot.sendMessage(from, '*Mas revisiones* 😊\n\n¡Excelente!');
     await bot.sendMessage(from, `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`);
     await bot.sendMessage(from, `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`);
 
@@ -1680,18 +1829,12 @@ Responde con un JSON que tenga los siguientes campos:
 
         // Mensaje para el usuario
         await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n\nEnvía una nueva captura cuando lo hayas corregido.`);
-
-        // Mantener al usuario en el mismo estado para que pueda volver a intentar
-        await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
 
       // Informar al usuario del error técnico
       await bot.sendMessage(from, "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste.");
-
-      // Mantener al usuario en el mismo estado para que pueda volver a intentar
-      await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
     }
 
   } catch (error) {
@@ -1707,17 +1850,13 @@ Responde con un JSON que tenga los siguientes campos:
  * @returns {Promise<void>}
  */
 const handleButtonReply = async (from, buttonId) => {
-  logger.info(`Button reply received from user ${from}: ${buttonId}`);
 
   try {
     // Obtener el estado actual de la sesión
     const session = await sessionService.getOrCreateSession(from);
     const currentState = session.state;
-    logger.info(`Session retrieved for user: ${from}, state: ${currentState}`);
-
     // Si el ID comienza con 'package_', redirigir a handlePackageSelection
     if (buttonId.startsWith('package_')) {
-      logger.info(`Redirecting package selection from button handler: ${buttonId}`);
       await handlePackageSelection(from, buttonId);
       return;
     }
@@ -1886,8 +2025,6 @@ const sendPostCVOptions = async (from, analysis = null) => {
     // Verificar si el usuario ya ha analizado un CV antes
     const totalAnalysisCount = await userService.getCVAnalysisCount(from);
     const hasAnalyzedCVBefore = totalAnalysisCount > 1;
-    logger.info(`Session retrieved for user: ${from}, state: ${await sessionService.getOrCreateSession(from).then(session => session.state)}`);
-
     // Definir las opciones del menú post-análisis
     let menuButtons = [
       { id: 'start_interview', text: '🎯 Simular entrevista' }

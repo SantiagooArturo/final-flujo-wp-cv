@@ -77,6 +77,7 @@ const getOrCreateSession = async (userId) => {
     } else {
       // Devolver sesión existente
       const sessionData = sessionDoc.data();
+      logger.info(`Session retrieved for user: ${userId}, state: ${sessionData.state}`);
       return sessionData;
     }
   } catch (error) {
@@ -309,22 +310,15 @@ const updateSession = async (userId, data) => {
 
     const db = firebaseConfig.getFirestore();
     const sessionRef = db.collection(SESSIONS_COLLECTION).doc(userId.toString());
-
-    // Verificar si el documento existe
-    const sessionDoc = await sessionRef.get();
+    
     const updateData = {
       ...data,
       updatedAt: new Date()
     };
-
-    if (sessionDoc.exists) {
-      await sessionRef.update(updateData);
-      logger.info(`Session updated for user ${userId}`);
-    } else {
-      await sessionRef.set(updateData); // Crea el documento si no existe
-      logger.info(`Session created for user ${userId}`);
-    }
-
+    
+    await sessionRef.update(updateData);
+    logger.info(`Session updated for user ${userId}`);
+    
     // Obtener la sesión actualizada
     const updatedSession = await sessionRef.get();
     return updatedSession.data();
