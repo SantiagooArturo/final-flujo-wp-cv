@@ -280,68 +280,6 @@ const handleText = async (from, text) => {
 
     // Si es un usuario nuevo o está en estado inicial y es su primer mensaje
     if (session.state === sessionService.SessionState.INITIAL && !session.hasReceivedWelcomeMessage) {
-      
-      if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
-      const code = 'UCAL20';
-      logger.info(`Activando código UCAL automáticamente para ${from}`);
-      
-      try {
-        // Asegurar que el código existe
-        await promoCodeService.ensurePromoCodeExists(code, {
-          estado: true,
-          description: 'Acceso ilimitado para estudiantes UCAL',
-          source: 'UCAL',
-          universidad: 'UCAL'
-        });
-        
-        const userDoc = await userService.registerOrUpdateUser(from);
-        if (userDoc.hasUnlimitedAccess) {
-          await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado como estudiante UCAL!');
-          return;
-        }
-        
-        if (userDoc.redeemedPromoCode) {
-          await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
-          return;
-        }
-        
-        const codeData = await promoCodeService.validateCode(code);
-        if (!codeData) {
-          logger.error(`Código UCAL20 no encontrado o inactivo en Firebase`);
-          await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte. ');
-          return;
-        }
-        
-        const redeemed = await promoCodeService.redeemCode(from, codeData);
-        if (redeemed) {
-          // Añadir créditos
-          const creditsAdded = await userService.addCVCredits(from, 99);
-          
-          // Guardar información adicional del estudiante
-          await userService.registerOrUpdateUser(from, {
-            universidad: 'UCAL',
-            codigoActivadoVia: 'mensaje_automatico',
-            fechaActivacionCodigo: new Date(),
-            tieneAccesoUCAL: true,
-            cvCredits: creditsAdded
-          });
-          
-          // Mensaje personalizado para estudiantes UCAL
-          await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional!`);
-
-          logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
-          return;
-        } else {
-          await bot.sendMessage(from, '⚠️ Hubo un problema al activar tu código UCAL. Por favor, contacta a soporte mencionando "error activación UCAL20".');
-          return;
-        }
-      } catch (error) {
-        logger.error(`Error procesando activación UCAL: ${error.message}`);
-        await bot.sendMessage(from, '⚠️ Ocurrió un error inesperado. Por favor, intenta nuevamente o contacta a soporte.');
-        return;
-      }
-      }
-      
       // Marcar que ya recibió el mensaje de bienvenida
       await sessionService.updateSession(from, { hasReceivedWelcomeMessage: true });
 
@@ -349,6 +287,67 @@ const handleText = async (from, text) => {
       await handleStart(from);
       return;
     }
+
+    // if (/¡*hola,*\s*worky!*\s*soy\s*estudiante\s*de\s*(la\s*)*ucal/i.test(text.trim())) {
+    //   const code = 'UCAL20';
+    //   logger.info(`Activando código UCAL automáticamente para ${from}`);
+      
+    //   try {
+    //     // Asegurar que el código existe
+    //     await promoCodeService.ensurePromoCodeExists(code, {
+    //       estado: true,
+    //       description: 'Acceso ilimitado para estudiantes UCAL',
+    //       source: 'UCAL',
+    //       universidad: 'UCAL'
+    //     });
+        
+    //     const userDoc = await userService.registerOrUpdateUser(from);
+    //     if (userDoc.hasUnlimitedAccess) {
+    //       await bot.sendMessage(from, '✨ ¡Ya tienes acceso ilimitado activado como estudiante UCAL!');
+    //       return;
+    //     }
+        
+    //     if (userDoc.redeemedPromoCode) {
+    //       await bot.sendMessage(from, `⚠️ Ya has canjeado un código promocional (${userDoc.redeemedPromoCode}). Solo se permite un código por usuario.`);
+    //       return;
+    //     }
+        
+    //     const codeData = await promoCodeService.validateCode(code);
+    //     if (!codeData) {
+    //       logger.error(`Código UCAL20 no encontrado o inactivo en Firebase`);
+    //       await bot.sendMessage(from, '❌ Error al activar código UCAL. Por favor contacta a soporte. ');
+    //       return;
+    //     }
+        
+    //     const redeemed = await promoCodeService.redeemCode(from, codeData);
+    //     if (redeemed) {
+    //       // Añadir créditos
+    //       const creditsAdded = await userService.addCVCredits(from, 99);
+          
+    //       // Guardar información adicional del estudiante
+    //       await userService.registerOrUpdateUser(from, {
+    //         universidad: 'UCAL',
+    //         codigoActivadoVia: 'mensaje_automatico',
+    //         fechaActivacionCodigo: new Date(),
+    //         tieneAccesoUCAL: true,
+    //         cvCredits: creditsAdded
+    //       });
+          
+    //       // Mensaje personalizado para estudiantes UCAL
+    //       await bot.sendMessage(from, `✅ *¡Bienvenido estudiante de UCAL!*\n\nHemos activado tu código promocional *${codeData.id}* con éxito.\n\n✨ Ahora tienes:\n• Acceso ilimitado\n\n¡Comencemos tu camino profesional!`);
+
+    //       logger.info(`Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`);
+    //       return;
+    //     } else {
+    //       await bot.sendMessage(from, '⚠️ Hubo un problema al activar tu código UCAL. Por favor, contacta a soporte mencionando "error activación UCAL20".');
+    //       return;
+    //     }
+    //   } catch (error) {
+    //     logger.error(`Error procesando activación UCAL: ${error.message}`);
+    //     await bot.sendMessage(from, '⚠️ Ocurrió un error inesperado. Por favor, intenta nuevamente o contacta a soporte.');
+    //     return;
+    //   }
+    // }
 
     // Manejar comandos especiales primero
     if (text.toLowerCase().startsWith('!')) {
