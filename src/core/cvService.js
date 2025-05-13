@@ -5,10 +5,14 @@ const openaiUtil = require('../utils/openaiUtil');
 const cvAnalyzer = require('../utils/cvAnalyzer');
 const ftpUploader = require('../utils/ftpUploader');
 const path = require('path');
+const admin = require('firebase-admin');
+const axios = require('axios');
 
 // Firestore collection names
 const USERS_COLLECTION = 'users';
 const CVS_COLLECTION = 'cvs';
+const CV_ANALYSIS_ENDPOINT = 'https://myworkin-cv.onrender.com/analizar-cv/'; // Replace with actual endpoint
+const USER_CV_ANALYSIS_COLLECTION = 'analysis_cvs';
 
 /**
  * Register a new user in Firestore
@@ -121,6 +125,19 @@ const processCV = async (documentOrUrl, userId, jobPosition = null) => {
             processingTime: analysisTime
           });
           logger.info(`[${userId}] Analysis reference stored in Firestore`);
+          
+          // INICIO DEL CÓDIGO INTEGRADO DE saveCVAnalysis
+          try {
+            logger.info(`[${userId}] Guardando análisis en historial de usuario...`);
+            const extractedData = await saveCVAnalysis(userId, publicUrl, jobPosition);
+            logger.info(`[${userId}] Análisis guardado en historial: ${JSON.stringify(extractedData)}`);
+            logger.info(`[${userId}] Análisis de CV guardado exitosamente en el historial`);
+          } catch (historialError) {
+            logger.error(`[${userId}] Error guardando en historial: ${historialError.message}`);
+            logger.info(`[${userId}] Continuando sin guardar en historial`);
+          }
+          // FIN DEL CÓDIGO INTEGRADO DE saveCVAnalysis
+          
         } catch (firestoreError) {
           logger.error(`[${userId}] Error storing analysis in Firestore: ${firestoreError.message}`);
           logger.info(`[${userId}] Continuing without storing analysis in Firestore`);
@@ -146,6 +163,55 @@ const processCV = async (documentOrUrl, userId, jobPosition = null) => {
   }
 };
 
+const saveCVAnalysis = async (userId, documentoOrUrl, jobPosition) => {
+  try {
+    const response = await axios.get(`${CV_ANALYSIS_ENDPOINT}`, {
+      params: {
+        pdf_url: documentoOrUrl,
+        puesto_postular: jobPosition
+      }
+    });
+    
+    if (response.status !== 200) {
+      throw new Error(`Error fetching CV analysis: ${response.statusText}`);
+    }
+    
+    const db = firebaseConfig.getFirestore();
+    const userRef = db.collection(USER_CV_ANALYSIS_COLLECTION).doc(userId);
+    
+    // Obtener el documento actual del usuario para verificar si ya existe
+    const userDoc = await userRef.get();
+    
+    if (userDoc.exists) {
+      // Si el documento existe, actualiza el array añadiendo el nuevo análisis
+      await userRef.update({
+        cvAnalysisHistorial: admin.firestore.FieldValue.arrayUnion({
+          extracted_data: response.extracted_data,
+          jobPosition: jobPosition || 'No especificado',
+          createdAt: new Date()
+        }),
+        updatedAt: new Date()
+      });
+    } else {
+      // Si el documento no existe, créalo con un nuevo array
+      await userRef.set({
+        id: userId,
+        cvAnalysisHistorial: [{
+          extracted_data: response.extracted_data,
+          jobPosition: jobPosition || 'No especificado',
+          createdAt: new Date()
+        }],
+        updatedAt: new Date()
+      });
+    }
+    
+    logger.info(`[${userId}] Análisis de CV guardado exitosamente en el historial`);
+    return response.extracted_data;
+  } catch (error) {
+    logger.error(`[${userId}] Error saving CV analysis: ${error.message}`);
+    throw error;
+  }
+};
 /**
  * Generate a PDF report from analysis
  * @param {Object} analysis - CV analysis results
@@ -166,5 +232,6 @@ const generateReportPDF = async (analysis, userId) => {
 module.exports = {
   registerUser,
   processCV,
-  generateReportPDF
+  generateReportPDF,
+  saveCVAnalysis
 }; 
