@@ -29,6 +29,7 @@ const SessionState = {
  * @returns {Promise<Object>} Datos de la sesión
  */
 const getOrCreateSession = async (userId) => {
+  logger.info(`[getOrCreateSession] Called for user: ${userId}`); // NUEVO LOG
   try {
     if (!firebaseConfig.isInitialized()) {
       logger.warn('Firebase not initialized, using mock session');
@@ -50,15 +51,16 @@ const getOrCreateSession = async (userId) => {
 
     const db = firebaseConfig.getFirestore();
     const sessionRef = db.collection(SESSIONS_COLLECTION).doc(userId.toString());
-    
-    // Verificar si la sesión ya existe
+    logger.info(`[getOrCreateSession] Session ref created for ${userId}`); // NUEVO LOG
+
     const sessionDoc = await sessionRef.get();
-    
-    if (!sessionDoc.exists) {
-      // Crear nueva sesión
+    logger.info(`[getOrCreateSession] sessionDoc.exists for ${userId}: ${sessionDoc.exists()}`); // NUEVO LOG
+
+    if (!sessionDoc.exists()) {
+      logger.info(`[getOrCreateSession] No session found for ${userId}, creating new one.`); // NUEVO LOG
       const newSession = {
         userId,
-        state: SessionState.INITIAL,
+        state: SessionState.INITIAL, // Asegúrate que SessionState.INITIAL es 'initial'
         cvAnalysis: null,
         jobPosition: null,
         currentQuestion: 0,
@@ -67,22 +69,31 @@ const getOrCreateSession = async (userId) => {
         feedback: [],
         cvProcessed: false,
         termsAccepted: false,
+        hasReceivedWelcomeMessage: false, // MUY IMPORTANTE
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        // ... otros campos que necesites inicializar
       };
-      
+      logger.info(`[getOrCreateSession] New session object for ${userId}: ${JSON.stringify(newSession)}`); // NUEVO LOG
       await sessionRef.set(newSession);
-      logger.info(`New session created for user: ${userId}`);
+      logger.info(`[getOrCreateSession] New session SET in Firestore for ${userId}. Returning new session.`); // NUEVO LOG
       return newSession;
     } else {
-      // Devolver sesión existente
       const sessionData = sessionDoc.data();
-      logger.info(`Session retrieved for user: ${userId}, state: ${sessionData.state}`);
-      return sessionData;
+      logger.info(`[getOrCreateSession] Existing session found for ${userId}. State: ${sessionData.state}, hasReceivedWelcomeMessage: ${sessionData.hasReceivedWelcomeMessage}. Returning existing session.`); // NUEVO LOG
+      return { ...sessionData, userId: sessionDoc.id }; // Asegurar que userId esté presente
     }
   } catch (error) {
-    logger.error(`Error getting session: ${error.message}`);
-    throw error;
+    logger.error(`[getOrCreateSession] Error for user ${userId}: ${error.message}`, { stack: error.stack }); // NUEVO LOG CON STACK
+    // Considera qué devolver aquí. Devolver undefined o un objeto parcial podría ser la causa.
+    // Quizás devolver un objeto de sesión con estado 'error' o lanzar el error.
+    // Por ahora, para depurar, veamos si se llega aquí.
+    return { // Objeto de fallback MUY BÁSICO si todo falla, para evitar undefined state
+      userId,
+      state: SessionState.INITIAL, // O un estado de error dedicado
+      hasReceivedWelcomeMessage: false,
+      errorState: true // Indicador de que algo falló
+    };
   }
 };
 
