@@ -400,6 +400,7 @@ const handleText = async (from, text) => {
           logger.info(
             `Usuario ${from} activó código UCAL exitosamente con ${creditsAdded} créditos`
           );
+          await showWelcomeMessage(from);
           return;
         } else {
           await bot.sendMessage(
