@@ -11,8 +11,10 @@ const chatwootConfig = require("../config/chatwootConfig");
 const { uploadFileR2 } = require("../services/s3.service");
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() }); // Guarda el archivo en memoria
+const cors = require("cors");
 
 const app = express();
+app.use(cors()); // Habilitar CORS
 app.use(bodyParser.json());
 
 app.post('/upload', upload.single('file'), (req, res) => {
