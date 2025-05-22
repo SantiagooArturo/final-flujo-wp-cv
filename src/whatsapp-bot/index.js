@@ -15,18 +15,18 @@ const upload = multer({ storage: multer.memoryStorage() }); // Guarda el archivo
 const app = express();
 app.use(bodyParser.json());
 
-app.post('/test-upload', upload.single('file'), (req, res) => {
+app.post('/upload', upload.single('file'), (req, res) => {
   const file = req.file;
   if (!file) {
-    return res.status(400).send('No file uploaded.');
+    return res.status(400).json({ success: false, error: 'No file uploaded.' });
   }
-  uploadFileR2(file)
+  uploadFileR2(file, 'cvs')
     .then((url) => {
-      res.status(200).send(`File uploaded successfully: ${url}`);
+      res.status(200).json({ success: true, url });
     })
     .catch((error) => {
       logger.error('Error uploading file:', error);
-      res.status(500).send('Error uploading file.');
+      res.status(500).json({ success: false, error: 'Error uploading file.' });
     });
 });
 
