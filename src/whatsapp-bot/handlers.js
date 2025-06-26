@@ -1890,9 +1890,11 @@ const handlePremiumInfo = async (from) => {
     await bot.sendMessage(from, `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`);
     await bot.sendMessage(from, `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`);
 
-    // Crear la estructura para el mensaje de lista de paquetes
+    // Actualizar estado ANTES de intentar enviar botones
+    await sessionService.updateSessionState(from, 'selecting_premium_package');
+
+    // Intentar enviar lista interactiva
     try {
-      // Definir secciones con los paquetes disponibles
       const packageSections = [
         {
           title: "Paquetes",
@@ -1911,17 +1913,11 @@ const handlePremiumInfo = async (from) => {
               id: "package_6",
               title: "6 Revisiones",
               description: "S/ 10 – 6 revisiones"
-            },
-            /* {
-              id: "package_10",
-              title: "10 Revisiones",
-              description: "S/ 15 – 10 revisiones"
-            } */
+            }
           ]
         }
       ];
 
-      // Enviar mensaje con lista de paquetes
       await bot.sendListMessage(
         from,
         "Revisión Avanzada",
@@ -1930,7 +1926,7 @@ const handlePremiumInfo = async (from) => {
         packageSections
       );
 
-      // Añadir botón para regresar al menú principal
+      // Si llegamos aquí, la lista se envió correctamente
       await bot.sendButtonMessage(
         from,
         "¿No quieres comprar créditos ahora?",
@@ -1938,35 +1934,34 @@ const handlePremiumInfo = async (from) => {
         "Otras opciones"
       );
 
-      // Actualizar estado para manejar selección de paquete
-      await sessionService.updateSessionState(from, 'selecting_premium_package');
-
     } catch (listError) {
       logger.warn(`Failed to send list message: ${listError.message}`);
+      
+      // Fallback a mensaje de texto simple
+      const fallbackMessage = `
+📋 *Paquetes Disponibles:*
 
-      // En lugar de enviar una versión de texto plano del mensaje y un botón separado,
-      // enviar directamente los botones con opciones de paquetes
-      const packageButtons = [
-        { id: 'package_1', text: 'S/ 4 – 1 revisión' },
-        { id: 'package_3', text: 'S/ 7 – 3 revisiones' },
-        { id: 'package_6', text: 'S/ 10 – 6 revisiones' },
-        { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
-      ];
+1️⃣ *1 Revisión* - S/4
+2️⃣ *3 Revisiones* - S/7  
+3️⃣ *6 Revisiones* - S/10
 
-      await bot.sendButtonMessage(
-        from,
-        "Selecciona un paquete de revisiones:",
-        packageButtons,
-        "Paquetes disponibles"
-      );
+Responde con el número del paquete que deseas (1, 2 o 3) o "menu" para regresar.
+      `;
 
-      // Actualizar estado de la sesión para manejar la selección
-      await sessionService.updateSessionState(from, 'selecting_premium_package');
+      await bot.sendMessage(from, fallbackMessage);
     }
 
   } catch (error) {
-    logger.error(`Error handling premium info: ${error.message}`, { error });
-    throw error;
+    logger.error(`Error handling premium info: ${error.message}`);
+    
+    // Fallback final: mensaje simple sin botones
+    try {
+      await bot.sendMessage(from, 'Lo siento, hubo un problema técnico. Por favor, escribe "menu" para volver al menú principal.');
+      // Resetear estado en caso de error crítico
+      await sessionService.updateSessionState(from, 'initial');
+    } catch (finalError) {
+      logger.error(`Critical error in handlePremiumInfo fallback: ${finalError.message}`);
+    }
   }
 };
 
@@ -1981,42 +1976,27 @@ const handlePackageSelection = async (from, text) => {
     let packagePrice = '';
     let packageReviews = '';
 
-    // Determinar qué paquete seleccionó el usuario
-    if (text.toLowerCase().includes('4') || text.toLowerCase().includes('1 revisión') || text.toLowerCase().includes('1 revision')) {
+    // Manejar selecciones numéricas simples (fallback cuando fallan los botones)
+    if (text === '1' || text.toLowerCase().includes('4') || text.toLowerCase().includes('package_1')) {
       packageName = '1 Revisión';
       packagePrice = 'S/4';
       packageReviews = '1';
-    } else if (text.toLowerCase().includes('7') || text.toLowerCase().includes('3 revisiones')) {
+    } else if (text === '2' || text.toLowerCase().includes('7') || text.toLowerCase().includes('package_3')) {
       packageName = '3 Revisiones';
       packagePrice = 'S/7';
       packageReviews = '3';
-    } else if (text.toLowerCase().includes('10') || text.toLowerCase().includes('6 revisiones')) {
+    } else if (text === '3' || text.toLowerCase().includes('10') || text.toLowerCase().includes('package_6')) {
       packageName = '6 Revisiones';
       packagePrice = 'S/10';
       packageReviews = '6';
-    } else if (text.toLowerCase().includes('15') || text.toLowerCase().includes('10 revisiones')) {
-      packageName = '10 Revisiones';
-      packagePrice = 'S/15';
-      packageReviews = '10';
-    } else if (text.toLowerCase().includes('package_1')) {
-      packageName = '1 Revisión';
-      packagePrice = 'S/4';
-      packageReviews = '1';
-    } else if (text.toLowerCase().includes('package_3')) {
-      packageName = '3 Revisiones';
-      packagePrice = 'S/7';
-      packageReviews = '3';
-    } else if (text.toLowerCase().includes('package_6')) {
-      packageName = '6 Revisiones';
-      packagePrice = 'S/10';
-      packageReviews = '6';
-    } else if (text.toLowerCase().includes('package_10')) {
-      packageName = '10 Revisiones';
-      packagePrice = 'S/15';
-      packageReviews = '10';
+    } else if (text.toLowerCase().includes('menu') || text.toLowerCase().includes('regresar')) {
+      // Usuario quiere volver al menú
+      await sessionService.resetSession(from);
+      await handleStart(from);
+      return;
     } else {
-      // Si no se reconoce el paquete, volver a mostrar las opciones sin mensaje de error
-      await handlePremiumInfo(from);
+      // Opción no reconocida - no crear bucle, dar opciones simples
+      await bot.sendMessage(from, 'Por favor responde:\n1 = S/4 (1 revisión)\n2 = S/7 (3 revisiones)\n3 = S/10 (6 revisiones)\n"menu" = Volver al menú');
       return;
     }
 
@@ -2027,38 +2007,20 @@ const handlePackageSelection = async (from, text) => {
       packageReviews: packageReviews
     });
 
-    // Enviar mensaje confirmando la selección y dando instrucciones de pago
+    // Enviar confirmación simple
     await bot.sendMessage(from, `*${packageReviews} Revisiones*\n${packageReviews} revisiones por ${packagePrice}`);
-
     await bot.sendMessage(from, `Yapea o Plinea ${packagePrice} a este número:\n954600805\n\nEstá a nombre de "Francesco Lucchesi"`);
-
-    // Enviar opciones para confirmar el pago o volver atrás
-    const paymentButtons = [
-      { id: 'payment_confirmed', text: '¡Ya pagué!' },
-      { id: 'payment_back', text: 'Volver atrás' }
-    ];
-
-    try {
-      await bot.sendButtonMessage(
-        from,
-        `✅ Después de realizar el pago presiona el botón ¡Ya pagué!\n\n🔄 Si quieres cambiar tu paquete de créditos, presiona el botón Volver atrás`,
-        paymentButtons,
-        'Confirmación de pago'
-      );
-
-      // Actualizar estado para manejar la confirmación de pago
-      await sessionService.updateSessionState(from, 'confirming_payment');
-
-    } catch (buttonError) {
-      logger.warn(`Failed to send payment confirmation buttons: ${buttonError.message}`);
-      await bot.sendMessage(from, 'Después de realizar el pago, responde con "pagado". Si quieres cambiar tu paquete, responde con "volver".');
-      await sessionService.updateSessionState(from, 'confirming_payment');
-    }
+    
+    // Actualizar estado
+    await sessionService.updateSessionState(from, 'confirming_payment');
+    
+    // Enviar instrucciones simples
+    await bot.sendMessage(from, 'Después de realizar el pago, responde "pagado" para continuar o "menu" para volver al inicio.');
 
   } catch (error) {
     logger.error(`Error handling package selection: ${error.message}`);
-    // En lugar de mostrar un mensaje de error, volver a las opciones de paquetes
-    await handlePremiumInfo(from);
+    // En lugar de volver a handlePremiumInfo (que puede crear bucle), dar opción simple
+    await bot.sendMessage(from, 'Hubo un error. Responde "menu" para volver al menú principal.');
   }
 };
 

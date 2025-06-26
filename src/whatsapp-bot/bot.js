@@ -21,6 +21,7 @@ class WhatsAppBot {
    */
   async _reportToChatwoot(to, content) {
     try {
+      return; // Deshabilitado temporalmente para evitar spam en Chatwoot
       // Primero verificar si tenemos una sesión con ID de conversación de Chatwoot
       const session = await sessionService.getOrCreateSession(to);
       let conversationId = session.chatwootConversationId;
