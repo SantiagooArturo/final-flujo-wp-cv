@@ -1886,7 +1886,7 @@ Por favor, responde con un mensaje de audio o video.
 const handlePremiumInfo = async (from) => {
   try {
     // Primero enviar información sobre la revisión avanzada
-    await bot.sendMessage(from, '*Mas reivisiones* 😊\n\n¡Excelente!');
+    await bot.sendMessage(from, '*Mas revisiones* 😊\n\n¡Excelente!');
     await bot.sendMessage(from, `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`);
     await bot.sendMessage(from, `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`);
 
