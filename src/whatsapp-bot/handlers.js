@@ -1883,22 +1883,12 @@ Por favor, responde con un mensaje de audio o video.
   }
 };
 
-/**
- * Maneja la información sobre la versión premium
- * @param {string} from - Número de teléfono del usuario
- */
 const handlePremiumInfo = async (from) => {
   try {
     // Primero enviar información sobre la revisión avanzada
-    await bot.sendMessage(from, "*Mas revisiones* 😊\n\n¡Excelente!");
-    await bot.sendMessage(
-      from,
-      `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`
-    );
-    await bot.sendMessage(
-      from,
-      `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`
-    );
+    await bot.sendMessage(from, '*Mas reivisiones* 😊\n\n¡Excelente!');
+    await bot.sendMessage(from, `Las revisiones incluyen:\n\n☑️ Análisis de gaps en el CV\n☑️ Fortalezas y debilidades\n☑️ Perfil profesional\n☑️ Experiencia de trabajo\n☑️ Verbos de acción\n☑️ Estructura del CV\n☑️ Relevancia\n☑️ Y más...`);
+    await bot.sendMessage(from, `Puedes adquirir paquetes de revisiones desde S/ 4.00\n\nLas revisiones las puedes usar para tu CV u otros CVs.`);
 
     // Crear la estructura para el mensaje de lista de paquetes
     try {
@@ -1910,25 +1900,25 @@ const handlePremiumInfo = async (from) => {
             {
               id: "package_1",
               title: "1 Revisión",
-              description: "S/ 4 – 1 revisión",
+              description: "S/ 4 – 1 revisión"
             },
             {
               id: "package_3",
               title: "3 Revisiones",
-              description: "S/ 7 – 3 revisiones",
+              description: "S/ 7 – 3 revisiones"
             },
             {
               id: "package_6",
               title: "6 Revisiones",
-              description: "S/ 10 – 6 revisiones",
+              description: "S/ 10 – 6 revisiones"
             },
             /* {
               id: "package_10",
               title: "10 Revisiones",
               description: "S/ 15 – 10 revisiones"
             } */
-          ],
-        },
+          ]
+        }
       ];
 
       // Enviar mensaje con lista de paquetes
@@ -1949,20 +1939,18 @@ const handlePremiumInfo = async (from) => {
       );
 
       // Actualizar estado para manejar selección de paquete
-      await sessionService.updateSessionState(
-        from,
-        "selecting_premium_package"
-      );
+      await sessionService.updateSessionState(from, 'selecting_premium_package');
+
     } catch (listError) {
       logger.warn(`Failed to send list message: ${listError.message}`);
 
       // En lugar de enviar una versión de texto plano del mensaje y un botón separado,
       // enviar directamente los botones con opciones de paquetes
       const packageButtons = [
-        { id: "package_1", text: "S/ 4 – 1 revisión" },
-        { id: "package_3", text: "S/ 7 – 3 revisiones" },
-        { id: "package_6", text: "S/ 10 – 6 revisiones" },
-        { id: "back_to_main_menu", text: "🔙 Regresar al menú" },
+        { id: 'package_1', text: 'S/ 4 – 1 revisión' },
+        { id: 'package_3', text: 'S/ 7 – 3 revisiones' },
+        { id: 'package_6', text: 'S/ 10 – 6 revisiones' },
+        { id: 'back_to_main_menu', text: '🔙 Regresar al menú' }
       ];
 
       await bot.sendButtonMessage(
@@ -1973,11 +1961,9 @@ const handlePremiumInfo = async (from) => {
       );
 
       // Actualizar estado de la sesión para manejar la selección
-      await sessionService.updateSessionState(
-        from,
-        "selecting_premium_package"
-      );
+      await sessionService.updateSessionState(from, 'selecting_premium_package');
     }
+
   } catch (error) {
     logger.error(`Error handling premium info: ${error.message}`, { error });
     throw error;
@@ -1991,56 +1977,43 @@ const handlePremiumInfo = async (from) => {
  */
 const handlePackageSelection = async (from, text) => {
   try {
-    let packageName = "";
-    let packagePrice = "";
-    let packageReviews = "";
+    let packageName = '';
+    let packagePrice = '';
+    let packageReviews = '';
 
     // Determinar qué paquete seleccionó el usuario
-    if (
-      text.toLowerCase().includes("4") ||
-      text.toLowerCase().includes("1 revisión") ||
-      text.toLowerCase().includes("1 revision")
-    ) {
-      packageName = "1 Revisión";
-      packagePrice = "S/4";
-      packageReviews = "1";
-    } else if (
-      text.toLowerCase().includes("7") ||
-      text.toLowerCase().includes("3 revisiones")
-    ) {
-      packageName = "3 Revisiones";
-      packagePrice = "S/7";
-      packageReviews = "3";
-    } else if (
-      text.toLowerCase().includes("10") ||
-      text.toLowerCase().includes("6 revisiones")
-    ) {
-      packageName = "6 Revisiones";
-      packagePrice = "S/10";
-      packageReviews = "6";
-    } else if (
-      text.toLowerCase().includes("15") ||
-      text.toLowerCase().includes("10 revisiones")
-    ) {
-      packageName = "10 Revisiones";
-      packagePrice = "S/15";
-      packageReviews = "10";
-    } else if (text.toLowerCase().includes("package_1")) {
-      packageName = "1 Revisión";
-      packagePrice = "S/4";
-      packageReviews = "1";
-    } else if (text.toLowerCase().includes("package_3")) {
-      packageName = "3 Revisiones";
-      packagePrice = "S/7";
-      packageReviews = "3";
-    } else if (text.toLowerCase().includes("package_6")) {
-      packageName = "6 Revisiones";
-      packagePrice = "S/10";
-      packageReviews = "6";
-    } else if (text.toLowerCase().includes("package_10")) {
-      packageName = "10 Revisiones";
-      packagePrice = "S/15";
-      packageReviews = "10";
+    if (text.toLowerCase().includes('4') || text.toLowerCase().includes('1 revisión') || text.toLowerCase().includes('1 revision')) {
+      packageName = '1 Revisión';
+      packagePrice = 'S/4';
+      packageReviews = '1';
+    } else if (text.toLowerCase().includes('7') || text.toLowerCase().includes('3 revisiones')) {
+      packageName = '3 Revisiones';
+      packagePrice = 'S/7';
+      packageReviews = '3';
+    } else if (text.toLowerCase().includes('10') || text.toLowerCase().includes('6 revisiones')) {
+      packageName = '6 Revisiones';
+      packagePrice = 'S/10';
+      packageReviews = '6';
+    } else if (text.toLowerCase().includes('15') || text.toLowerCase().includes('10 revisiones')) {
+      packageName = '10 Revisiones';
+      packagePrice = 'S/15';
+      packageReviews = '10';
+    } else if (text.toLowerCase().includes('package_1')) {
+      packageName = '1 Revisión';
+      packagePrice = 'S/4';
+      packageReviews = '1';
+    } else if (text.toLowerCase().includes('package_3')) {
+      packageName = '3 Revisiones';
+      packagePrice = 'S/7';
+      packageReviews = '3';
+    } else if (text.toLowerCase().includes('package_6')) {
+      packageName = '6 Revisiones';
+      packagePrice = 'S/10';
+      packageReviews = '6';
+    } else if (text.toLowerCase().includes('package_10')) {
+      packageName = '10 Revisiones';
+      packagePrice = 'S/15';
+      packageReviews = '10';
     } else {
       // Si no se reconoce el paquete, volver a mostrar las opciones sin mensaje de error
       await handlePremiumInfo(from);
@@ -2051,24 +2024,18 @@ const handlePackageSelection = async (from, text) => {
     await sessionService.updateSession(from, {
       selectedPackage: packageName,
       packagePrice: packagePrice,
-      packageReviews: packageReviews,
+      packageReviews: packageReviews
     });
 
     // Enviar mensaje confirmando la selección y dando instrucciones de pago
-    await bot.sendMessage(
-      from,
-      `*${packageReviews} Revisiones*\n${packageReviews} revisiones por ${packagePrice}`
-    );
+    await bot.sendMessage(from, `*${packageReviews} Revisiones*\n${packageReviews} revisiones por ${packagePrice}`);
 
-    await bot.sendMessage(
-      from,
-      `Yapea o Plinea ${packagePrice} a este número:\n954600805\n\nEstá a nombre de "Francesco Lucchesi"`
-    );
+    await bot.sendMessage(from, `Yapea o Plinea ${packagePrice} a este número:\n954600805\n\nEstá a nombre de "Francesco Lucchesi"`);
 
     // Enviar opciones para confirmar el pago o volver atrás
     const paymentButtons = [
-      { id: "payment_confirmed", text: "¡Ya pagué!" },
-      { id: "payment_back", text: "Volver atrás" },
+      { id: 'payment_confirmed', text: '¡Ya pagué!' },
+      { id: 'payment_back', text: 'Volver atrás' }
     ];
 
     try {
@@ -2076,21 +2043,18 @@ const handlePackageSelection = async (from, text) => {
         from,
         `✅ Después de realizar el pago presiona el botón ¡Ya pagué!\n\n🔄 Si quieres cambiar tu paquete de créditos, presiona el botón Volver atrás`,
         paymentButtons,
-        "Confirmación de pago"
+        'Confirmación de pago'
       );
 
       // Actualizar estado para manejar la confirmación de pago
-      await sessionService.updateSessionState(from, "confirming_payment");
+      await sessionService.updateSessionState(from, 'confirming_payment');
+
     } catch (buttonError) {
-      logger.warn(
-        `Failed to send payment confirmation buttons: ${buttonError.message}`
-      );
-      await bot.sendMessage(
-        from,
-        'Después de realizar el pago, responde con "pagado". Si quieres cambiar tu paquete, responde con "volver".'
-      );
-      await sessionService.updateSessionState(from, "confirming_payment");
+      logger.warn(`Failed to send payment confirmation buttons: ${buttonError.message}`);
+      await bot.sendMessage(from, 'Después de realizar el pago, responde con "pagado". Si quieres cambiar tu paquete, responde con "volver".');
+      await sessionService.updateSessionState(from, 'confirming_payment');
     }
+
   } catch (error) {
     logger.error(`Error handling package selection: ${error.message}`);
     // En lugar de mostrar un mensaje de error, volver a las opciones de paquetes
@@ -2105,23 +2069,18 @@ const handlePackageSelection = async (from, text) => {
 const handlePaymentConfirmation = async (from) => {
   try {
     const session = await sessionService.getOrCreateSession(from);
-    const packageReviews = session.packageReviews || "1";
-    const packagePrice = session.packagePrice || "S/4";
+    const packageReviews = session.packageReviews || '1';
+    const packagePrice = session.packagePrice || 'S/4';
 
     // Solicitar captura de pantalla del pago en lugar de confirmar automáticamente
-    await bot.sendMessage(
-      from,
-      `✅ *Por favor, envía una captura de pantalla de tu pago de ${packagePrice}*\n\nNecesito verificar:\n• El Nro de operacion"\n• La fecha y hora`
-    );
+    await bot.sendMessage(from, `✅ *Por favor, envía una captura de pantalla de tu pago de ${packagePrice}*\n\nNecesito verificar:\n• El Nro de operacion"\n• La fecha y hora`);
 
     // Actualizar el estado de la sesión para esperar la captura
-    await sessionService.updateSessionState(from, "waiting_payment_screenshot");
+    await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
+
   } catch (error) {
     logger.error(`Error handling payment confirmation: ${error.message}`);
-    await bot.sendMessage(
-      from,
-      "Ocurrió un error al procesar tu confirmación. Por favor, contacta con nuestro soporte."
-    );
+    await bot.sendMessage(from, 'Ocurrió un error al procesar tu confirmación. Por favor, contacta con nuestro soporte.');
   }
 };
 
@@ -2133,27 +2092,22 @@ const handlePaymentConfirmation = async (from) => {
 const verifyPaymentScreenshot = async (from, image) => {
   try {
     const session = await sessionService.getOrCreateSession(from);
-    const packageReviews = session.packageReviews || "1";
-    const packagePrice = session.packagePrice || "S/4";
+    const packageReviews = session.packageReviews || '1';
+    const packagePrice = session.packagePrice || 'S/4';
 
-    logger.info(
-      `Received payment screenshot from ${from} for ${packageReviews} reviews`
-    );
+    logger.info(`Received payment screenshot from ${from} for ${packageReviews} reviews`);
 
     // Obtener la URL de la imagen
     let imageUrl;
     try {
       imageUrl = await bot.getMediaUrl(image.id);
       if (!imageUrl) {
-        throw new Error("No se pudo obtener la URL de la imagen");
+        throw new Error('No se pudo obtener la URL de la imagen');
       }
       logger.info(`Payment image URL obtained: ${imageUrl}`);
     } catch (mediaError) {
       logger.error(`Error obtaining image URL: ${mediaError.message}`);
-      await bot.sendMessage(
-        from,
-        "No pudimos acceder a tu imagen. Por favor, intenta enviarla nuevamente."
-      );
+      await bot.sendMessage(from, 'No pudimos acceder a tu imagen. Por favor, intenta enviarla nuevamente.');
       return;
     }
 
@@ -2161,15 +2115,10 @@ const verifyPaymentScreenshot = async (from, image) => {
     let imageBuffer;
     try {
       imageBuffer = await fileProcessing.downloadFile(imageUrl);
-      logger.info(
-        `Payment image downloaded, size: ${imageBuffer.length} bytes`
-      );
+      logger.info(`Payment image downloaded, size: ${imageBuffer.length} bytes`);
     } catch (downloadError) {
       logger.error(`Error downloading image: ${downloadError.message}`);
-      await bot.sendMessage(
-        from,
-        "Hubo un problema al descargar tu imagen. Por favor, intenta enviarla nuevamente."
-      );
+      await bot.sendMessage(from, 'Hubo un problema al descargar tu imagen. Por favor, intenta enviarla nuevamente.');
       return;
     }
 
@@ -2178,13 +2127,10 @@ const verifyPaymentScreenshot = async (from, image) => {
 
     try {
       // Mensaje al usuario indicando que se está verificando el pago
-      await bot.sendMessage(
-        from,
-        "⏳ Estamos verificando tu comprobante de pago..."
-      );
+      await bot.sendMessage(from, '⏳ Estamos verificando tu comprobante de pago...');
 
       // Convertir imagen a base64
-      const imageBase64 = imageBuffer.toString("base64");
+      const imageBase64 = imageBuffer.toString('base64');
 
       // Consultar a OpenAI para verificar la imagen
       const systemPrompt = `Eres un asistente especializado en verificar comprobantes de pago. Necesitas verificar si la imagen es un comprobante de pago válido y contiene los siguientes elementos:
@@ -2211,11 +2157,7 @@ Responde con un JSON que tenga los siguientes campos:
       const userPrompt = `Verifica si esta imagen es un comprobante de pago válido de ${packagePrice} a Francesco Lucchesi o Francesco Lucchesi V. Se considera válido si el pago se realizó recientemente (este mes o en los últimos 5 días).`;
 
       // Llamar a la API de OpenAI para analizar la imagen
-      const imageAnalysis = await openaiUtil.analyzeImage(
-        imageBase64,
-        systemPrompt,
-        userPrompt
-      );
+      const imageAnalysis = await openaiUtil.analyzeImage(imageBase64, systemPrompt, userPrompt);
 
       // Parsear la respuesta
       logger.info(`Payment image analysis: ${imageAnalysis}`);
@@ -2226,59 +2168,48 @@ Responde con un JSON que tenga los siguientes campos:
         const jsonMatch = imageAnalysis.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           analysisResult = JSON.parse(jsonMatch[0]);
-          logger.info(
-            `Parsed analysis result: ${JSON.stringify(analysisResult)}`
-          );
+          logger.info(`Parsed analysis result: ${JSON.stringify(analysisResult)}`);
         } else {
           // Si no encuentra JSON, intentar extraer la validez de la respuesta
-          logger.warn(
-            "No JSON found in OpenAI response, using text analysis fallback"
-          );
-          isValidPayment =
-            imageAnalysis.toLowerCase().includes("válido") ||
-            imageAnalysis.toLowerCase().includes("valido") ||
-            imageAnalysis.toLowerCase().includes("correcto") ||
-            imageAnalysis.toLowerCase().includes("francesco lucchesi");
+          logger.warn("No JSON found in OpenAI response, using text analysis fallback");
+          isValidPayment = imageAnalysis.toLowerCase().includes('válido') ||
+            imageAnalysis.toLowerCase().includes('valido') ||
+            imageAnalysis.toLowerCase().includes('correcto') ||
+            imageAnalysis.toLowerCase().includes('francesco lucchesi');
 
           // Crear un objeto con la información disponible
           analysisResult = {
             isValid: isValidPayment,
-            reason: imageAnalysis,
+            reason: imageAnalysis
           };
         }
       } catch (parseError) {
         logger.error(`Error parsing analysis result: ${parseError.message}`);
         // Intentar determinar si es válido basado en el texto
-        isValidPayment =
-          imageAnalysis.toLowerCase().includes("válido") ||
-          imageAnalysis.toLowerCase().includes("valido") ||
-          imageAnalysis.toLowerCase().includes("correcto");
+        isValidPayment = imageAnalysis.toLowerCase().includes('válido') ||
+          imageAnalysis.toLowerCase().includes('valido') ||
+          imageAnalysis.toLowerCase().includes('correcto');
 
         analysisResult = {
           isValid: isValidPayment,
-          reason: "No se pudo analizar la respuesta en formato JSON",
+          reason: 'No se pudo analizar la respuesta en formato JSON'
         };
       }
 
       // Como fallback adicional, verificar si la imagen muestra los elementos críticos
       // incluso si OpenAI dijo que no era válido
       if (!analysisResult.isValid) {
-        logger.info(
-          "Payment marked as invalid by OpenAI, checking for critical elements"
-        );
+        logger.info("Payment marked as invalid by OpenAI, checking for critical elements");
 
         // Verificar si la respuesta menciona los elementos críticos de forma positiva
-        const hasCorrectName =
-          analysisResult.recipientName &&
-          analysisResult.recipientName.toLowerCase().includes("francesco");
+        const hasCorrectName = analysisResult.recipientName &&
+          analysisResult.recipientName.toLowerCase().includes('francesco');
 
-        const hasCorrectAmount =
-          analysisResult.amount &&
-          analysisResult.amount.includes(packagePrice.replace("S/", ""));
+        const hasCorrectAmount = analysisResult.amount &&
+          analysisResult.amount.includes(packagePrice.replace('S/', ''));
 
-        const isYapeOrPlin =
-          imageAnalysis.toLowerCase().includes("yape") ||
-          imageAnalysis.toLowerCase().includes("plin");
+        const isYapeOrPlin = imageAnalysis.toLowerCase().includes('yape') ||
+          imageAnalysis.toLowerCase().includes('plin');
 
         // MODIFICACIÓN: Ya no verificamos la fecha, solo el nombre y el monto
         // Nombre: Francesco o Francesco Lucchesi
@@ -2286,18 +2217,11 @@ Responde con un JSON que tenga los siguientes campos:
 
         // Si tiene el nombre y monto correctos, considerarlo válido
         // Ya no verificamos la fecha ni la plataforma
-        if (
-          (hasCorrectName ||
-            imageAnalysis.toLowerCase().includes("francesco")) &&
-          (hasCorrectAmount ||
-            imageAnalysis.toLowerCase().includes(packagePrice))
-        ) {
-          logger.info(
-            "Critical elements found (name and amount), overriding OpenAI result to VALID"
-          );
+        if ((hasCorrectName || imageAnalysis.toLowerCase().includes('francesco')) &&
+          (hasCorrectAmount || imageAnalysis.toLowerCase().includes(packagePrice))) {
+          logger.info("Critical elements found (name and amount), overriding OpenAI result to VALID");
           analysisResult.isValid = true;
-          analysisResult.reason =
-            "Pago verificado: contiene el nombre y monto correctos";
+          analysisResult.reason = "Pago verificado: contiene el nombre y monto correctos";
         }
       }
 
@@ -2307,7 +2231,7 @@ Responde con un JSON que tenga los siguientes campos:
         logger.info(`Payment validated successfully for user ${from}`);
 
         // Extraer el monto del precio (convertir 'S/4' a 4)
-        const priceValue = parseFloat(packagePrice.replace("S/", ""));
+        const priceValue = parseFloat(packagePrice.replace('S/', ''));
 
         // Actualizar el contador de créditos del usuario
         await userService.addCVCredits(from, parseInt(packageReviews));
@@ -2316,97 +2240,77 @@ Responde con un JSON que tenga los siguientes campos:
         await userService.recordTransaction(
           from,
           priceValue,
-          "cv_credits",
+          'cv_credits',
           `Compra de ${packageReviews} créditos para análisis de CV`
         );
 
         // Enviar confirmación de que el pago ha sido verificado
-        await bot.sendMessage(
-          from,
-          `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`
-        );
+        await bot.sendMessage(from, `✅ *¡Pago verificado!*\n\nSe han añadido ${packageReviews} créditos a tu cuenta. Ya puedes analizar más CVs.`);
 
         // Restablecer el estado de CV procesado para permitir un nuevo análisis
         await sessionService.updateSession(from, { cvProcessed: false });
 
         // Ofrecer botones para elegir si revisar CV inmediatamente o ir al menú principal
         const postPaymentButtons = [
-          { id: "review_cv", text: "📋 Revisar mi CV" },
-          { id: "back_to_main_menu", text: "🏠 Ir al Menú" },
+          { id: 'review_cv', text: '📋 Revisar mi CV' },
+          { id: 'back_to_main_menu', text: '🏠 Ir al Menú' }
         ];
 
         try {
           await bot.sendButtonMessage(
             from,
-            "¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.",
+            '¿Qué deseas hacer ahora? Puedes revisar tu CV en este momento o volver al menú principal para usar tus créditos más tarde.',
             postPaymentButtons,
-            "Opciones después del pago"
+            'Opciones después del pago'
           );
 
           // Actualizar el estado de la sesión a "payment_completed"
-          await sessionService.updateSessionState(from, "payment_completed");
+          await sessionService.updateSessionState(from, 'payment_completed');
         } catch (buttonError) {
-          logger.warn(
-            `Failed to send post-payment buttons: ${buttonError.message}`
-          );
+          logger.warn(`Failed to send post-payment buttons: ${buttonError.message}`);
           // Si no se pueden enviar los botones, enviar mensaje normal
-          await bot.sendMessage(
-            from,
-            "Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal."
-          );
-          await sessionService.updateSessionState(from, "waiting_for_cv");
+          await bot.sendMessage(from, 'Para usar tus créditos, simplemente envía el CV que deseas analizar o escribe !start para ir al menú principal.');
+          await sessionService.updateSessionState(from, 'waiting_for_cv');
         }
       } else {
         // El pago no es válido
-        logger.warn(
-          `Invalid payment image from user ${from}: ${analysisResult.reason}`
-        );
+        logger.warn(`Invalid payment image from user ${from}: ${analysisResult.reason}`);
 
         // Informar al usuario por qué el pago fue rechazado
-        let rejectionReason =
-          "no pudimos verificar que cumpla con los requisitos";
+        let rejectionReason = "no pudimos verificar que cumpla con los requisitos";
 
         if (analysisResult.reason) {
           rejectionReason = analysisResult.reason;
         } else {
           // Intentar determinar la razón específica
-          if (
-            analysisResult.amount &&
-            analysisResult.amount !== packagePrice.replace("S/", "")
-          ) {
+          if (analysisResult.amount && analysisResult.amount !== packagePrice.replace('S/', '')) {
             rejectionReason = `el monto no coincide con el precio del paquete (${packagePrice})`;
-          } else if (
-            analysisResult.recipientName &&
-            !analysisResult.recipientName.toLowerCase().includes("francesco")
-          ) {
-            rejectionReason =
-              "el destinatario no parece ser Francesco Lucchesi";
+          } else if (analysisResult.recipientName && !analysisResult.recipientName.toLowerCase().includes('francesco')) {
+            rejectionReason = "el destinatario no parece ser Francesco Lucchesi";
           } else {
             rejectionReason = "no pudimos verificar claramente el pago";
           }
         }
 
         // Mensaje para el usuario
-        await bot.sendMessage(
-          from,
-          `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n\nEnvía una nueva captura cuando lo hayas corregido.`
-        );
+        await bot.sendMessage(from, `⚠️ *No pudimos verificar tu pago*\n\nMotivo: ${rejectionReason}\n\nPor favor, asegúrate de que:\n• El pago sea a Francesco Lucchesi\n• El monto sea de ${packagePrice}\n\nEnvía una nueva captura cuando lo hayas corregido.`);
+
+        // Mantener al usuario en el mismo estado para que pueda volver a intentar
+        await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
       }
     } catch (aiError) {
       logger.error(`Error verifying payment with OpenAI: ${aiError.message}`);
 
       // Informar al usuario del error técnico
-      await bot.sendMessage(
-        from,
-        "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste."
-      );
+      await bot.sendMessage(from, "❌ Lo sentimos, tuvimos un problema técnico al verificar tu pago. Por favor, intenta nuevamente en unos minutos o contacta a soporte si el problema persiste.");
+
+      // Mantener al usuario en el mismo estado para que pueda volver a intentar
+      await sessionService.updateSessionState(from, 'waiting_payment_screenshot');
     }
+
   } catch (error) {
     logger.error(`Error verifying payment screenshot: ${error.message}`);
-    await bot.sendMessage(
-      from,
-      "Ocurrió un error al verificar tu pago. Por favor, contacta con nuestro soporte."
-    );
+    await bot.sendMessage(from, 'Ocurrió un error al verificar tu pago. Por favor, contacta con nuestro soporte.');
   }
 };
 
